@@ -369,7 +369,7 @@ target_link_libraries(ultrawidelock_storage PUBLIC ultrawidelock_radio)
 include("${ULTRAWIDELOCK_PORT_DIR}/uwb/uwb.cmake")
 
 # ----------------------------------------------------------------------------
-# credential reader: the transaction engine, its BLE transport, and the ranging glue.
+# Credential reader: the transaction engine, its BLE transport, and the ranging glue.
 #
 # After the UWB layer because it calls into it: ultrawidelock_ranging.c drives the
 # responder through the contract in <ultrawidelock/uwb.h>.
@@ -702,6 +702,58 @@ target_link_libraries(ultrawidelock_dfu PUBLIC ultrawidelock_storage ultrawidelo
 set(ULTRAWIDELOCK_NRF5_USBD "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/usbd")
 set(ULTRAWIDELOCK_NRF5_NRFX "${ULTRAWIDELOCK_NRF5_SDK}/modules/nrfx")
 
+# ----------------------------------------------------------------------------
+# The one SDK source this image does not compile verbatim, and why.
+#
+# app_usbd_core.c builds its device descriptor with bDeviceClass,
+# bDeviceSubClass and bDeviceProtocol all zero -- "ask the interfaces". Linux
+# does ask: cdc_acm binds off the interface class and a port appears. macOS does
+# not. AppleUSBCDCACM binds a two-interface CDC function only when the DEVICE
+# descriptor carries the Interface Association triple 0xEF/0x02/0x01, which is
+# what marks the control and data interfaces as one function. With zeros it sees
+# two unrelated interfaces of an unknown device and binds nothing.
+#
+# The failure has no error in it anywhere. The board enumerates, ioreg shows
+# "Provisioning Console" with the right strings and serial, the firmware logs
+# "USB CDC ACM up" -- and there is no /dev/cu.* node. Zephyr sets
+# USB_BCC_MISCELLANEOUS here, which is why the same console works on the same
+# laptop from the oracle build. A permissive host hid a descriptor that was
+# always wrong, which is this port's recurring bug in a new place.
+#
+# THE VENDORED TREE IS NOT EDITED. A corrected copy is generated into the build
+# directory and compiled instead. The three substitutions are asserted present
+# first, so an SDK whose descriptor no longer looks like this stops the build
+# rather than silently producing an image that enumerates into nothing -- the
+# same failure the patch exists to remove.
+#
+# A linker --wrap on app_usbd_core_setup_rsp was tried first and is NOT
+# sufficient: the descriptor is sent from setup_device_req_get_descriptor in the
+# same translation unit, so the call never becomes a cross-object reference and
+# --wrap does not see it. That version linked cleanly, defined the wrapper, and
+# still shipped zeros. Checked by disassembly, not by the build succeeding.
+# ----------------------------------------------------------------------------
+set(ULTRAWIDELOCK_USBD_CORE_SRC "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_core.c")
+set(ULTRAWIDELOCK_USBD_CORE_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_usbd_core_iad.c")
+file(READ "${ULTRAWIDELOCK_USBD_CORE_SRC}" _ultrawidelock_usbd_core_txt)
+foreach(_pair
+    ".bDeviceClass = 0,|.bDeviceClass = 0xEF,"
+    ".bDeviceSubClass = 0,|.bDeviceSubClass = 0x02,"
+    ".bDeviceProtocol = 0,|.bDeviceProtocol = 0x01,")
+  string(REPLACE "|" ";" _p "${_pair}")
+  list(GET _p 0 _from)
+  list(GET _p 1 _to)
+  string(FIND "${_ultrawidelock_usbd_core_txt}" "${_from}" _at)
+  if(_at EQUAL -1)
+    message(FATAL_ERROR
+      "app_usbd_core.c no longer contains '${_from}'. The device descriptor "
+      "changed shape in this SDK. Re-check the Interface Association triple "
+      "against the new source: without it macOS enumerates the console and "
+      "creates no serial port, with no error anywhere.")
+  endif()
+  string(REPLACE "${_from}" "${_to}" _ultrawidelock_usbd_core_txt "${_ultrawidelock_usbd_core_txt}")
+endforeach()
+file(WRITE "${ULTRAWIDELOCK_USBD_CORE_GEN}" "${_ultrawidelock_usbd_core_txt}")
+
 add_library(ultrawidelock_usb STATIC
   # The pinned vendor stack, unmodified.
   "${ULTRAWIDELOCK_NRF5_NRFX}/drivers/src/nrfx_usbd.c"
@@ -709,7 +761,8 @@ add_library(ultrawidelock_usb STATIC
   # The pinned nrfx inlines these; this one does not, so the source is needed.
   "${ULTRAWIDELOCK_NRF5_NRFX}/soc/nrfx_atomic.c"
   "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd.c"
-  "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_core.c"
+  # Generated above from app_usbd_core.c: the device-class triple only.
+  "${ULTRAWIDELOCK_USBD_CORE_GEN}"
   "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_string_desc.c"
   "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_serial_num.c"
   "${ULTRAWIDELOCK_NRF5_USBD}/class/cdc/acm/app_usbd_cdc_acm.c"
