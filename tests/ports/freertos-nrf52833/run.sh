@@ -362,3 +362,23 @@ OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 	"$ROOT/ports/freertos-nrf52833/thread/ot_settings_freertos.c" \
 	-o "$OT_SETTINGS_BIN"
 "$OT_SETTINGS_BIN"
+
+# The grant decision, driven as walk-ups. test_approach.c covers the controller
+# -- given ranges, does it unlock. This covers the code that chooses WHICH
+# ranges the controller ever sees, which no test on any port asked before: the
+# three latch epochs and the departure fallback each carry a plausible
+# simplification that changes when a door relocks, and every case here is
+# written as one of those defects. Links the real aliro_approach.c, because a
+# stub could not be wrong about any of it.
+GRANT_BIN="$OUT/freertos_grant_test"
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/apps/dwm3001cdk-lock-freertos/src" \
+	-I"$ROOT/modules/woz_aliro/include" \
+	-I"$ROOT/modules/woz_port/include" \
+	"$HERE/test_grant.c" \
+	"$ROOT/apps/dwm3001cdk-lock-freertos/src/grant.c" \
+	"$ROOT/modules/woz_aliro/src/aliro_approach.c" \
+	-o "$GRANT_BIN"
+"$GRANT_BIN"
