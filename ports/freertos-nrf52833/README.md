@@ -397,15 +397,14 @@ make freertos-build \
   QORVO_SDK_DIR=<path-to-extracted-DW3_QM33_SDK_1.1.1>
 ```
 
-The image is assembled in layers, and a layer is only added once the one below
-it links, because a first link that reports its section sizes is worth more here
-than a complete graph that does not. The binding constraint is 512 KB of flash
-and 128 KB of RAM, and the Zephyr oracle already overflows 128 KB by 1,752 bytes
-with the same feature set, so every layer is measured as it lands. What is
-currently linked is the kernel, the device layer, and the board's timebase,
-logging, and fault paths.
+The image is assembled in layers, and a layer was only added once the one below
+it linked, because a first link that reports its section sizes is worth more
+here than a complete graph that does not. The binding constraint is 512 KB of
+flash and 128 KB of RAM, and the Zephyr oracle overflows 128 KB by 1,752 bytes
+with the same feature set, so every layer was measured as it landed. All of them
+are now linked and running on hardware.
 
-What is linked, and what it costs, measured at the link rather than estimated:
+What is linked:
 
 | Layer | Contents |
 | --- | --- |
@@ -419,20 +418,26 @@ What is linked, and what it costs, measured at the link rather than estimated:
 | UWB | the ranging engine, the vendored decadriver, and the DW3110 backends |
 | Thread | OpenThread as an MTD, built through its own CMake, plus the port's adapters |
 
-That image is 163,356 bytes of flash and 50,928 of RAM: 32 percent of the flash
-budget and 39 percent of the RAM one.
+The complete image is 418,584 bytes of flash and 108,092 of RAM: 96 percent of
+the 0x6a000 application slot and 82 percent of the RAM budget. Flash is the tight
+one, with under 16 KB spare, which is why the Matter commissioning stack is not
+a deferred item but an excluded one -- it is 3,417 lines and would not come
+close to fitting. A credential is typed in over the USB console instead.
 
-Two of those layers compile but are not in that measurement, and the distinction
-matters. Nothing calls into UWB or OpenThread while the application is a
-skeleton, so `--gc-sections` drops both archives and the image links without a
-byte of either. A layer that compiles is a weaker claim than a layer that links,
-and the gap between them is where a call to a vendor function nobody supplies
-survives. `ultrawidelock_uwb_link_check` closes that gap for UWB by forcing the whole
-archive in against the same libraries the product links; it bounds the engine at
-280,820 bytes of flash, which is an upper bound rather than a cost, since a
-responder that never initiates cannot reach all of the decadriver. OpenThread
-has no equivalent yet because it cannot link until the nRF 802.15.4 driver and
-Nordic's `radio_nrf5.c` arrive, which is the next and last layer.
+`ultrawidelock_uwb_reach` still runs on every build and still reports an upper bound
+rather than a cost, because `--gc-sections` charges only what is reachable and a
+responder that never initiates cannot reach all of the decadriver.
+
+VERIFIED ON A DWM3001CDK, not inferred from a link: MCUboot hands over and the
+image boots, the store completes a page erase in thirty MPSL timeslot slices
+with none blocked, the DW3110 answers SPI with DEV_ID 0xdeca0302 and configures
+its PHY, OpenThread's radio initialises, the reader advertises and serves its
+GATT table over a real connection, the update channel refuses every opcode with
+no window open, MCUboot's serial recovery answers an image-list request, the
+status LEDs run their patterns, and the grant decision executes -- confirmed by
+a breakpoint on `grant_step`, not by a log line. `scripts/freertos-ble-liveness.py`
+re-runs the over-the-air half on demand, because this port has twice printed a
+complete, healthy boot log from a board that had already stopped.
 
 The RAM figure is the one that matters. The first link with the BLE host in it
 also found 3,480 bytes of isochronous transport buffers that upstream allocates
@@ -454,8 +459,9 @@ checkout, each pinned by `platform.lock.yml`.
 are the key-value store, which holds the credential provisioning record and
 OpenThread's settings including the SRP client key, so an oversized image is a
 link error rather than a lock that forgets its identity after a firmware update.
-MCUboot is not in the map yet; when it arrives it takes the bottom of flash and
-the application origin moves, which is why the store sits at the top.
+MCUboot occupies the bottom of flash and the application runs from `0x0a000`
+with its vector table relocated, which is why the store sits at the top and out
+of the way of both.
 
 The kernel is FreeRTOS V10.0.0 from the pinned Qorvo tree's nRF5 SDK, and its
 Cortex-M4F port is compiled unmodified against two small headers in

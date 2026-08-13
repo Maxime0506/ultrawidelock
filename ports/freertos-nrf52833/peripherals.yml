@@ -3,6 +3,7 @@ schema: 1
 # Frozen nRF52833 ownership for the shipping MPSL configuration. The Qorvo
 # archive's weak vector stubs allow the port to provide these handlers.
 interrupts:
+  POWER_CLOCK: { priority: 0, owner: mpsl_clock }
   RADIO: { priority: 0, owner: mpsl }
   RTC0: { priority: 0, owner: mpsl }
   TIMER0: { priority: 0, owner: mpsl }

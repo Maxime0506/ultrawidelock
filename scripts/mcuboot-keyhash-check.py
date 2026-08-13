@@ -229,6 +229,53 @@ def self_test():
 
     ok = True
 
+    # THE CASE THIS SELF-TEST COULD NOT SEE.
+    #
+    # Every other check below builds its fixture out of P256_SPKI_PREFIX and
+    # then searches for P256_SPKI_PREFIX. If that constant were wrong -- a bad
+    # transcription, or MCUboot changing how it embeds the key -- the fixture
+    # would be wrong in exactly the same way and all four would still pass. The
+    # check would be scanning real bootloaders and finding nothing, while its
+    # own self-test reported PASS.
+    #
+    # The real path does fail closed on an empty scan ("no P-256 public key
+    # found ... Refusing to guess"), so the blindness points the safe way. But
+    # "safe" and "verified" are different claims and this only ever made the
+    # first one.
+    #
+    # So derive the prefix a second way, from a real generated P-256 key rather
+    # than from the literal. cryptography is not a dependency of this script --
+    # it has to run on bare python3 -- so when it is absent this says so instead
+    # of quietly skipping.
+    #
+    # DO NOT SIMPLIFY THIS TO USE P256_SPKI_PREFIX. Generating a key to check a
+    # constant that is right there in the file looks like waste, and replacing
+    # it with a comparison against the constant would pass, shorten the file,
+    # and read as a tidy-up. It would also restore the exact bug this exists to
+    # close: the value under test cannot supply its own evidence. The cost of
+    # the second derivation IS the point of it.
+    try:
+        from cryptography.hazmat.primitives import serialization as _ser
+        from cryptography.hazmat.primitives.asymmetric import ec as _ec
+
+        _der = (
+            _ec.generate_private_key(_ec.SECP256R1())
+            .public_key()
+            .public_bytes(_ser.Encoding.DER, _ser.PublicFormat.SubjectPublicKeyInfo)
+        )
+        if len(_der) != P256_SPKI_LEN:
+            print(f"  FAIL a real P-256 SPKI is {len(_der)} bytes, not {P256_SPKI_LEN}")
+            ok = False
+        elif not _der.startswith(P256_SPKI_PREFIX):
+            print(f"  FAIL P256_SPKI_PREFIX does not match a real key: {_der[:27].hex()}")
+            ok = False
+        else:
+            print("  ok   the search prefix matches a genuinely generated P-256 key")
+    except ImportError:
+        print("  --   search prefix NOT checked against a real key (no cryptography);")
+        print("       every case below builds its fixture from the same constant it")
+        print("       searches for, so none of them can see a wrong prefix.")
+
     def build_image(keyhash_bytes):
         body = b"\x00" * 64
         hdr_size, img_size = 32, len(body)

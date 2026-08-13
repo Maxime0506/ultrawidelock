@@ -44,27 +44,20 @@
 #include <ultrawidelock_freertos_radio.h>
 #include <ultrawidelock_freertos_uwb.h>
 #include <ultrawidelock/uwb.h>
-#include <ultrawidelock_approach.h>
 #include <ultrawidelock_osal.h>
 
+#include "grant.h"
 #include "status_led.h"
 
 #define MAIN_TAG "main"
 
 /*
- * How long one accepted range keeps D11 at the ranging rate. It outlives one
- * round at every rate iOS uses, so a walk-up shows as a steady 4 Hz rather
- * than a stutter, and it drops back to the 1 Hz session light about a second
- * after the phone stops ranging -- which a still phone does, with the session
- * still up. The Zephyr image uses the same number for the same reason.
- */
-#define LED_RANGE_HOLD_MS 1000
-
-/*
- * How often the run loop samples what the LEDs report, and how many of those
- * samples make up one status log line. The display is the reason the loop is
- * this fast: 250 ms is inside LED_RANGE_HOLD_MS, so a walk-up cannot start and
- * finish between two samples. The log stays at its old one-a-second.
+ * The housekeeping cadence, and how many of those passes make one log line.
+ *
+ * This is the floor, not the rate: the loop normally wakes on a range latch and
+ * only falls back to this when none comes. 250 ms is inside
+ * GRANT_RANGE_HOLD_MS, so a walk-up cannot start and finish between two passes
+ * even if every latch were missed. The log stays at one a second.
  */
 #define RUN_POLL_MS 250
 #define RUN_LOG_EVERY 4
@@ -95,57 +88,46 @@ static struct ultrawidelock_trust_store s_trust;
 static bool s_prov_mode;
 
 static StaticTask_t s_boot_tcb;
-static StackType_t s_boot_stack[512];
 
 /*
- * A placeholder for the product task. It exists so the first images have a task
- * to schedule and so the tick can be watched advancing on the bench before any
- * of the BLE, UWB, or credential layers are trusted.
+ * 1,536 words, and the number is measured rather than chosen.
+ *
+ * This task carries three different peaks. The ordinary boot path high-waters
+ * at 1,540 bytes, read off the fill pattern on a running board. The run loop
+ * after it adds the approach controller's float maths. And in provisioning mode
+ * the same stack runs ultrawidelock_freertos_prov_console_run(), whose `import` does a
+ * software P-256 derive -- kilobytes, not the 508 bytes that were left.
+ *
+ * At 512 words it did not survive that. The import reset the board mid-transfer:
+ * the USB device dropped off the bus, the console vanished, and the board came
+ * back up on the DEV identity with the store untouched, which from outside
+ * looks exactly like an import that was refused. There is no fault code to find
+ * afterwards either, because the overflow hook resets and a reset clears CFSR.
+ *
+ * The console's own header already said this stack was "sized for the P-256
+ * derive inside import". It never was; that comment described an intent nobody
+ * implemented. It is now, with headroom to measure against rather than trust.
  */
+static StackType_t s_boot_stack[1536];
+
 /*
- * What the board does once it is a lock: report itself, forever.
+ * What the board does once it is a lock: sample, decide, report, forever.
  *
- * Two of the four lamps are driven from here because only here are both facts
- * available at once -- whether a phone is in a session, and whether ranges are
- * currently landing. The other two are driven by whoever owns their fact:
- * D10's window follows the DFU receiver's own callback, and D9 and D12 follow
- * provisioning mode and a failed start.
+ * The I/O lives here and the decision lives in grant.c, which is what makes a
+ * walk-up something a test can write down. This function reads the radio,
+ * notifies the reader, drives the lamps and logs; it makes no judgement of its
+ * own about when a door should open.
  *
- * TWO SIGNALS ARE NOT ASSERTED YET, and their absence is a gap rather than a
- * decision. STATUS_LED_UNLOCKED needs the grant path the Zephyr image's reader
- * loop carries (approach vetoes, side decisions, passive-unlock revocation),
- * none of which is ported. STATUS_LED_UNCOMMISSIONED needs a Matter fabric to
- * ask about, and no Matter image fits an nRF52833 -- which is the whole reason
- * this board adopts a credential over the USB console instead. So on this
- * image D9 shows the heartbeat and D12 stays dark unless something failed.
+ * ONE SIGNAL IS STILL NOT ASSERTED, and it is a gap rather than a decision.
+ * STATUS_LED_UNCOMMISSIONED needs a Matter fabric to ask about, and no Matter
+ * image fits an nRF52833 -- which is the whole reason this board adopts a
+ * credential over the USB console instead. So D12 stays dark unless something
+ * failed.
  */
 static void run_loop(void)
 {
-	struct ultrawidelock_approach approach;
-	/*
-	 * Three epochs over the same latch counter, consumed at different
-	 * moments on purpose. Folding any two together changes when a relock
-	 * fires: last_gen is taken only by a range the integrity consensus
-	 * vouches for, last_obs_gen by any fresh range at all so the silence
-	 * clock is not refreshed twice, and led_gen is read-only with respect
-	 * to the unlock logic.
-	 */
-	uint32_t last_gen;
-	uint32_t last_obs_gen;
-	uint32_t led_gen;
-	int64_t last_range_us = 0;
-	bool present = false;
-	bool granted = false;
-	bool session_was_up = false;
+	struct grant_ctx grant;
 	unsigned poll = 0;
-
-	/*
-	 * Factory defaults: unlock 100 cm, relock 250 cm, and a trajectory gate
-	 * at 180 cm -- no auto-unlock until the credential has been seen that
-	 * far out in this session, so a phone already at the door when ranging
-	 * started does not open it.
-	 */
-	ultrawidelock_approach_init(&approach, NULL);
 
 	/*
 	 * Both lines before the listener can fire: the semaphore has to exist
@@ -153,176 +135,59 @@ static void run_loop(void)
 	 * before a signal can reach it.
 	 */
 	ultrawidelock_sem_init(&s_range_sig, 0, 1);
+	grant_init(&grant, ultrawidelock_uwb_range_generation());
 	ultrawidelock_uwb_set_range_listener(on_range_latched);
-
-	last_gen = ultrawidelock_uwb_range_generation();
-	last_obs_gen = last_gen;
-	led_gen = last_gen;
 
 	for (;;) {
 		int64_t now_us = ultrawidelock_freertos_uptime_us();
-		int64_t now = now_us / 1000;
-		uint32_t gen = ultrawidelock_uwb_range_generation();
-		enum ultrawidelock_approach_action act;
-		bool session_now;
+		struct grant_input in = {0};
+		struct grant_output out = {0};
 		int32_t cm = 0;
-		bool ranging;
 
-		ultrawidelock_reader_status_tick(now);
+		in.now_ms = now_us / 1000;
+		in.gen = ultrawidelock_uwb_range_generation();
+		in.trusted_valid = ultrawidelock_uwb_trusted_range_cm(&cm);
+		in.trusted_cm = cm;
+		cm = 0;
+		in.raw_valid = ultrawidelock_uwb_last_range_cm(&cm);
+		in.raw_cm = cm;
+		in.session_active = ultrawidelock_reader_session_active();
 
-		/*
-		 * One approach sample per NEWLY accepted trusted range. A stale
-		 * latch keeps the old generation -- iOS stops ranging once the
-		 * phone holds still -- so it drives a tick, not a fresh sample.
-		 *
-		 * NOT ml_feed_range(). That is the Zephyr image's channel
-		 * classifier glue, and with CONFIG_ULTRAWIDELOCK_ML_LOS and
-		 * CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG off it does exactly this call and
-		 * nothing else -- its own comment calls the unwidened threshold
-		 * "the behaviour that shipped". Porting the classifier is a
-		 * separate piece of work with its own budget question, and
-		 * pretending it is here by calling through an empty wrapper
-		 * would hide that.
-		 */
-		if (gen != last_gen && ultrawidelock_uwb_trusted_range_cm(&cm)) {
-			last_gen = gen;
-			last_obs_gen = gen;
-			present = true;
-			act = ultrawidelock_approach_feed(&approach, now, cm);
-		} else {
-			/*
-			 * A fresh range the consensus will not vouch for still
-			 * says something, about DEPARTURE only -- far ranges are
-			 * the ones it declines, so without this the walk-away
-			 * relock can never fire.
-			 *
-			 * last_gen is deliberately NOT consumed here. Trust can
-			 * arrive late for a latch already taken, and the branch
-			 * above is what catches it. The separate epoch keeps this
-			 * from observing one range twice, which would refresh the
-			 * silence clock and stop it ever expiring.
-			 */
-			if (gen != last_obs_gen) {
-				int32_t raw = 0;
+		ultrawidelock_reader_status_tick(in.now_ms);
 
-				last_obs_gen = gen;
-				if (ultrawidelock_uwb_last_range_cm(&raw)) {
-					ultrawidelock_approach_observe_departure(&approach, now, raw);
-				}
-			}
-			act = ultrawidelock_approach_tick(&approach, now);
+		grant_step(&grant, &in, &out);
+
+		if (out.departure_fallback) {
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
+					 "departure fallback: last fed %d cm "
+					 "(gate: >= %d cm held for %d ms)",
+					 (int)grant.approach.last_cm,
+					 (int)grant.approach.cfg.relock_cm,
+					 (int)grant.approach.cfg.far_silence_ms);
+		}
+		if (out.lock_changed) {
+			ultrawidelock_reader_notify_unlock(out.unlocked);
+			status_led_signal(STATUS_LED_UNLOCKED, out.unlocked);
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG, "%s at %d cm",
+					 out.unlocked ? "unlock" : "relock",
+					 (int)grant.approach.last_cm);
 		}
 
-		switch (act) {
-		case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
-		case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
-			/*
-			 * NO SIDE GATE ON THIS IMAGE. The Zephyr build can
-			 * suppress a passive unlock on inside/outside evidence
-			 * from witness links (CONFIG_ULTRAWIDELOCK_SIDE_GATE); that
-			 * subsystem is not ported, so every passive grant here
-			 * is ungated. It is the same behaviour as a Zephyr board
-			 * built without the gate, which is the shipped default,
-			 * but it is a real difference and belongs in the log
-			 * rather than in a commit message.
-			 */
-			ultrawidelock_reader_notify_unlock(true);
-			status_led_signal(STATUS_LED_UNLOCKED, true);
-			granted = true;
-			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG, "unlock: %s at %d cm",
-					 act == ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT ? "predicted"
-									      : "threshold",
-					 (int)approach.last_cm);
-			break;
-		case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
-		case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
-			ultrawidelock_reader_notify_unlock(false);
-			status_led_signal(STATUS_LED_UNLOCKED, false);
-			granted = false;
-			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG, "relock: %s",
-					 act == ULTRAWIDELOCK_APPROACH_RELOCK_DEPART ? "departed"
-									     : "aborted");
-			break;
-		default:
-			break;
-		}
-
-		session_now = ultrawidelock_reader_session_active();
-
-		/*
-		 * A session cannot come up without the phone approaching: the
-		 * BLE RSSI power gate holds ranging off until the connection
-		 * crosses its open threshold. So this edge is the approach
-		 * evidence the trajectory gate wants, and it is the only form of
-		 * it this architecture produces -- UWB starts when the phone is
-		 * already at the door, so a 180 cm range never arrives.
-		 */
-		if (session_now && !session_was_up) {
-			ultrawidelock_approach_session_up(&approach);
-		}
-		session_was_up = session_now;
-
-		/*
-		 * Departure: the peer's credential session ended. Ranging silence
-		 * alone does NOT mean departed, because a still phone stops
-		 * ranging too, so this gates on the session and not on range
-		 * age. Reaching here with the bolt still open means the silence
-		 * relock did not fire, and this is the only moment that proves
-		 * it. The log must run BEFORE ultrawidelock_approach_gone(), which
-		 * re-inits the struct and erases the evidence.
-		 */
-		if (present && !session_now) {
-			if (granted) {
-				ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
-						 "departure fallback: last fed %d cm "
-						 "(gate: >= %d cm held for %d ms)",
-						 (int)approach.last_cm,
-						 (int)approach.cfg.relock_cm,
-						 (int)approach.cfg.far_silence_ms);
-			}
-			(void)ultrawidelock_approach_gone(&approach);
-			if (granted) {
-				ultrawidelock_reader_notify_unlock(false);
-				status_led_signal(STATUS_LED_UNLOCKED, false);
-				granted = false;
-			}
-			present = false;
-		}
-
-		if (gen != led_gen) {
-			led_gen = gen;
-			last_range_us = now_us;
-		}
-		/*
-		 * The != 0 is not redundant: uptime is a few tens of ms when
-		 * this loop first runs, so without it every board would report
-		 * ranging for its first second.
-		 */
-		ranging = last_range_us != 0 &&
-			  (now_us - last_range_us) < ((int64_t)LED_RANGE_HOLD_MS * 1000);
-
-		status_led_signal(STATUS_LED_RANGING, ranging);
-		status_led_signal(STATUS_LED_SESSION, session_now);
+		status_led_signal(STATUS_LED_RANGING, out.ranging);
+		status_led_signal(STATUS_LED_SESSION, in.session_active);
 
 		if (++poll >= RUN_LOG_EVERY) {
 			/*
 			 * Seconds and milliseconds as two 32-bit values, NOT one
-			 * %lld.
-			 *
-			 * This image links newlib-nano, whose printf does not
-			 * implement the ll length modifier. It does not print
-			 * something wrong and carry on: it consumes the wrong
-			 * number of bytes, so the %s that follows takes the
+			 * %lld. This image links newlib-nano, whose printf does
+			 * not implement the ll modifier: it consumes four bytes
+			 * where eight were passed, so the %s after it takes the
 			 * uptime's low word as a char *, memchr dereferences it,
-			 * and the precise bus fault that follows lands in
-			 * default_handler and spins there. That stops the RTC1
-			 * tick with it, so the board goes silent rather than
-			 * crashing visibly -- which is exactly how it presented:
-			 * a full, healthy boot log and then nothing.
-			 *
-			 * The division is done here, where libgcc handles the
-			 * 64-bit maths, instead of in a formatter that cannot.
-			 * scripts/freertos-printf-check.sh keeps the next one out.
+			 * and the bus fault lands in default_handler and spins
+			 * there -- stopping the tick, so the board goes silent
+			 * rather than crashing visibly. The division is done
+			 * here, where libgcc handles the 64-bit maths, instead
+			 * of in a formatter that cannot.
 			 */
 			uint32_t up_s = (uint32_t)(now_us / 1000000);
 			uint32_t up_ms = (uint32_t)((now_us / 1000) % 1000);
@@ -338,12 +203,10 @@ static void run_loop(void)
 		/*
 		 * Wake on the next latch, or on the housekeeping tick if none
 		 * comes. A latch that lands while this pass is still running
-		 * leaves the semaphore given, so the take returns at once and
-		 * no range waits for the next tick.
-		 *
-		 * This replaces a plain delay, and the difference is the whole
-		 * point: a walk-up is served at the ranging rate rather than at
-		 * 4 Hz, while an idle board still costs four wakes a second.
+		 * leaves the semaphore given, so the take returns at once and no
+		 * range waits for the next tick. A walk-up is therefore served
+		 * at the ranging rate rather than at 4 Hz, while an idle board
+		 * still costs four wakes a second.
 		 */
 		(void)ultrawidelock_sem_take(&s_range_sig, RUN_POLL_MS);
 	}
