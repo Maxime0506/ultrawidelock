@@ -44,6 +44,8 @@
 #include <woz_freertos_radio.h>
 #include <woz_freertos_uwb.h>
 #include <ultrawidelock/uwb.h>
+#include <aliro_approach.h>
+#include <woz_osal.h>
 
 #include "status_led.h"
 
@@ -66,6 +68,21 @@
  */
 #define RUN_POLL_MS 250
 #define RUN_LOG_EVERY 4
+
+/*
+ * Wake the grant loop on an accepted range latch.
+ *
+ * Runs on the UWB RX path, so it does nothing but give the semaphore. The
+ * approach controller's float maths stays on the loop, where it competes with
+ * no deadline; doing it here would put it inside the ~1836 us window the
+ * DW3110 gives to arm a reply.
+ */
+static woz_sem_t s_range_sig;
+
+static void on_range_latched(void)
+{
+	woz_sem_give(&s_range_sig);
+}
 
 /*
  * The reader identity and its trust store, static because they outlive the
@@ -104,17 +121,176 @@ static StackType_t s_boot_stack[512];
  */
 static void run_loop(void)
 {
-	uint32_t last_gen = woz_uwb_range_generation();
+	struct aliro_approach approach;
+	/*
+	 * Three epochs over the same latch counter, consumed at different
+	 * moments on purpose. Folding any two together changes when a relock
+	 * fires: last_gen is taken only by a range the integrity consensus
+	 * vouches for, last_obs_gen by any fresh range at all so the silence
+	 * clock is not refreshed twice, and led_gen is read-only with respect
+	 * to the unlock logic.
+	 */
+	uint32_t last_gen;
+	uint32_t last_obs_gen;
+	uint32_t led_gen;
 	int64_t last_range_us = 0;
+	bool present = false;
+	bool granted = false;
+	bool session_was_up = false;
 	unsigned poll = 0;
+
+	/*
+	 * Factory defaults: unlock 100 cm, relock 250 cm, and a trajectory gate
+	 * at 180 cm -- no auto-unlock until the credential has been seen that
+	 * far out in this session, so a phone already at the door when ranging
+	 * started does not open it.
+	 */
+	aliro_approach_init(&approach, NULL);
+
+	/*
+	 * Both lines before the listener can fire: the semaphore has to exist
+	 * before anything may give it, and the controller has to be initialised
+	 * before a signal can reach it.
+	 */
+	woz_sem_init(&s_range_sig, 0, 1);
+	woz_uwb_set_range_listener(on_range_latched);
+
+	last_gen = woz_uwb_range_generation();
+	last_obs_gen = last_gen;
+	led_gen = last_gen;
 
 	for (;;) {
 		int64_t now_us = woz_freertos_uptime_us();
+		int64_t now = now_us / 1000;
 		uint32_t gen = woz_uwb_range_generation();
+		enum aliro_approach_action act;
+		bool session_now;
+		int32_t cm = 0;
 		bool ranging;
 
-		if (gen != last_gen) {
+		aliro_reader_status_tick(now);
+
+		/*
+		 * One approach sample per NEWLY accepted trusted range. A stale
+		 * latch keeps the old generation -- iOS stops ranging once the
+		 * phone holds still -- so it drives a tick, not a fresh sample.
+		 *
+		 * NOT ml_feed_range(). That is the Zephyr image's channel
+		 * classifier glue, and with CONFIG_WOZ_ML_LOS and
+		 * CONFIG_WOZ_UWB_CIRDIAG off it does exactly this call and
+		 * nothing else -- its own comment calls the unwidened threshold
+		 * "the behaviour that shipped". Porting the classifier is a
+		 * separate piece of work with its own budget question, and
+		 * pretending it is here by calling through an empty wrapper
+		 * would hide that.
+		 */
+		if (gen != last_gen && woz_uwb_trusted_range_cm(&cm)) {
 			last_gen = gen;
+			last_obs_gen = gen;
+			present = true;
+			act = aliro_approach_feed(&approach, now, cm);
+		} else {
+			/*
+			 * A fresh range the consensus will not vouch for still
+			 * says something, about DEPARTURE only -- far ranges are
+			 * the ones it declines, so without this the walk-away
+			 * relock can never fire.
+			 *
+			 * last_gen is deliberately NOT consumed here. Trust can
+			 * arrive late for a latch already taken, and the branch
+			 * above is what catches it. The separate epoch keeps this
+			 * from observing one range twice, which would refresh the
+			 * silence clock and stop it ever expiring.
+			 */
+			if (gen != last_obs_gen) {
+				int32_t raw = 0;
+
+				last_obs_gen = gen;
+				if (woz_uwb_last_range_cm(&raw)) {
+					aliro_approach_observe_departure(&approach, now, raw);
+				}
+			}
+			act = aliro_approach_tick(&approach, now);
+		}
+
+		switch (act) {
+		case ALIRO_APPROACH_UNLOCK_PREDICT:
+		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+			/*
+			 * NO SIDE GATE ON THIS IMAGE. The Zephyr build can
+			 * suppress a passive unlock on inside/outside evidence
+			 * from witness links (CONFIG_WOZ_SIDE_GATE); that
+			 * subsystem is not ported, so every passive grant here
+			 * is ungated. It is the same behaviour as a Zephyr board
+			 * built without the gate, which is the shipped default,
+			 * but it is a real difference and belongs in the log
+			 * rather than in a commit message.
+			 */
+			aliro_reader_notify_unlock(true);
+			status_led_signal(STATUS_LED_UNLOCKED, true);
+			granted = true;
+			woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "unlock: %s at %d cm",
+					 act == ALIRO_APPROACH_UNLOCK_PREDICT ? "predicted"
+									      : "threshold",
+					 (int)approach.last_cm);
+			break;
+		case ALIRO_APPROACH_RELOCK_DEPART:
+		case ALIRO_APPROACH_RELOCK_ABORT:
+			aliro_reader_notify_unlock(false);
+			status_led_signal(STATUS_LED_UNLOCKED, false);
+			granted = false;
+			woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "relock: %s",
+					 act == ALIRO_APPROACH_RELOCK_DEPART ? "departed"
+									     : "aborted");
+			break;
+		default:
+			break;
+		}
+
+		session_now = aliro_reader_session_active();
+
+		/*
+		 * A session cannot come up without the phone approaching: the
+		 * BLE RSSI power gate holds ranging off until the connection
+		 * crosses its open threshold. So this edge is the approach
+		 * evidence the trajectory gate wants, and it is the only form of
+		 * it this architecture produces -- UWB starts when the phone is
+		 * already at the door, so a 180 cm range never arrives.
+		 */
+		if (session_now && !session_was_up) {
+			aliro_approach_session_up(&approach);
+		}
+		session_was_up = session_now;
+
+		/*
+		 * Departure: the peer's Aliro session ended. Ranging silence
+		 * alone does NOT mean departed, because a still phone stops
+		 * ranging too, so this gates on the session and not on range
+		 * age. Reaching here with the bolt still open means the silence
+		 * relock did not fire, and this is the only moment that proves
+		 * it. The log must run BEFORE aliro_approach_gone(), which
+		 * re-inits the struct and erases the evidence.
+		 */
+		if (present && !session_now) {
+			if (granted) {
+				woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+						 "departure fallback: last fed %d cm "
+						 "(gate: >= %d cm held for %d ms)",
+						 (int)approach.last_cm,
+						 (int)approach.cfg.relock_cm,
+						 (int)approach.cfg.far_silence_ms);
+			}
+			(void)aliro_approach_gone(&approach);
+			if (granted) {
+				aliro_reader_notify_unlock(false);
+				status_led_signal(STATUS_LED_UNLOCKED, false);
+				granted = false;
+			}
+			present = false;
+		}
+
+		if (gen != led_gen) {
+			led_gen = gen;
 			last_range_us = now_us;
 		}
 		/*
@@ -126,7 +302,7 @@ static void run_loop(void)
 			  (now_us - last_range_us) < ((int64_t)LED_RANGE_HOLD_MS * 1000);
 
 		status_led_signal(STATUS_LED_RANGING, ranging);
-		status_led_signal(STATUS_LED_SESSION, aliro_reader_session_active());
+		status_led_signal(STATUS_LED_SESSION, session_now);
 
 		if (++poll >= RUN_LOG_EVERY) {
 			/*
@@ -159,7 +335,17 @@ static void run_loop(void)
 					 woz_freertos_uwb_ready() ? "ready" : "down");
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(RUN_POLL_MS));
+		/*
+		 * Wake on the next latch, or on the housekeeping tick if none
+		 * comes. A latch that lands while this pass is still running
+		 * leaves the semaphore given, so the take returns at once and
+		 * no range waits for the next tick.
+		 *
+		 * This replaces a plain delay, and the difference is the whole
+		 * point: a walk-up is served at the ranging rate rather than at
+		 * 4 Hz, while an idle board still costs four wakes a second.
+		 */
+		(void)woz_sem_take(&s_range_sig, RUN_POLL_MS);
 	}
 }
 
