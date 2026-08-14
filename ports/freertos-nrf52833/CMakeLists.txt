@@ -49,6 +49,101 @@ foreach(_ultrawidelock_path "${ULTRAWIDELOCK_FREERTOS_SRC}/source/tasks.c" "${UL
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Link-time optimisation, applied to the WHOLE program.
+# ----------------------------------------------------------------------------
+# This block sits here, ahead of every add_library() and every
+# add_subdirectory(), because add_compile_options() is directory-scoped and
+# applies only to targets created after it. Declaring the option further down --
+# which is where it used to live -- silently limited LTO to the handful of
+# targets that happened to be defined below it, and that is the defect this
+# placement fixes rather than a style preference. See the measurement below.
+#
+# WHY WHOLE-PROGRAM AND NOT A LIST. The list was the bug. An earlier form of
+# this named ten ultrawidelock_* targets, which read like a considered subset and was in
+# fact an accident of file order: OpenThread, tcplp, the Matter node and the
+# Matter transport were never in it. MEASURED from the two linker map files,
+# Matter configuration, 2026-08-14:
+#
+#   Zephyr oracle       313,572 B of flash inside the LTO set,  74.3%
+#   this port           174,143 B,                              36.6%
+#
+# The Zephyr image's entire non-LTO remainder is prebuilt binary: the
+# SoftDevice Controller, MPSL, nrf_oberon, the 802.15.4 SL and libc. It
+# optimises everything it has source for, and so should this. The single
+# largest line in the difference was libopenthread-mtd.a at 102,396 B compiled
+# per-file here and inside the oracle's LTO set there.
+#
+# WHAT THE FIX WAS WORTH, measured on the linked images, 2026-08-14, text for
+# flash and data+bss for RAM:
+#
+#   Matter, console off, log level 2   446,852 -> 390,924 flash   -55,928
+#                                      129,576 -> 123,076 RAM      -6,500
+#   default, no Matter                 417,348 -> 348,636 flash   -68,712
+#                                      112,196 -> 105,680 RAM      -6,516
+#
+# The Matter image had been 13,188 B OVER the 433,664 B slot and is now 42,740 B
+# inside it. A product decision -- drop UWB from the Matter image, or ship Matter
+# and the credential reader as separate images -- was put to the user on the strength of that
+# overflow. It was never a real constraint; it was this misplacement.
+#
+# A 56 KB drop has the same shape as the failure this port has already paid for
+# twice: a link that succeeds by deleting the product. VERIFIED ON THE ELF
+# rather than inferred from the green build -- 384 mangled ot:: symbols with
+# ot::Srp::Client, ot::Mle and ot::MeshForwarder among them, 42 matter_*,
+# 48 ultrawidelock_*, 174 nrf_802154*, 60 psa_*, 24 ble_gatts_*, 14 dw3000*, and one
+# each of vTaskSwitchContext and SystemInit. The otSrpClient* and otThread* C
+# wrappers are gone BY NAME because their callers are now inside the set and the
+# calls inlined, which is the optimisation working rather than the node
+# vanishing. Ask the artifact what it does.
+#
+# add_compile_options() rather than CMAKE_INTERPROCEDURAL_OPTIMIZATION: the
+# latter does not reach a vendored subdirectory that sets its own properties,
+# and OpenThread's CMake is exactly such a subdirectory.
+option(ULTRAWIDELOCK_LTO "Build the image with link-time optimisation" OFF)
+
+# 1to1 keeps code generation on translation-unit boundaries. It was forced by an
+# assembler "offset out of range" -- the assembler, not the linker -- when -Os
+# inlining across merged units produced functions past Thumb branch range.
+#
+# THAT IS NO LONGER WHY IT IS HERE. Re-measured on the whole-program set,
+# Matter configuration, 2026-08-14: balanced links clean, passes the vector
+# check, and is 628 B LARGER (391,552 vs 390,924 flash) for 80 B less RAM. An
+# earlier run on the old partial set put balanced 920 B behind. Two measurements
+# on different sets agree on the direction, so this stays 1to1 because it is
+# smaller, not because the assembler forbids the alternative.
+#
+# Left as a cache variable because the finding is worth re-testing whenever the
+# set changes again -- and it should be re-tested by BUILDING, not reasoned
+# about from what LTO is supposed to do.
+set(ULTRAWIDELOCK_LTO_PARTITION "1to1" CACHE STRING "GCC -flto-partition mode")
+
+if(ULTRAWIDELOCK_LTO)
+  # -ffat-lto-objects is not optional, and it is not about build speed.
+  #
+  # Without it every archive member is IR only, and ld's plugin decides a symbol
+  # is "IR only, no non-IR reference" while the archive holding the non-IR
+  # caller has not been scanned yet. It then never generates code for it.
+  # Measured on this tree: 167 symbols went missing from libultrawidelock_thread alone --
+  # the whole Mbed TLS surface OpenThread calls, all of nrf_802154, every
+  # ultrawidelock_* entry point -- each reported as
+  #
+  #   undefined reference to `X'
+  #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
+  #
+  # A fat object carries real machine code and a real symbol table beside the
+  # IR, so ordinary archive resolution works and the plugin still optimises
+  # across what it can see. Only one of the two forms is ever linked, so the
+  # final image is unaffected.
+  #
+  # It is also what retires the old exclusion list. ultrawidelock_soc held SystemInit,
+  # whose only caller is the non-LTO startup file; ultrawidelock_thread held the otPlat*
+  # callouts reached from libopenthread-mtd.a. Both were symptoms of thin LTO
+  # objects and of OpenThread sitting outside the set, and both premises are
+  # gone here.
+  add_compile_options(-flto -ffat-lto-objects)
+endif()
+
+# ----------------------------------------------------------------------------
 # Device layer: CMSIS, the pinned MDK, and the nrfx hal.
 #
 # This is the hal_nordic tree the radio stack is built against, deliberately
@@ -1134,14 +1229,6 @@ endforeach()
 # deadline of ~1.836 ms has never been measured, and inlining moves code across
 # the boundary the deadline lives on. Until that measurement exists this stays
 # an option rather than the default.
-option(ULTRAWIDELOCK_LTO "Build the image with link-time optimisation" OFF)
-# 1to1 keeps code generation on translation-unit boundaries and was forced by
-# an assembler "offset out of range" under the default partitioning, back when
-# the kernel, device and Thread layers were still inside the LTO set. That set
-# has since shrunk, so the restriction is a variable rather than a constant --
-# it costs cross-unit code motion, which is most of what LTO is for.
-set(ULTRAWIDELOCK_LTO_PARTITION "1to1" CACHE STRING "GCC -flto-partition mode")
-
 # ----------------------------------------------------------------------------
 # How much of the log survives compilation.
 # ----------------------------------------------------------------------------
@@ -1157,57 +1244,21 @@ set(ULTRAWIDELOCK_LOG_LEVEL "3" CACHE STRING "Highest log level compiled in (1 e
 add_compile_definitions(ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL=${ULTRAWIDELOCK_LOG_LEVEL})
 
 if(ULTRAWIDELOCK_LTO)
-  # THE RULE, learned one link failure at a time: a layer may be optimised
-  # across the program only if every caller it has is also inside the LTO set.
-  # A symbol referenced solely from outside gets dropped, because the plugin
-  # resolves liveness against the LTO objects while the archive holding the
-  # caller has not been scanned yet. The non-LTO build links fine, so ordinary
-  # archive ordering is adequate; it is the plugin that is order-sensitive.
+  # TWO FILES ARE HELD OUT OF THE WHOLE-PROGRAM SET, and only two. Both are
+  # reached from something the optimiser cannot read, so neither exclusion is
+  # caution: each was a measured failure.
   #
-  # The failure is always the same pair of messages, and it names the symbol:
-  #
-  #   undefined reference to `X'
-  #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
-  #
-  # Two layers are excluded for exactly this reason, both measured:
-  #
-  #   ultrawidelock_soc  the vendored MDK and nrfx. Holds SystemInit, whose only
-  #               caller in the entire program is the non-LTO startup file.
-  #   ultrawidelock_thread  the OpenThread platform callouts. libopenthread-mtd.a is
-  #               built by OpenThread's own CMake, outside this set, and it
-  #               calls otPlatAlarmMilliGetNow and the rest of otPlat*.
-  #   ultrawidelock_kernel  the FreeRTOS kernel. vTaskSwitchContext's only caller is the
-  #               inline assembly in the Cortex-M PendSV handler, and assembly
-  #               is outside the LTO set by construction: the optimiser reads
-  #               IR, never an asm string. It does not merely drop the function
-  #               -- it may localise and rename it, which is why forcing the
-  #               symbol with -Wl,--undefined does NOT help and was tried.
-  #
-  # If a future layer starts being called from a vendored archive or from
-  # assembly, it belongs on this list too, and the link will say so by name.
-  foreach(_ultrawidelock_target ultrawidelock_board ultrawidelock_radio ultrawidelock_nimble ultrawidelock_mbedtls
-                      ultrawidelock_storage ultrawidelock_uwb ultrawidelock_cred ultrawidelock_dfu ultrawidelock_usb ultrawidelock_802154)
-    if(TARGET ${_ultrawidelock_target})
-      # -ffat-lto-objects is not optional here, and it is not about speed.
-      #
-      # Without it every archive member is IR only, and ld's plugin decides a
-      # symbol is "IR only, no non-IR reference" while the archive holding the
-      # non-IR caller has not been scanned yet. It then never generates code for
-      # it. Measured on this tree: 167 symbols went missing from libultrawidelock_thread
-      # alone -- the whole mbedtls surface OpenThread calls, all of nrf_802154,
-      # every ultrawidelock_* entry point -- each reported as
-      #
-      #   undefined reference to `X'
-      #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
-      #
-      # A fat object carries real machine code and a real symbol table beside
-      # the IR, so ordinary archive resolution works and the plugin still gets
-      # to optimise across the ones it can see. The cost is build time and
-      # intermediate object size; the final image is unaffected, because only
-      # one of the two forms is ever linked.
-      target_compile_options(${_ultrawidelock_target} PRIVATE -flto -ffat-lto-objects)
-    endif()
-  endforeach()
+  # THE FREERTOS PORT LAYER. vTaskSwitchContext's only caller is the inline
+  # assembly in the Cortex-M PendSV handler, and assembly is outside the LTO set
+  # by construction -- the optimiser reads IR, never an asm string. LTO does not
+  # merely drop the function, it may LOCALISE AND RENAME it, which is why
+  # forcing the symbol with -Wl,--undefined does not help and was tried. Only
+  # port.c is held out, not the whole kernel: tasks.c, queue.c and the rest have
+  # every caller in C and belong in the set.
+  set_source_files_properties("${ULTRAWIDELOCK_FREERTOS_SRC}/portable/GCC/nrf52/port.c"
+    TARGET_DIRECTORY ultrawidelock_kernel
+    PROPERTIES COMPILE_OPTIONS "-fno-lto"
+  )
 
   # THE STARTUP FILE MUST NOT BE OPTIMISED ACROSS THE PROGRAM, and the reason
   # is not caution -- it was measured. With this file in LTO the link says:
