@@ -1200,13 +1200,16 @@ static void reader_status_send(struct ultrawidelock_session *s, bool unsecured)
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 	/*
-	 * Only once it is actually on the wire. This is the instant the phone
-	 * animates, so it is also the instant anything else reporting this
-	 * lock's state -- a Matter tile, say -- becomes wrong if it is not told.
+	 * The lock-state listener used to fire here, gated on rc == 0 --
+	 * "only once it is actually on the wire". That gate conflated two
+	 * audiences. The phone needs DELIVERY; a Matter tile needs the TRUTH,
+	 * and the truth does not depend on whether the phone was still around
+	 * to hear it. The common relock is triggered BY the peer leaving, so
+	 * hanging Matter's report off a successful send to that very peer
+	 * guaranteed the Home tile stayed "unlocked" after every walk-away.
+	 * The listener now fires in ultrawidelock_reader_notify_unlock(), on the state
+	 * change itself.
 	 */
-	if (rc == 0 && s_lock_state_listener != NULL) {
-		s_lock_state_listener(unsecured);
-	}
 	ultrawidelock_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 	s_secured_undelivered = false;
 	/* Whatever just went out is newer than any held replay, including the replay
@@ -1263,6 +1266,18 @@ static void reader_status_send_on_host(bool unsecured)
 // if secured.
 void ultrawidelock_reader_notify_unlock(bool unsecured)
 {
+	/*
+	 * Tell the listener first, unconditionally. This is the grant machine's
+	 * authoritative statement that the lock moved; whether the phone can be
+	 * reached to hear about it is the delivery problem below, and the two
+	 * must not share a fate. (The RSSI-gate farewell in rssi_changed() still
+	 * sends Secured directly without passing here, but the approach
+	 * controller's own relock follows it within a poll period and lands
+	 * here; the listener's state-compare absorbs the near-duplicate.)
+	 */
+	if (s_lock_state_listener != NULL) {
+		s_lock_state_listener(unsecured);
+	}
 	ultrawidelock_ble_post_reader_status(reader_status_send_on_host, unsecured);
 }
 

@@ -45,6 +45,23 @@ extern "C" {
 #define MATTER_CLUSTER_DOOR_LOCK               0x0101u
 
 /*
+ * Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349
+ * (Apple), cluster 0xFC03, on the door lock endpoint beside DoorLock itself.
+ *
+ * This is what puts the "approach direction" control in Apple Home's accessory
+ * settings; both CHIP-based lock builds carry it (apps/esp32-matter-lock
+ * creates it in code, integrations/nrfconnect-door-lock patches it into the
+ * zap). One writable bitmap8 attribute; 7 means all three directions
+ * permitted, and which single bit is Left versus Right is still unknown.
+ * Nothing gates unlock on it -- a single-antenna DW3110 cannot measure the
+ * angle -- so the value is stored and reported but never enforced.
+ */
+#define MATTER_CLUSTER_APPROACH_DIRECTION    0x1349FC03u
+#define MATTER_ATTR_APPROACH_DIRECTION       0x0000u
+#define MATTER_APPROACH_DIRECTION_ALL        0x07u
+#define MATTER_APPROACH_DIRECTION_CLUSTER_REV 1u
+
+/*
  * AdministratorCommissioning. This is what Apple Home's "Turn On Pairing Mode"
  * sends, and what multi-admin sharing runs on: a node that does not serve it
  * can be commissioned exactly once, by whoever got there first, and can never
@@ -104,6 +121,7 @@ extern "C" {
 #define MATTER_ATTR_DL_LOCK_STATE                0x0000u
 #define MATTER_ATTR_DL_LOCK_TYPE                 0x0001u
 #define MATTER_ATTR_DL_ACTUATOR_ENABLED          0x0002u
+#define MATTER_ATTR_DL_AUTO_RELOCK_TIME          0x0023u
 #define MATTER_ATTR_DL_OPERATING_MODE            0x0025u
 #define MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES 0x0026u
 
@@ -313,8 +331,22 @@ struct matter_user {
 #define MATTER_DL_LOCK_STATE_LOCKED         1u
 #define MATTER_DL_LOCK_STATE_UNLOCKED       2u
 #define MATTER_DL_OPERATING_MODE_NORMAL     0u
-/** SupportedOperatingModes is a bitmap; bit 0 is Normal and it is the only one. */
-#define MATTER_DL_SUPPORTED_OPERATING_MODES 0x0001u
+/**
+ * SupportedOperatingModes is INVERTED: a bit CLEARED to 0 means the mode is
+ * supported (DoorLock cluster spec, DlSupportedOperatingModes). The previous
+ * 0x0001 therefore claimed "everything except Normal", the opposite of the
+ * truth. 0xFFF6 is CHIP's default and what the reference builds report:
+ * Normal (bit 0) and NoRemoteLockUnlock (bit 3) supported, the rest not.
+ */
+#define MATTER_DL_SUPPORTED_OPERATING_MODES 0xFFF6u
+
+/**
+ * CredentialRulesSupport (0x001B): mandatory with the User feature. Bit 0 is
+ * Single -- one credential authorises an operation on its own -- and it is
+ * the only rule this node implements (a normal bitmap, unlike the one above).
+ */
+#define MATTER_ATTR_DL_CREDENTIAL_RULES 0x001Bu
+#define MATTER_DL_CREDENTIAL_RULES      0x0001u
 
 /*
  * The one credential protocol version this reader speaks, big-endian, reported for
@@ -363,6 +395,28 @@ struct matter_user {
 
 /** FeatureMap, on every cluster (GlobalAttributeIds.h). */
 #define MATTER_ATTR_FEATURE_MAP 0xFFFCu
+
+/*
+ * The remaining global attributes (GlobalAttributeIds.h). Served only where a
+ * controller has been seen to care: the CHIP-based lock builds answer all of
+ * these on every cluster, and Apple Home builds its accessory-settings UI from
+ * what it can discover -- the missing globals are the working hypothesis for
+ * why Home showed this lock none of the optional controls the CHIP builds get.
+ * Answered on the lock endpoint's clusters; the root endpoint commissions fine
+ * without them and stays as it was.
+ */
+#define MATTER_ATTR_GENERATED_CMD_LIST 0xFFF8u
+#define MATTER_ATTR_ACCEPTED_CMD_LIST  0xFFF9u
+#define MATTER_ATTR_ATTRIBUTE_LIST     0xFFFBu
+#define MATTER_ATTR_CLUSTER_REVISION   0xFFFDu
+
+/**
+ * Door Lock ClusterRevision: 8, the value the working Nordic reference build
+ * reports (integrations/nrfconnect-door-lock/patches/approach-direction-cluster.patch
+ * shows it in the zap context) and the revision that defines the credential
+ * attributes this lock serves.
+ */
+#define MATTER_DL_CLUSTER_REVISION 8u
 
 /* BasicInformation attributes (BasicInformation/AttributeIds.h:19-77). */
 #define MATTER_ATTR_BASIC_DATA_MODEL_REVISION   0x0000u
@@ -572,6 +626,27 @@ struct matter_device_info {
 	 * refuses to send UnlockDoor to something already reporting Unlocked.
 	 */
 	uint8_t lock_state;
+	/**
+	 * AutoRelockTime, in seconds; 0 means no automatic relock.
+	 *
+	 * Implemented because its ABSENCE changes controller behaviour: Apple
+	 * Home shows an auto-lock timing control for locks that carry this
+	 * attribute and improvises without it -- observed on hardware as an
+	 * unrequested LockDoor a few seconds after every UnlockDoor. The node
+	 * itself enforces nothing here yet: the value is reported and writable
+	 * so the controller owns the policy. NOT persisted yet; a reboot
+	 * returns it to 0.
+	 */
+	uint32_t auto_relock_time_s;
+	/**
+	 * The Approach Direction bitmap, whatever the controller last wrote.
+	 *
+	 * The port initialises it to MATTER_APPROACH_DIRECTION_ALL, the same
+	 * default the CHIP builds declare in their metadata; zero is a value a
+	 * controller could legally write, so it cannot double as "never set".
+	 * NOT persisted yet; a reboot returns it to the default.
+	 */
+	uint8_t approach_direction;
 	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *

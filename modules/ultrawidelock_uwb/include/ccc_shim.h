@@ -99,6 +99,11 @@ int ccc_prepoll_prewarm(uint8_t channel, uint8_t preamble_code);
  * only). */
 void ccc_prepoll_stop(void);
 
+/** True while the Pre-POLL listener is up (listen-gate open). Platforms whose flash controller
+ * stalls the CPU (nRF NVMC) defer flash work behind this, so a write or erase cannot land inside
+ * a ranging slot's arm window (target only). */
+bool ccc_prepoll_listening(void);
+
 /** @brief The bound session's `STS_Index0` (for UAD/Pre-POLL derivation); 0 if unbound. */
 uint32_t ccc_shim_sts_index0(void);
 

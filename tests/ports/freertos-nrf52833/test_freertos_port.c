@@ -432,11 +432,14 @@ static void test_mpsl_runtime(void)
 
 	CHECK("MPSL rejects a missing low-priority processor",
 	      ultrawidelock_freertos_mpsl_start(NULL) == -1);
-	CHECK("MPSL starts one static highest-priority system task",
+	/* One below the top on purpose: the DW3110 worker owns configMAX_PRIORITIES - 1
+	 * alone, so its notify preempts a running pump pass (configUSE_TIME_SLICING is 0,
+	 * so an equal-priority pump would hold the worker off until it blocked). */
+	CHECK("MPSL starts one static system task just below the UWB worker",
 	      ultrawidelock_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
 		      fake_task_count == 4 &&
 		      fake_task_stack_depth * sizeof(StackType_t) == 1024 &&
-		      fake_task_priority == configMAX_PRIORITIES - 1 &&
+		      fake_task_priority == configMAX_PRIORITIES - 2 &&
 		      ultrawidelock_freertos_mpsl_ready());
 	CHECK("MPSL start is idempotent for the same processor",
 	      ultrawidelock_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&

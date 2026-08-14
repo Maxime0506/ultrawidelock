@@ -41,6 +41,7 @@
 
 #include <ultrawidelock_freertos_platform.h>
 #include <ultrawidelock_freertos_radio.h>
+#include <ultrawidelock_freertos_uwb.h>
 
 #define FLASH_TAG "flash"
 
@@ -89,6 +90,58 @@
 #ifndef ULTRAWIDELOCK_FREERTOS_FLASH_TIMEOUT_MS
 #define ULTRAWIDELOCK_FREERTOS_FLASH_TIMEOUT_MS 10000u
 #endif
+
+/*
+ * How long an operation may be HELD BACK while a UWB ranging session is live,
+ * before it runs anyway. The timeslots MPSL grants for flash are arbitrated
+ * against BLE and 802.15.4 only; the UWB slot schedule is invisible to them,
+ * and NVMC work stalls the CPU outright, so a grant can land a 3 ms erase
+ * slice or a multi-millisecond write burst inside the ~1,836 us window between
+ * a DW3110 frame and its armed response. Every caller here is a settings
+ * persist with no deadline of its own, and a walk-up session ends within a few
+ * seconds, so waiting for its idle is nearly free. The wait is still bounded,
+ * because a phone parked in range keeps a session listening indefinitely and a
+ * persist deferred forever is data lost to the next power cut -- for a lock,
+ * the worse trade.
+ */
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_DEFER_MS
+#define ULTRAWIDELOCK_FREERTOS_FLASH_DEFER_MS 5000u
+#endif
+#define FLASH_DEFER_POLL_MS 10u
+
+/*
+ * Weak so this file keeps linking where the UWB layer does not: the host tests
+ * compile it against fakes, and an image without the radio stack never has a
+ * session to defer for. uwb/ultrawidelock_freertos_uwb.c provides the real
+ * answer.
+ */
+__attribute__((weak)) bool ultrawidelock_freertos_uwb_ranging_active(void)
+{
+	return false;
+}
+
+/* Hold the operation until the ranging session ends, or the bound expires. */
+static void flash_defer_for_ranging(void)
+{
+	TickType_t deadline;
+
+	if (__get_IPSR() != 0u || xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) {
+		return; /* nothing to yield from; run_op() already handles both contexts */
+	}
+	if (!ultrawidelock_freertos_uwb_ranging_active()) {
+		return;
+	}
+	deadline = xTaskGetTickCount() + pdMS_TO_TICKS(ULTRAWIDELOCK_FREERTOS_FLASH_DEFER_MS);
+	while (ultrawidelock_freertos_uwb_ranging_active()) {
+		if ((int32_t)(xTaskGetTickCount() - deadline) >= 0) {
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, FLASH_TAG,
+						   "ranging still live after %u ms; flash work proceeds",
+						   (unsigned)ULTRAWIDELOCK_FREERTOS_FLASH_DEFER_MS);
+			break;
+		}
+		vTaskDelay(pdMS_TO_TICKS(FLASH_DEFER_POLL_MS));
+	}
+}
 
 /*
  * ONE WRITER AT A TIME, and this is not defensive programming.
@@ -562,10 +615,13 @@ int ultrawidelock_freertos_flash_write(uint32_t offset, const void *data, size_t
 	}
 
 	/* Taken BEFORE s_op is touched: the operation record is the shared
-	 * state, not just the timeslot session. */
+	 * state, not just the timeslot session. The ranging defer runs first,
+	 * outside the lock, so a held-back writer does not also stall a later
+	 * one for the whole defer bound on top of its own. */
 	bool held;
 	int rc;
 
+	flash_defer_for_ranging();
 	if (flash_lock_take(&held) != 0) {
 		return -1;
 	}
@@ -595,6 +651,7 @@ int ultrawidelock_freertos_flash_erase(uint32_t offset, size_t length)
 	bool held;
 	int rc;
 
+	flash_defer_for_ranging();
 	if (flash_lock_take(&held) != 0) {
 		return -1;
 	}

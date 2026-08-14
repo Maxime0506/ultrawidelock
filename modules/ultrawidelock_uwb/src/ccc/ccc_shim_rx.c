@@ -1044,6 +1044,66 @@ static int32_t gated_rxenable(int32_t mode)
 	return dwt_rxenable(mode);
 }
 
+/* ── Arm-leg latency distributions (J-Link read; nothing prints on the hot path) ──
+ * One record per arm attempt, in the DW3110's hi32 time (~4 ns/tick, the same domain as dsys):
+ * RMARKER of the frame that triggered the dispatch -> the arm point. min/max catch the tail that
+ * the ARM FAIL log only sees once it is already fatal; the histogram (250 us buckets, the last
+ * bucket saturates) shows where the steady state sits. Never reset, so a session's distribution
+ * survives its stop for a post-hoc probe attach. */
+#define CCC_LAT_BUCKET_HI32 62500u /* 250 us in hi32 (~4 ns) ticks */
+#define CCC_LAT_HIST_N      8u     /* 0..2 ms; the whole Pre-POLL budget is 1,836 us */
+
+struct ccc_lat_stat {
+	uint32_t n;   /* samples recorded */
+	uint32_t min; /* hi32 ticks; us = value / 250 */
+	uint32_t max;
+	uint32_t hist[CCC_LAT_HIST_N];
+};
+
+static volatile struct ccc_lat_stat g_lat_prepoll; /* Pre-POLL RMARKER -> POLL RX arm (dsys) */
+static volatile struct ccc_lat_stat g_lat_resp;    /* POLL RMARKER -> Response TX arm */
+static volatile struct ccc_lat_stat g_lat_final;   /* Response TX RMARKER (t3) -> Final RX arm */
+
+static void lat_record(volatile struct ccc_lat_stat *s, uint32_t d)
+{
+	uint32_t b = d / CCC_LAT_BUCKET_HI32;
+
+	if (s->n == 0u || d < s->min) {
+		s->min = d;
+	}
+	if (d > s->max) {
+		s->max = d;
+	}
+	s->hist[b < CCC_LAT_HIST_N ? b : CCC_LAT_HIST_N - 1u]++;
+	s->n++;
+}
+
+#if defined(CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT)
+/* DW3000 IRQ-path cycle stamps (the port's dw3000_hw file), read to DECOMPOSE an arm leg's
+ * dispatch latency into its buckets: hop (GPIO ISR -> worker dispatch = contention), isr (worker
+ * entry -> callback entry = the dwt_isr SPI frame-pull, plus the rxdiag shim's prefix), cb
+ * (callback entry -> the arm point = callback processing). Whichever bucket dominates decides
+ * the fix: a large hop => contention (quiet BLE / priorities); a large isr+cb => irreducible SPI
+ * on the critical path (take the CPU off it via DW3000 auto-RX).
+ *
+ * All three stamps are from the CURRENT event. g_dw_cyc_isrdone is deliberately not consumed
+ * here: the drain loop stamps it only after the callback returns, so a callback that reads it
+ * gets the PREVIOUS event's value (observed as a negative isr bucket over SWD). g_dw_cyc_cbentry
+ * is stamped at prepoll_rx_rearm entry instead, which is inside this event. */
+extern volatile uint32_t g_dw_cyc_gpio;      /* T0: GPIO ISR entry */
+extern volatile uint32_t g_dw_cyc_work;      /* T1: worker-task dispatch entry */
+extern volatile uint32_t g_dw_cyc_per_us;    /* calibrated CPU cyc/us */
+uint32_t dw3000_dwt_cyccnt(void);            /* free-running cycle counter, same clock */
+static volatile uint32_t g_dw_cyc_cbentry;   /* T2: CCC RX-callback entry, this event */
+static volatile uint32_t g_dbg_pp_hop;       /* PRE-POLL leg: T1-T0 cyc (contention) */
+static volatile uint32_t g_dbg_pp_isr;       /* PRE-POLL leg: T2-T1 cyc (dwt_isr SPI) */
+static volatile uint32_t g_dbg_pp_cb;        /* PRE-POLL leg: (arm point)-T2 cyc (callback) */
+static volatile uint32_t g_dbg_final_hop;    /* FINAL leg: T1-T0 cyc */
+static volatile uint32_t g_dbg_final_isr;    /* FINAL leg: T2-T1 cyc */
+static volatile uint32_t g_dbg_final_cb;     /* FINAL leg: (arm entry)-T2 cyc */
+static volatile uint32_t g_dbg_final_per_us; /* cyc/us copy for the J-Link decode */
+#endif
+
 /** Flip to SP3/ND, load the pre-warmed CCC STS (g_warm_index), and arm a delayed RX to catch the
  * POLL that follows the Pre-POLL. */
 static int arm_poll_sp3(uint32_t prepoll_ip)
@@ -1082,6 +1142,14 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 	/* dsys = RMARKER->arm gap in hi32 (4 ns) units; the delayed target must still be
 	 * in the future when rxenable latches it (dsys < SLOT - LEAD), else HPDWARN. */
 	uint32_t dsys = dwt_readsystimestamphi32() - prepoll_ip;
+	lat_record(&g_lat_prepoll, dsys);
+#if defined(CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT)
+	/* Mirror of the FINAL-leg decomposition, for THIS Pre-POLL dispatch. Taken at the dsys
+	 * point so the cb bucket covers the whole pre-arm work (MHR parse + STS loads above). */
+	g_dbg_pp_hop = g_dw_cyc_work - g_dw_cyc_gpio;
+	g_dbg_pp_isr = g_dw_cyc_cbentry - g_dw_cyc_work;
+	g_dbg_pp_cb = dw3000_dwt_cyccnt() - g_dw_cyc_cbentry;
+#endif
 	dwt_setdelayedtrxtime(prepoll_ip + CCC_RX_SLOT_HI32 - CCC_RX_POLL_LEAD);
 	dwt_setrxtimeout(CCC_RX_POLL_WIN_TO);
 	if (gated_rxenable(DWT_START_RX_DELAYED | DWT_IDLE_ON_DLY_ERR) != DWT_SUCCESS) {
@@ -1125,20 +1193,8 @@ static void revert_to_sp0_listen(void)
  * no-frame timeout (RXFTO -> prepoll_rx_rearm else-branch re-arms immediate SP0), the next
  * Pre-POLL is never lost, so ranging can only improve. Consumed by the same-round snapshot, so no
  * live-timestamp race. */
-/* DW3000 IRQ-path cycle stamps (dw3000_hw.c), read to DECOMPOSE the FINAL callback's ~3 ms
- * latency into its buckets: hop (GPIO-ISR -> workqueue dispatch = BLE/coop contention), isr
- * (dwt_isr SPI frame-pull), cb (dwt_isr-done -> here = callback processing). Whichever bucket
- * dominates decides the fix: a large hop => contention (quiet BLE / ISR fast-path); a large
- * isr+cb => irreducible SPI on the critical path (take the CPU off it via DW3000 auto-RX). */
-extern volatile uint32_t g_dw_cyc_gpio;      /* T0: GPIO ISR entry */
-extern volatile uint32_t g_dw_cyc_work;      /* T1: work-handler entry */
-extern volatile uint32_t g_dw_cyc_isrdone;   /* T2: dwt_isr loop done */
-extern volatile uint32_t g_dw_cyc_per_us;    /* calibrated CPU cyc/us */
-uint32_t dw3000_dwt_cyccnt(void);            /* free-running DWT cycle counter */
-static volatile uint32_t g_dbg_final_hop;    /* FINAL: T1-T0 dispatch cyc (contention) */
-static volatile uint32_t g_dbg_final_isr;    /* FINAL: T2-T1 dwt_isr SPI cyc */
-static volatile uint32_t g_dbg_final_cb;     /* FINAL: (arm entry)-T2 callback cyc */
-static volatile uint32_t g_dbg_final_per_us; /* cyc/us copy for the J-Link decode */
+/* The hop/isr/cb decomposition stamps this callback consumes are declared above arm_poll_sp3,
+ * shared with the PRE-POLL leg's mirror. */
 
 /* Final_Data delayed-RX net (bench-widened): open ~100 us after the Final RMARKER and hold ~8 ms
  * (~4 slots). Scheduled in HARDWARE, so the window opens at the right instant no matter how busy
@@ -1164,11 +1220,11 @@ static int arm_final_data_sp0(uint32_t final_ip)
 	uint32_t dx = final_ip + CCC_FDRX_OPEN_HI32; /* ideal: just after the Final frame's tail */
 	int r;
 
-	/* Decompose THIS FINAL's dispatch latency (cyc; the stamps are from the FINAL's own IRQ).
-	 */
+	/* Decompose THIS FINAL's dispatch latency (cyc; every stamp is from the FINAL's own IRQ —
+	 * g_dw_cyc_cbentry, not g_dw_cyc_isrdone, which the drain loop has not restamped yet). */
 	g_dbg_final_hop = g_dw_cyc_work - g_dw_cyc_gpio;
-	g_dbg_final_isr = g_dw_cyc_isrdone - g_dw_cyc_work;
-	g_dbg_final_cb = dw3000_dwt_cyccnt() - g_dw_cyc_isrdone;
+	g_dbg_final_isr = g_dw_cyc_cbentry - g_dw_cyc_work;
+	g_dbg_final_cb = dw3000_dwt_cyccnt() - g_dw_cyc_cbentry;
 	g_dbg_final_per_us = g_dw_cyc_per_us;
 
 	dwt_forcetrxoff();
@@ -1220,6 +1276,7 @@ static int tx_response_sp3(uint32_t poll_ip, uint32_t resp_idx)
 	dwt_writetxdata(sizeof(g_resp_payload), g_resp_payload, 0u);
 	dwt_writetxfctrl(sizeof(g_resp_payload) + 2u, 0u, 1u); /* +FCS; ranging=1 (STS) */
 	now = dwt_readsystimestamphi32();
+	lat_record(&g_lat_resp, now - poll_ip); /* POLL RMARKER -> this TX arm */
 	r = dwt_starttx(DWT_START_TX_DELAYED);
 	if (dbg_n < 8u) {
 		/* PROBE (removable): dx-now = margin to the programmed TX RMARKER (hi32/4 ns);
@@ -1254,6 +1311,8 @@ static int arm_final_sp3(uint32_t poll_ip)
 		     CCC_RX_SLOT_HI32; /* EXPERIMENT-2RESP: Final RMARKER = POLL +
 					  ULTRAWIDELOCK_FINAL_SLOT_OFFSET slots (n=1 -> +2, n=2 -> +3) */
 	now = dwt_readsystimestamphi32();
+	/* Response TX RMARKER (t3, stamped by the caller just before this arm) -> this RX arm. */
+	lat_record(&g_lat_final, now - (uint32_t)(g_t_resp_tx >> 8));
 	dwt_setdelayedtrxtime(dx - CCC_RX_POLL_LEAD);
 	dwt_setrxtimeout(CCC_RX_POLL_WIN_TO);
 	r = gated_rxenable(DWT_START_RX_DELAYED | DWT_IDLE_ON_DLY_ERR);
@@ -1336,6 +1395,12 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 	uint8_t rng = 0u;
 	bool is_pp = false;
 	uint8_t b[CCC_MHR_LEN] = {0};
+
+#if defined(CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT)
+	/* T2 of the hop/isr/cb decomposition: this event's own callback entry. First, so the cb
+	 * bucket owns everything below, including the flight recorder. */
+	g_dw_cyc_cbentry = dw3000_dwt_cyccnt();
+#endif
 
 	/* Flight recorder: record this RX-result callback + its register snapshot. */
 	fr_capture_ev((uint8_t)FR_EP_RX_REARM, st, (cb != NULL) ? (uint16_t)cb->datalength : 0u);
@@ -1726,5 +1791,10 @@ void ccc_prepoll_stop(void)
 	}
 	g_listen_gate = false; /* order matters: close the gate, then kill RX */
 	dwt_forcetrxoff();
+}
+
+bool ccc_prepoll_listening(void)
+{
+	return g_listen_gate;
 }
 #endif /* ULTRAWIDELOCK_CCC_PREPOLL_LISTEN */

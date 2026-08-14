@@ -94,6 +94,9 @@ static struct matter_device_info s_info = {
 	 * yet, so false would promise a return that never happens.
 	 */
 	.supports_concurrent_connection = true,
+	/* All three directions permitted, the default the CHIP builds declare;
+	 * zero is a writable value so it cannot mean "never set". */
+	.approach_direction = MATTER_APPROACH_DIRECTION_ALL,
 };
 static struct matter_im_server s_im;
 
@@ -121,8 +124,13 @@ static struct matter_im_server s_im;
  * The subscription path chunks and so survives any size; the READ path
  * (on_read_request) does not, and this buffer is the whole of its ceiling.
  * Chunking reads is the real fix and is still owed.
+ *
+ * Raised 2048 -> 3072 when the Door Lock globals and the Approach Direction
+ * cluster landed: the uncommissioned full-wildcard report measured 2069 B on
+ * the host, and a commissioned node's fabric data has previously added ~420 B
+ * on top of the fixture's number.
  */
-#define MATTER_REPORT_MAX 2048u
+#define MATTER_REPORT_MAX 3072u
 static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
 
 /** The Interaction Model payload, before framing. */

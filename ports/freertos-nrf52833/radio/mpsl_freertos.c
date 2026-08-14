@@ -25,8 +25,17 @@
 #define ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES 1024u
 #endif
 
+/*
+ * One below the DW3110 worker, above every other task. The worker owns the top
+ * level alone: configUSE_TIME_SLICING is 0, so at EQUAL priority a pump pass
+ * already running when the DW3110's notification lands would keep the CPU
+ * until it blocked, delaying the IRQ-to-task hop inside the ~1,836 us arm
+ * window. One level down, the notify preempts the pump immediately, and MPSL's
+ * time-critical work is unaffected either way -- it runs in its priority-0
+ * interrupts, not here.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY
-#define ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 1u)
+#define ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 2u)
 #endif
 
 #define MPSL_STACK_WORDS                                                                \
