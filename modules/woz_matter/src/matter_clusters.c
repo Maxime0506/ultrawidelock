@@ -78,6 +78,7 @@ static const uint32_t k_root_servers[] = {
 static const uint32_t k_lock_servers[] = {
 	MATTER_CLUSTER_DESCRIPTOR,
 	MATTER_CLUSTER_DOOR_LOCK,
+	MATTER_CLUSTER_APPROACH_DIRECTION,
 };
 
 /* NetworkInfoStruct (python clusters/Objects.py, NetworkInfoStruct). */
@@ -158,7 +159,9 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	(void)ctx;
 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
-		return cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_DOOR_LOCK;
+		return cluster == MATTER_CLUSTER_DESCRIPTOR ||
+		       cluster == MATTER_CLUSTER_DOOR_LOCK ||
+		       cluster == MATTER_CLUSTER_APPROACH_DIRECTION;
 	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return false;
@@ -224,6 +227,19 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 				return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
 			}
 		}
+		if (cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {
+			switch (attribute) {
+			case MATTER_ATTR_APPROACH_DIRECTION:
+			case MATTER_ATTR_FEATURE_MAP:
+			case MATTER_ATTR_CLUSTER_REVISION:
+			case MATTER_ATTR_ATTRIBUTE_LIST:
+			case MATTER_ATTR_ACCEPTED_CMD_LIST:
+			case MATTER_ATTR_GENERATED_CMD_LIST:
+				return MATTER_IM_STATUS_SUCCESS;
+			default:
+				return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+			}
+		}
 		if (cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
 		}
@@ -253,6 +269,17 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		 * questions nobody asked.
 		 */
 		case MATTER_ATTR_FEATURE_MAP:
+		/*
+		 * The remaining globals, on this cluster only: the CHIP builds
+		 * answer them everywhere, and Apple Home's optional lock
+		 * controls (auto-lock timing, access management) appear on
+		 * those builds and not on this one. See the note in
+		 * matter_clusters.h at MATTER_ATTR_CLUSTER_REVISION.
+		 */
+		case MATTER_ATTR_CLUSTER_REVISION:
+		case MATTER_ATTR_ATTRIBUTE_LIST:
+		case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		case MATTER_ATTR_GENERATED_CMD_LIST:
 			return MATTER_IM_STATUS_SUCCESS;
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
@@ -380,6 +407,85 @@ static void put_protocol_version_list(struct matter_tlv_writer *w, matter_tlv_ta
 	(void)matter_tlv_end_container(w);
 }
 
+/*
+ * FeatureMap leads, because it is the attribute that decides what the rest
+ * mean: without the two Aliro bits a controller reads 0x0080..0x0088 as
+ * attributes a lock has no business answering. The four other globals close
+ * the list, and the list includes them because it IS AttributeList: the same
+ * array expands a wildcard and answers 0xFFFB, so the two cannot disagree
+ * about what this cluster carries.
+ */
+static const uint32_t k_lock_attrs[] = {
+	MATTER_ATTR_FEATURE_MAP,
+	MATTER_ATTR_DL_LOCK_STATE,
+	MATTER_ATTR_DL_LOCK_TYPE,
+	MATTER_ATTR_DL_ACTUATOR_ENABLED,
+	MATTER_ATTR_DL_AUTO_RELOCK_TIME,
+	MATTER_ATTR_DL_OPERATING_MODE,
+	MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES,
+	MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY,
+	MATTER_ATTR_DL_ALIRO_GROUP_ID,
+	MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID,
+	MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS,
+	MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY,
+	MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS,
+	MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION,
+	MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX,
+	MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX,
+	MATTER_ATTR_DL_USERS_MAX,
+	MATTER_ATTR_DL_CREDS_PER_USER_MAX,
+	MATTER_ATTR_CLUSTER_REVISION,
+	MATTER_ATTR_ATTRIBUTE_LIST,
+	MATTER_ATTR_ACCEPTED_CMD_LIST,
+	MATTER_ATTR_GENERATED_CMD_LIST,
+};
+
+/*
+ * AcceptedCommandList / GeneratedCommandList: exactly what command() below
+ * dispatches and what it answers with. An id here that command() refuses
+ * invites an invoke that earns UNSUPPORTED_COMMAND, so the three must agree.
+ */
+static const uint32_t k_lock_accepted_cmds[] = {
+	MATTER_CMD_DL_LOCK_DOOR,
+	MATTER_CMD_DL_UNLOCK_DOOR,
+	MATTER_CMD_DL_SET_USER,
+	MATTER_CMD_DL_GET_USER,
+	MATTER_CMD_DL_CLEAR_USER,
+	MATTER_CMD_DL_SET_CREDENTIAL,
+	MATTER_CMD_DL_GET_CREDENTIAL_STATUS,
+	MATTER_CMD_DL_CLEAR_CREDENTIAL,
+	MATTER_CMD_DL_SET_ALIRO_READER_CONFIG,
+};
+
+static const uint32_t k_lock_generated_cmds[] = {
+	MATTER_CMD_DL_GET_USER_RESPONSE,
+	MATTER_CMD_DL_SET_CREDENTIAL_RESPONSE,
+	MATTER_CMD_DL_GET_CREDENTIAL_STATUS_RESPONSE,
+};
+
+static const uint32_t k_approach_attrs[] = {
+	MATTER_ATTR_APPROACH_DIRECTION,
+	MATTER_ATTR_FEATURE_MAP,
+	MATTER_ATTR_CLUSTER_REVISION,
+	MATTER_ATTR_ATTRIBUTE_LIST,
+	MATTER_ATTR_ACCEPTED_CMD_LIST,
+	MATTER_ATTR_GENERATED_CMD_LIST,
+};
+
+/** An array attribute whose members are bare unsigned ids; NULL/0 is legal
+ * and encodes the empty list, which is how a cluster says "no commands". */
+static void put_id_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const uint32_t *ids,
+			size_t count)
+{
+	size_t i;
+
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+	for (i = 0u; i < count; i++) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, ids[i]);
+	}
+	(void)matter_tlv_end_container(w);
+}
+
 /**
  * Endpoint 1: the Door Lock and its own Descriptor.
  *
@@ -423,6 +529,31 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		}
 	}
 
+	if (cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {
+		switch (attribute) {
+		case MATTER_ATTR_APPROACH_DIRECTION:
+			(void)matter_tlv_put_u64(w, tag, info->approach_direction);
+			return;
+		case MATTER_ATTR_FEATURE_MAP:
+			(void)matter_tlv_put_u64(w, tag, 0u);
+			return;
+		case MATTER_ATTR_CLUSTER_REVISION:
+			(void)matter_tlv_put_u64(w, tag, MATTER_APPROACH_DIRECTION_CLUSTER_REV);
+			return;
+		case MATTER_ATTR_ATTRIBUTE_LIST:
+			put_id_list(w, tag, k_approach_attrs,
+				    sizeof(k_approach_attrs) / sizeof(k_approach_attrs[0]));
+			return;
+		case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		case MATTER_ATTR_GENERATED_CMD_LIST:
+			/* Three attributes and nothing else: no commands. */
+			put_id_list(w, tag, NULL, 0u);
+			return;
+		default:
+			return;
+		}
+	}
+
 	if (cluster != MATTER_CLUSTER_DOOR_LOCK) {
 		return;
 	}
@@ -433,6 +564,20 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 					 MATTER_DL_FEATURE_ALIRO_PROVISIONING |
 						 MATTER_DL_FEATURE_ALIRO_BLE_UWB |
 						 MATTER_DL_FEATURE_USER);
+		return;
+	case MATTER_ATTR_CLUSTER_REVISION:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_CLUSTER_REVISION);
+		return;
+	case MATTER_ATTR_ATTRIBUTE_LIST:
+		put_id_list(w, tag, k_lock_attrs, sizeof(k_lock_attrs) / sizeof(k_lock_attrs[0]));
+		return;
+	case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		put_id_list(w, tag, k_lock_accepted_cmds,
+			    sizeof(k_lock_accepted_cmds) / sizeof(k_lock_accepted_cmds[0]));
+		return;
+	case MATTER_ATTR_GENERATED_CMD_LIST:
+		put_id_list(w, tag, k_lock_generated_cmds,
+			    sizeof(k_lock_generated_cmds) / sizeof(k_lock_generated_cmds[0]));
 		return;
 	case MATTER_ATTR_DL_USERS_MAX:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_USERS_MAX);
@@ -974,31 +1119,8 @@ static const uint32_t k_desc_attrs[] = {
 	MATTER_ATTR_DESC_PARTS_LIST,
 };
 
-/*
- * FeatureMap leads, because it is the attribute that decides what the rest
- * mean: without the two Aliro bits a controller reads 0x0080..0x0088 as
- * attributes a lock has no business answering.
- */
-static const uint32_t k_lock_attrs[] = {
-	MATTER_ATTR_FEATURE_MAP,
-	MATTER_ATTR_DL_LOCK_STATE,
-	MATTER_ATTR_DL_LOCK_TYPE,
-	MATTER_ATTR_DL_ACTUATOR_ENABLED,
-	MATTER_ATTR_DL_AUTO_RELOCK_TIME,
-	MATTER_ATTR_DL_OPERATING_MODE,
-	MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES,
-	MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY,
-	MATTER_ATTR_DL_ALIRO_GROUP_ID,
-	MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID,
-	MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS,
-	MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY,
-	MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS,
-	MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION,
-	MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX,
-	MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX,
-	MATTER_ATTR_DL_USERS_MAX,
-	MATTER_ATTR_DL_CREDS_PER_USER_MAX,
-};
+/* k_lock_attrs and k_approach_attrs live above lock_attr_value(), which
+ * serves them as AttributeList; they belong to this section all the same. */
 
 static const uint32_t k_ac_attrs[] = {
 	MATTER_ATTR_AC_ACL,
@@ -1078,6 +1200,10 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 		if (cluster == MATTER_CLUSTER_DOOR_LOCK) {
 			*out = k_lock_attrs;
 			return sizeof(k_lock_attrs) / sizeof(k_lock_attrs[0]);
+		}
+		if (cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {
+			*out = k_approach_attrs;
+			return sizeof(k_approach_attrs) / sizeof(k_approach_attrs[0]);
 		}
 		return 0u;
 	}
@@ -2590,6 +2716,27 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
 	if (path->endpoint == MATTER_ENDPOINT_LOCK) {
+		if (path->cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {
+			struct matter_tlv_reader r;
+			uint64_t v = 0u;
+
+			if (path->attribute != MATTER_ATTR_APPROACH_DIRECTION) {
+				return MATTER_IM_STATUS_UNSUPPORTED_WRITE;
+			}
+			if (data == NULL || data_len == 0u) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			matter_tlv_reader_init(&r, data, data_len);
+			if (matter_tlv_next(&r) != 0 || matter_tlv_get_u64(&r, &v) != 0) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			/* bitmap8; a wider value is the controller's error. */
+			if (v > 0xFFu) {
+				return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+			}
+			info->approach_direction = (uint8_t)v;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		if (path->cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return has_cluster(ctx, path->endpoint, path->cluster)
 				       ? MATTER_IM_STATUS_UNSUPPORTED_WRITE

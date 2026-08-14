@@ -67,7 +67,7 @@ struct rep {
  * If the two drift apart the assertion below stops meaning anything, so they
  * are named the same thing on purpose.
  */
-#define PORT_REPORT_MAX 2048u
+#define PORT_REPORT_MAX 3072u
 
 /* Room for every attribute of the widest cluster this node has, plus slack.
  * BasicInformation alone reports 16, which is exactly where this used to sit --

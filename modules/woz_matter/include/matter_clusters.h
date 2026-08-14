@@ -45,6 +45,23 @@ extern "C" {
 #define MATTER_CLUSTER_DOOR_LOCK               0x0101u
 
 /*
+ * Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349
+ * (Apple), cluster 0xFC03, on the door lock endpoint beside DoorLock itself.
+ *
+ * This is what puts the "approach direction" control in Apple Home's accessory
+ * settings; both CHIP-based lock builds carry it (apps/esp32-matter-lock
+ * creates it in code, integrations/nrfconnect-door-lock patches it into the
+ * zap). One writable bitmap8 attribute; 7 means all three directions
+ * permitted, and which single bit is Left versus Right is still unknown.
+ * Nothing gates unlock on it -- a single-antenna DW3110 cannot measure the
+ * angle -- so the value is stored and reported but never enforced.
+ */
+#define MATTER_CLUSTER_APPROACH_DIRECTION    0x1349FC03u
+#define MATTER_ATTR_APPROACH_DIRECTION       0x0000u
+#define MATTER_APPROACH_DIRECTION_ALL        0x07u
+#define MATTER_APPROACH_DIRECTION_CLUSTER_REV 1u
+
+/*
  * AdministratorCommissioning. This is what Apple Home's "Turn On Pairing Mode"
  * sends, and what multi-admin sharing runs on: a node that does not serve it
  * can be commissioned exactly once, by whoever got there first, and can never
@@ -365,6 +382,28 @@ struct matter_user {
 /** FeatureMap, on every cluster (GlobalAttributeIds.h). */
 #define MATTER_ATTR_FEATURE_MAP 0xFFFCu
 
+/*
+ * The remaining global attributes (GlobalAttributeIds.h). Served only where a
+ * controller has been seen to care: the CHIP-based lock builds answer all of
+ * these on every cluster, and Apple Home builds its accessory-settings UI from
+ * what it can discover -- the missing globals are the working hypothesis for
+ * why Home showed this lock none of the optional controls the CHIP builds get.
+ * Answered on the lock endpoint's clusters; the root endpoint commissions fine
+ * without them and stays as it was.
+ */
+#define MATTER_ATTR_GENERATED_CMD_LIST 0xFFF8u
+#define MATTER_ATTR_ACCEPTED_CMD_LIST  0xFFF9u
+#define MATTER_ATTR_ATTRIBUTE_LIST     0xFFFBu
+#define MATTER_ATTR_CLUSTER_REVISION   0xFFFDu
+
+/**
+ * Door Lock ClusterRevision: 8, the value the working Nordic reference build
+ * reports (integrations/nrfconnect-door-lock/patches/approach-direction-cluster.patch
+ * shows it in the zap context) and the revision that defines the Aliro
+ * attributes this lock serves.
+ */
+#define MATTER_DL_CLUSTER_REVISION 8u
+
 /* BasicInformation attributes (BasicInformation/AttributeIds.h:19-77). */
 #define MATTER_ATTR_BASIC_DATA_MODEL_REVISION   0x0000u
 #define MATTER_ATTR_BASIC_VENDOR_NAME           0x0001u
@@ -585,6 +624,15 @@ struct matter_device_info {
 	 * returns it to 0.
 	 */
 	uint32_t auto_relock_time_s;
+	/**
+	 * The Approach Direction bitmap, whatever the controller last wrote.
+	 *
+	 * The port initialises it to MATTER_APPROACH_DIRECTION_ALL, the same
+	 * default the CHIP builds declare in their metadata; zero is a value a
+	 * controller could legally write, so it cannot double as "never set".
+	 * NOT persisted yet; a reboot returns it to the default.
+	 */
+	uint8_t approach_direction;
 	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *
