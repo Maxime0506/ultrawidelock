@@ -49,6 +49,30 @@ foreach(_woz_path "${WOZ_FREERTOS_SRC}/source/tasks.c" "${WOZ_MDK}/nrf52833.h"
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Which product this image is, declared before anything is built.
+# ----------------------------------------------------------------------------
+# WOZ_HAVE_MATTER used to be set 830 lines down, next to the OpenThread
+# subdirectory whose config reads it. That was early enough for OpenThread and
+# too late for everything else: add_compile_definitions only reaches targets
+# created AFTER the call, and woz_aliro, woz_matter and woz_matter_transport are
+# all created above it. Their sources compiled with the symbol undefined, so
+# every "#if defined(WOZ_HAVE_MATTER)" in them silently took the other branch.
+#
+# That is the same defect as the LTO block below and the section-splitting block
+# after it -- three placements, one cause -- and this one is the quietest of the
+# three, because the other two only cost bytes. This one costs behaviour: the
+# advertiser in modules/woz_aliro/src/aliro_ble_nimble.c decides whether the
+# board is discoverable as a commissionable Matter node, and with the symbol
+# undefined it could only ever advertise the Aliro reader tag.
+#
+# The app gets the same symbol a second way, through woz_freertos_port's
+# INTERFACE definitions further down. That is deliberate and stays: the app is a
+# different directory, which a directory-scoped definition does not reach at all.
+if(WOZ_MATTER)
+  add_compile_definitions(WOZ_HAVE_MATTER=1)
+endif()
+
+# ----------------------------------------------------------------------------
 # Code generation applied to the WHOLE program.
 # ----------------------------------------------------------------------------
 # Same placement argument as the LTO block below, and the same defect behind it:
@@ -554,6 +578,23 @@ add_library(woz_aliro STATIC
 target_include_directories(woz_aliro PUBLIC
   "${WOZ_MODULES_DIR}/woz_aliro/include"
 )
+if(WOZ_MATTER)
+  # The advertiser has to ask two questions it cannot answer itself: whether the
+  # node already holds a fabric, and what the commissionable payload is. Headers
+  # only, and PRIVATE -- linking woz_aliro against woz_matter_transport would be
+  # a cycle, since woz_matter already links woz_aliro. The symbols resolve when
+  # the executable is linked, which is the one place both archives are present.
+  #
+  # apps/dwm3001cdk-lock/src is the other product's tree and carries a
+  # status_led.h that would be wrong for this image. No woz_aliro source
+  # includes it, which is why this is safe here and is checked rather than
+  # assumed -- the same hazard is called out where woz_matter_transport takes
+  # the same directory.
+  target_include_directories(woz_aliro PRIVATE
+    "${WOZ_PORT_DIR}/matter"
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
+  )
+endif()
 # woz_radio for the NimBLE host and its hooks, woz_storage for the provisioning
 # backend the identity is read through, woz_uwb for the ranging contract.
 target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
@@ -873,15 +914,15 @@ set(OT_PROJECT_CONFIG "openthread_project_config.h" CACHE STRING "" FORCE)
 # from every OpenThread translation unit.
 include_directories("${WOZ_PORT_DIR}/thread")
 
-# The project config gates the SRP client on this, and OpenThread is built by
-# its own CMake in a subdirectory -- so it has to be a GLOBAL definition, set
-# before that subdirectory is added. A target-scoped one would leave the config
-# reading it as undefined and silently build an OpenThread with no SRP client,
-# which fails at link with otSrpClient* missing rather than quietly, but only
-# after a full build of the wrong thing.
-if(WOZ_MATTER)
-  add_compile_definitions(WOZ_HAVE_MATTER=1)
-endif()
+# WOZ_HAVE_MATTER is what the project config gates the SRP client on, and
+# OpenThread is built by its own CMake in the subdirectory below -- so it has to
+# be a GLOBAL definition set before that subdirectory is added. A target-scoped
+# one would leave the config reading it as undefined and silently build an
+# OpenThread with no SRP client, which fails at link with otSrpClient* missing
+# rather than quietly, but only after a full build of the wrong thing.
+#
+# It is now set at the top of this file instead of here. This position satisfied
+# OpenThread and nothing else; see the block up there for what it cost.
 
 add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 
