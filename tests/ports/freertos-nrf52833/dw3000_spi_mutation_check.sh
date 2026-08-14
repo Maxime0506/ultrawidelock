@@ -22,7 +22,7 @@ SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c"
 mkdir -p "$OUT"
 
 build() { # <source> <binary>
-	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS \
+	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS -DWOZ_FREERTOS_LOG_NO_MACRO \
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \

@@ -181,6 +181,24 @@ add_library(woz_mbedtls STATIC
   "${WOZ_PORT_DIR}/crypto/mbedtls_platform_freertos.c"
   "${WOZ_PORT_DIR}/crypto/crypto_init_freertos.c"
 )
+if(WOZ_MATTER)
+  # PSA's Internal Trusted Storage, over the port's key-value store. Only a
+  # Matter build has a persistent key to hold -- OpenThread's SRP signing key --
+  # and MBEDTLS_PSA_CRYPTO_STORAGE_C is only defined for that build, so
+  # compiling this unconditionally would be four entry points nothing calls.
+  target_sources(woz_mbedtls PRIVATE "${WOZ_PORT_DIR}/crypto/psa_its_freertos.c")
+  # The NATIVE ITS path, which is the supported way to supply a custom backend:
+  # psa_crypto_storage.c takes it whenever MBEDTLS_PSA_ITS_FILE_C is absent, and
+  # then expects public <psa/error.h> and <psa/internal_trusted_storage.h>.
+  # Neither ships in this tree, so the port provides them.
+  #
+  # MBEDTLS_PSA_ITS_FILE_C was tried first and is NOT the door: it selects the
+  # internal interface but requires MBEDTLS_FS_IO, and there is no filesystem
+  # here. Mbed TLS's own psa_its_file.c self-guards on that symbol, so with it
+  # undefined the file compiles to nothing and cannot collide.
+  target_include_directories(woz_mbedtls PRIVATE "${WOZ_PORT_DIR}/crypto/psa_native_its")
+  target_link_libraries(woz_mbedtls PRIVATE woz_storage)
+endif()
 target_include_directories(woz_mbedtls PUBLIC
   "${WOZ_MBEDTLS_DIR}/include"
   "${WOZ_PORT_DIR}/crypto"
@@ -755,6 +773,31 @@ add_library(woz_thread STATIC
   "${WOZ_PORT_DIR}/thread/ot_log_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_settings_freertos.c"
 )
+if(WOZ_MATTER)
+  # Nordic's PSA crypto platform, a pinned NCS source compiled unmodified --
+  # the same arrangement as radio_nrf5.c above.
+  #
+  # It is required, not optional, once OPENTHREAD_CONFIG_CRYPTO_LIB is PSA.
+  # OpenThread's own crypto_platform.cpp then contributes only 71 lines of weak
+  # ECDSA stubs and expects the PLATFORM to supply otPlatCrypto -- import,
+  # export, destroy, HMAC, AES, random, the whole surface. Without this file the
+  # link fails on otPlatCryptoImportKey and a dozen others, which is exactly
+  # what it did.
+  #
+  # Writing that surface by hand was the alternative. Nordic already maintains
+  # it against the same OpenThread and the same PSA core, and the oracle ships
+  # it, so this is the file the Zephyr build uses too.
+  target_sources(woz_thread PRIVATE
+    "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/crypto_psa.c")
+  # NOT matter_compat on this target's include path. Both shim trees publish
+  # zephyr/kernel.h and zephyr/logging/log.h, and putting the second one here
+  # let it shadow ot_compat's for radio_nrf5.c -- which then failed to compile
+  # against a struct it had been reading correctly for months. Two shim trees on
+  # one include path is a trap regardless of order.
+  #
+  # crypto_psa.c needs one declaration out of Zephyr's settings API, so
+  # ot_compat carries its own one-function header instead.
+endif()
 target_include_directories(woz_thread PUBLIC
   "${WOZ_PORT_DIR}/thread/ot_compat"
   "${WOZ_OPENTHREAD_DIR}/include"
@@ -769,11 +812,24 @@ target_link_libraries(woz_thread PUBLIC woz_storage woz_802154 openthread-mtd ot
 # archive is scanned first leaves the other's references open.
 set_property(TARGET openthread-mtd APPEND PROPERTY INTERFACE_LINK_LIBRARIES woz_thread)
 
-# The two vendor sources read their configuration from a forced include, the
-# same way the source-check script compiles them, so neither needs an edit.
-set_source_files_properties(
+# The vendor sources read their configuration from a forced include, the same
+# way the source-check script compiles them, so none of them needs an edit.
+#
+# THIS LIST IS NAMED, so a file added to woz_thread and not added here compiles
+# with every CONFIG_* guard evaluating false -- silently, because an #if on an
+# undefined symbol is 0 rather than an error. That is what happened when
+# crypto_psa.c was added: it compiled to almost nothing and the link failed on
+# otPlatCryptoEcdsaGenerateAndImportKey, three functions that were sitting
+# inside `#if defined(CONFIG_OPENTHREAD_ECDSA)` in a file that had never been
+# told the symbol was set.
+set(WOZ_OT_VENDOR_SOURCES
   "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/radio_nrf5.c"
-  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c")
+if(WOZ_MATTER)
+  list(APPEND WOZ_OT_VENDOR_SOURCES
+    "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/crypto_psa.c")
+endif()
+set_source_files_properties(${WOZ_OT_VENDOR_SOURCES}
   PROPERTIES COMPILE_OPTIONS
   "-include;${WOZ_PORT_DIR}/thread/ot_compat/woz_freertos_ot_config.h;-Wno-unused-parameter")
 
