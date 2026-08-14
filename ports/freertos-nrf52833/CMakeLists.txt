@@ -49,6 +49,39 @@ foreach(_ultrawidelock_path "${ULTRAWIDELOCK_FREERTOS_SRC}/source/tasks.c" "${UL
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Which product this image is, declared before anything is built.
+# ----------------------------------------------------------------------------
+# Position is for readers, NOT for correctness, and the difference is worth
+# stating because the two blocks below look like this one and do not behave like
+# it.
+#
+#   add_compile_definitions  sets a directory property that CMake reads when it
+#                            GENERATES. Every target in this directory gets it,
+#                            including targets created above the call.
+#   add_compile_options      is captured when each target is CREATED. Targets
+#                            above the call never see it.
+#
+# Verified with a two-target scratch project rather than reasoned about: a
+# library created before both calls received the definition and did not receive
+# the option. So this could sit where it used to, 830 lines down beside the
+# OpenThread subdirectory whose config reads it, and ultrawidelock_cred would still have
+# compiled with ULTRAWIDELOCK_HAVE_MATTER defined. It is up here because a symbol that
+# says which product the image is belongs before anything is built, not because
+# moving it fixed anything -- it fixed nothing, and an earlier version of this
+# comment claimed otherwise.
+#
+# The app gets the same symbol a second way, through ultrawidelock_freertos_port's
+# INTERFACE definitions further down. That one IS load-bearing: the app is a
+# different directory, and no directory property here reaches it.
+#
+# OpenThread still constrains this. Its subdirectory is added below and its
+# config reads the symbol, so the definition has to exist by then -- which any
+# position in this file satisfies, and a target-scoped definition would not.
+if(ULTRAWIDELOCK_MATTER)
+  add_compile_definitions(ULTRAWIDELOCK_HAVE_MATTER=1)
+endif()
+
+# ----------------------------------------------------------------------------
 # Code generation applied to the WHOLE program.
 # ----------------------------------------------------------------------------
 # Same placement argument as the LTO block below, and the same defect behind it:
@@ -555,6 +588,24 @@ add_library(ultrawidelock_cred STATIC
 target_include_directories(ultrawidelock_cred PUBLIC
   "${ULTRAWIDELOCK_MODULES_DIR}/ultrawidelock_cred/include"
 )
+if(ULTRAWIDELOCK_MATTER)
+  # The advertiser has to ask two questions it cannot answer itself: whether the
+  # node already holds a fabric, and what the commissionable payload is. Headers
+  # only, and PRIVATE -- linking ultrawidelock_cred against
+  # ultrawidelock_matter_transport would be a cycle, since ultrawidelock_matter
+  # already links ultrawidelock_cred. The symbols resolve when the executable is
+  # linked, which is the one place both archives are present.
+  #
+  # apps/dwm3001cdk-lock/src is the other product's tree and carries a
+  # status_led.h that would be wrong for this image. No ultrawidelock_cred source
+  # includes it, which is why this is safe here and is checked rather than
+  # assumed -- the same hazard is called out where ultrawidelock_matter_transport
+  # takes the same directory.
+  target_include_directories(ultrawidelock_cred PRIVATE
+    "${ULTRAWIDELOCK_PORT_DIR}/matter"
+    "${ULTRAWIDELOCK_REPO_ROOT}/apps/dwm3001cdk-lock/src"
+  )
+endif()
 # ultrawidelock_radio for the NimBLE host and its hooks, ultrawidelock_storage for the provisioning
 # backend the identity is read through, ultrawidelock_uwb for the ranging contract.
 target_link_libraries(ultrawidelock_cred PUBLIC ultrawidelock_radio ultrawidelock_storage ultrawidelock_uwb)
@@ -874,15 +925,16 @@ set(OT_PROJECT_CONFIG "openthread_project_config.h" CACHE STRING "" FORCE)
 # from every OpenThread translation unit.
 include_directories("${ULTRAWIDELOCK_PORT_DIR}/thread")
 
-# The project config gates the SRP client on this, and OpenThread is built by
-# its own CMake in a subdirectory -- so it has to be a GLOBAL definition, set
-# before that subdirectory is added. A target-scoped one would leave the config
-# reading it as undefined and silently build an OpenThread with no SRP client,
-# which fails at link with otSrpClient* missing rather than quietly, but only
-# after a full build of the wrong thing.
-if(ULTRAWIDELOCK_MATTER)
-  add_compile_definitions(ULTRAWIDELOCK_HAVE_MATTER=1)
-endif()
+# ULTRAWIDELOCK_HAVE_MATTER is what the project config gates the SRP client on, and
+# OpenThread is built by its own CMake in the subdirectory below -- so it has to
+# be a GLOBAL definition rather than a target-scoped one, which would leave the
+# config reading it as undefined and silently build an OpenThread with no SRP
+# client. That fails at link with otSrpClient* missing rather than quietly, but
+# only after a full build of the wrong thing.
+#
+# It is set at the top of this file. Anywhere above this line would do; see the
+# block up there for why position is a readability choice and not a functional
+# one for definitions.
 
 add_subdirectory("${ULTRAWIDELOCK_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 

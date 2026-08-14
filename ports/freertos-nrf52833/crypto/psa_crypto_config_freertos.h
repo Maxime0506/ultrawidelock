@@ -8,21 +8,21 @@
  *
  * Two omissions carry over and matter:
  *
- * PSA_WANT_ALG_HKDF is absent. It depends on HMAC, which this image does not
- * enable, so it would resolve to nothing. Key derivation is ultrawidelock_hkdf() in
- * modules/ultrawidelock_cred/src/ultrawidelock_hash.c, pure C11 and already linked.
+ * PSA_WANT_ALG_HKDF is absent. It depends on HMAC, and nothing here derives
+ * keys through a PSA key derivation: ultrawidelock_hkdf() in
+ * modules/ultrawidelock_cred/src/ultrawidelock_hash.c is pure C11 and already
+ * linked, and OpenThread's own HKDF is built on its HmacSha256 rather than on
+ * PSA.
  *
- * PSA persistent-key storage is absent, and unlike the oracle this port can
- * afford that. The oracle must keep MBEDTLS_PSA_CRYPTO_STORAGE_C because
- * OPENTHREAD_CRYPTO_PSA=y puts Zephyr's crypto_psa.c in the call graph, and
- * that file imports keys at PSA_KEY_LIFETIME_PERSISTENT unconditionally. This
- * port leaves OpenThread on its upstream default of
- * OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS, so that caller does not exist, and no
- * tracked caller asks for a persistent lifetime: ultrawidelock_prim_psa.c imports,
- * uses and destroys volatile keys, and the reader identity is a record in the
- * key-value store rather than a PSA key. Adding OT PSA later means adding
- * storage back and a PSA ITS backend with it -- read the oracle's note before
- * assuming otherwise, because it cost a commissioning round to learn.
+ * PSA persistent-key storage depends on the build. A READER-ONLY image has no
+ * caller that asks for a persistent lifetime -- ultrawidelock_prim_psa.c imports, uses
+ * and destroys volatile keys, and the reader identity is a record in the
+ * key-value store rather than a PSA key. A MATTER image does: it sets
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA, which puts Nordic's crypto_psa.c in the
+ * call graph, and that file imports keys at PSA_KEY_LIFETIME_PERSISTENT
+ * unconditionally. That is why MBEDTLS_PSA_CRYPTO_STORAGE_C and the ITS backend
+ * in crypto/psa_its_freertos.c exist. The oracle pays for storage always, for
+ * the same reason and with no switch to avoid it.
  */
 #ifndef ULTRAWIDELOCK_FREERTOS_PSA_CRYPTO_CONFIG_H
 #define ULTRAWIDELOCK_FREERTOS_PSA_CRYPTO_CONFIG_H
@@ -40,6 +40,50 @@
 #define PSA_WANT_ALG_ECB_NO_PADDING 1
 #define PSA_WANT_ALG_GCM 1
 #define PSA_WANT_KEY_TYPE_AES 1
+
+#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
+/*
+ * WHAT OPENTHREAD NEEDS ONCE ITS CRYPTO LIBRARY IS PSA.
+ *
+ * These three are not in the oracle's list, and that is not an oversight in
+ * either direction: the oracle leaves OpenThread on its upstream Mbed TLS
+ * crypto library, where HMAC is reached through MBEDTLS_MD_C and never through
+ * PSA. This port's Matter build sets OPENTHREAD_CONFIG_CRYPTO_LIB_PSA instead,
+ * which routes the same calls into Nordic's crypto_psa.c, and that file asks
+ * PSA for algorithms nothing else in this image had ever asked for.
+ *
+ * In Zephyr they arrive by themselves. nrf/subsys/nrf_security/Kconfig.legacy
+ * carries "select PSA_WANT_ALG_HMAC if PSA_CRYPTO_CLIENT" and the matching line
+ * for deterministic ECDSA, so a Kconfig build that enables OpenThread's PSA
+ * crypto gets them without naming them. This port has no Kconfig, so nothing
+ * selects anything, and a hand-written list omits exactly what it was never
+ * told about.
+ *
+ * HOW THE OMISSION PRESENTED, because it is worth recognising again: the image
+ * built clean, linked clean, booted, initialised the PSA core, brought up the
+ * OpenThread radio -- and then the boot task spun forever inside
+ * KeyManager::ComputeKeys. Thread derives its key material by HMAC-SHA256 over
+ * the network key, psa_get_and_lock_key_slot_with_policy answered
+ * PSA_ERROR_NOT_SUPPORTED, and OpenThread wraps that call in SuccessOrAssert,
+ * which on this platform is an infinite loop rather than a message. The key in
+ * ITS was correct, the policy was correct, and the log's last line was
+ * "OpenThread radio initialized". Nothing named HMAC anywhere in the symptom.
+ *
+ * HMAC also carries HKDF. OpenThread's hkdf_sha256.cpp is written on top of
+ * Crypto::HmacSha256 rather than on a PSA key derivation, so the note above
+ * about PSA_WANT_ALG_HKDF being pointless without HMAC still holds and still
+ * needs no line of its own.
+ *
+ * PSA_WANT_ALG_PBKDF2_AES_CMAC_PRF_128 stays out. crypto_psa.c references it,
+ * but only from otPlatCryptoPbkdf2GenerateKey, which derives a PSKc for the
+ * commissioner and joiner roles this lock does not build. If a joiner is ever
+ * added, this is the line it will need, and it will announce itself the same
+ * unhelpful way.
+ */
+#define PSA_WANT_ALG_HMAC 1
+#define PSA_WANT_KEY_TYPE_HMAC 1
+#define PSA_WANT_ALG_DETERMINISTIC_ECDSA 1
+#endif
 
 /*
  * The oracle's list has one more line, CONFIG_PSA_WANT_GENERATE_RANDOM, and it

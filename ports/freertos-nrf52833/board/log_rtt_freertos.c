@@ -55,7 +55,29 @@
 
 #include <ultrawidelock_freertos_platform.h>
 
-/* Bytes of RAM the up-buffer holds. One boot's worth of bring-up chatter. */
+/*
+ * Bytes of RAM the up-buffer holds. One boot's worth of bring-up chatter.
+ *
+ * IT IS NOT A RING THAT OVERWRITES. The flags below are RTT_MODE_NO_BLOCK_SKIP,
+ * so once the buffer is full a write that does not fit is DROPPED WHOLE and the
+ * ones already there are kept. With a debugger attached that never happens,
+ * because the host advances the read offset as it reads. With nothing attached
+ * -- which is every board not on a bench, and also a board being read by
+ * savebin rather than by an RTT client -- the buffer fills once and every line
+ * after it is silently lost.
+ *
+ * That is the right trade for a product: dropping log lines is better than
+ * blocking a lock's boot, and better than losing the START of a boot, which is
+ * where the reasons live. It is the wrong trade while debugging something
+ * talkative, and it cost a bench session to recognise: the Matter advertising
+ * decision logs about 1.1 kB into boot, so the line was emitted, dropped, and
+ * its absence read as the code not running. It was running -- a BLE scan saw
+ * the advertisement on air.
+ *
+ * Raise this from the build for anything past bring-up. The whole size is
+ * static RAM on a part with roughly 8 kB spare, so it is a bench value, not a
+ * shipping one, and there is deliberately no default here that spends it.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES
 #define ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES 1024u
 #endif

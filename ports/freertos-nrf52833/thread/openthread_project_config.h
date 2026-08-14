@@ -106,6 +106,20 @@
  */
 #define OPENTHREAD_CONFIG_CRYPTO_LIB OPENTHREAD_CONFIG_CRYPTO_LIB_PSA
 #define OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE 1
+
+/*
+ * The KeyManager half of exportable MAC keys. See
+ * thread/ot_compat/ultrawidelock_freertos_ot_config.h for why the radio needs the literal
+ * bytes at all; this line is what lets it have them. KeyManager reads it as
+ * kExportableMacKeys and imports the MAC keys with PSA_KEY_USAGE_EXPORT, and
+ * without it the export the radio performs is refused by PSA at the policy
+ * check rather than at compile time.
+ *
+ * Both symbols are set together and neither is useful alone. Zephyr expresses
+ * that with a single Kconfig option that feeds both; here it is two defines in
+ * two files, which is the cost of not having Kconfig.
+ */
+#define OPENTHREAD_CONFIG_PLATFORM_MAC_KEYS_EXPORTABLE_ENABLE 1
 #endif
 
 #endif /* ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */
