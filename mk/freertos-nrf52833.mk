@@ -94,6 +94,16 @@ FREERTOS_PROV_CONSOLE ?= ON
 # reach over BLE is not one anybody can add to a home.
 FREERTOS_MATTER ?= OFF
 
+# 1 error, 2 warning, 3 info, 4 debug. The gate is at the call site, so a lower
+# level removes the format strings too rather than only their output.
+FREERTOS_LOG_LEVEL ?= 3
+
+# GCC -flto-partition. 1to1 keeps code generation on translation-unit
+# boundaries; it was forced by an assembler "offset out of range" when the
+# kernel, device and Thread layers were still inside the LTO set, and it costs
+# most of the cross-unit code motion LTO exists for.
+FREERTOS_LTO_PARTITION ?= 1to1
+
 # Turning the console off removes the USBD vector, and freertos-vector-check.sh
 # is told which OWNER went rather than being left to infer it from a missing
 # handler. Inferring it would make a deliberate exclusion and a dropped handler
@@ -105,6 +115,8 @@ FREERTOS_CMAKE_ARGS = \
 	-DWOZ_LTO=$(FREERTOS_LTO) \
 	-DWOZ_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
 	-DWOZ_MATTER=$(FREERTOS_MATTER) \
+	-DWOZ_LOG_LEVEL=$(FREERTOS_LOG_LEVEL) \
+	-DWOZ_LTO_PARTITION=$(FREERTOS_LTO_PARTITION) \
 	-DWOZ_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \

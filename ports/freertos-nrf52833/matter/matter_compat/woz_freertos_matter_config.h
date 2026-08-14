@@ -23,6 +23,50 @@
 #define WOZ_FREERTOS_MATTER_CONFIG_H
 
 /*
+ * The toolchain preamble, and why it is HERE rather than in zephyr/kernel.h.
+ *
+ * A Zephyr build injects these through its own forced includes, so a source
+ * file may use BUILD_ASSERT or EINVAL without including anything that declares
+ * them. matter_fab_settings.c does exactly that: its only Zephyr includes are
+ * logging and settings, and it still uses BUILD_ASSERT, ARRAY_SIZE and EINVAL.
+ * Putting them in kernel.h looked right and changed nothing, because that file
+ * never includes kernel.h.
+ *
+ * This header is -include'd on every source in the library, which is the same
+ * position Zephyr's autoconf occupies. That is the property being matched.
+ */
+#include <errno.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifndef BUILD_ASSERT
+/*
+ * Zephyr's message argument is optional and C11's _Static_assert requires one.
+ * Concatenating with an empty literal covers both: with no message the result
+ * is _Static_assert(expr, ""), and with one it is ordinary string
+ * concatenation, done by the compiler rather than by an argument-counting
+ * macro.
+ */
+#define BUILD_ASSERT(expr, ...) _Static_assert(expr, "" __VA_ARGS__)
+#endif
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
+#ifndef ARG_UNUSED
+#define ARG_UNUSED(x) ((void)(x))
+#endif
+
+/*
+ * Zephyr's config-symbol test. A symbol that is not defined at all evaluates to
+ * 0 in #if, which is the behaviour these call sites want.
+ */
+#ifndef IS_ENABLED
+#define IS_ENABLED(cfg) (cfg)
+#endif
+
+/*
  * The transport is built on OpenThread's own API, not Zephyr's L2. The file
  * says so itself: without this it compiles to a set of honest refusals rather
  * than disappearing, because matter_clusters.c calls it unconditionally and a
@@ -45,14 +89,59 @@
 #define CONFIG_ALIRO_MATTER_PRODUCT_ID 0x8001
 
 /*
- * Deliberately left undefined:
+ * The commissioning layer's build-time parameters. Every value matches the
+ * Zephyr oracle's Kconfig default, so a commissioner cannot tell the two images
+ * apart -- which is the point of sharing the source.
+ */
+
+/* 0xF00 with passcode 20202021 is CHIP's own test pairing, so a bench
+ * commissioner works with no extra setup. */
+#define CONFIG_ALIRO_MATTER_DISCRIMINATOR 0xF00
+
+/*
+ * What the device stores INSTEAD of the setup passcode. Someone who reads this
+ * out of flash can verify a commissioner that knows the passcode and cannot
+ * impersonate one, which is the point of SPAKE2+'s augmented form. w0 (32 B)
+ * then L (65 B), and it must be derived from the same passcode, salt and
+ * iteration count as the three lines around it.
+ */
+#define CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER                                                       \
+	"ca92f10ad437760cc8948aefe2d09f142bc1a363824a0079a63e6df097575bb5"                         \
+	"043609715ad65a53cd3c18a0f80011bf09dbbfbd9453c2b00eed286f5275ecaa"                         \
+	"e60a2e896837995232334c319994d790ee2d09fe5cb4a229503234f8479eb3d3"                         \
+	"08"
+#define CONFIG_ALIRO_MATTER_SPAKE2P_SALT                                                           \
+	"04f7398d5b49b5b5db8a5e61c8aece1d1a230e3b9085199d854ef034fd30a89b"
+#define CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS 20000
+
+/* The inbound Matter message ceiling. A Start fragment declaring more than this
+ * is refused before a byte is copied, so a peer cannot choose this node's
+ * memory use. Must match matter_ble_freertos.c's reassembly buffer. */
+#define CONFIG_ALIRO_MATTER_BLE_RX_BUF 1024
+
+/* Reported in one log line when the heap probe is on. The port's Mbed TLS heap;
+ * see the crypto layer for where the number comes from. */
+#define CONFIG_MBEDTLS_HEAP_SIZE 16384
+
+/* This image has the update receiver, and the commissioning gesture opens the
+ * update window alongside the commissioning one. */
+#define CONFIG_WOZ_DFU_RECEIVER 1
+
+/*
+ * Deliberately left undefined, and each is a behaviour rather than a size:
  *
- *   CONFIG_ALIRO_SRP_DIAG   the SRP state-changed diagnostic callback. It is
- *                           the one openthread_*() helper this port has no
- *                           equivalent for -- Zephyr's callback registration
- *                           takes a Zephyr list node -- and it reports on
- *                           registration rather than performing it, so the
- *                           transport is complete without it.
+ *   CONFIG_ALIRO_MATTER_CLEAR_ON_BOOT  erases stored fabrics at every boot. A
+ *                                      bench aid; shipping it would make the
+ *                                      node forget its home on every reset.
+ *   CONFIG_ALIRO_HEAP_PROBE            reports the Mbed TLS high-water mark.
+ *                                      Costs a walk of the heap's block list.
+ *   CONFIG_ALIRO_SRP_DIAG              the SRP state-changed diagnostic
+ *                                      callback, and the one openthread_*()
+ *                                      helper this port has no equivalent for:
+ *                                      Zephyr's registration takes a Zephyr
+ *                                      list node. It reports on registration
+ *                                      rather than performing it, so the
+ *                                      transport is complete without it.
  */
 
 #endif /* WOZ_FREERTOS_MATTER_CONFIG_H */

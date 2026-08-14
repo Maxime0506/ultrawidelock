@@ -41,6 +41,7 @@
 #endif
 #if WOZ_HAVE_MATTER
 #include <matter_ble_freertos.h>
+#include <matter_commission.h>
 #endif
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
@@ -428,6 +429,27 @@ static void boot_task(void *arg)
 		status_led_signal(STATUS_LED_FAULT, true);
 		woz_freertos_fatal("Aliro reader start failed");
 	}
+
+#if WOZ_HAVE_MATTER
+	/*
+	 * The commissioning handlers, after the reader because they use the
+	 * identity and the crypto it brought up.
+	 *
+	 * Nothing here touches a radio. Whether the board is DISCOVERABLE as a
+	 * commissionable node is decided by the advertiser, which asks
+	 * matter_commission_has_fabric() -- one advertising set carries the
+	 * Matter payload or the Aliro tag, never both.
+	 *
+	 * Not fatal, and the asymmetry with the reader above is deliberate: a
+	 * reader that cannot commission is still a lock that opens for a phone
+	 * already enrolled. A bad verifier is refused per attempt rather than at
+	 * startup for the same reason.
+	 */
+	if (matter_commission_init() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "Matter commissioning unavailable; this board cannot join a fabric");
+	}
+#endif
 
 	run_loop();
 }

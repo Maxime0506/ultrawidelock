@@ -475,14 +475,67 @@ if(WOZ_MATTER)
     # differ in shape, not spelling. It carries the oracle's hard-won behaviour
     # across rather than its code -- see the four numbered lessons in the file.
     "${WOZ_PORT_DIR}/matter/matter_ble_freertos.c"
+    # The commissioning layer, also compiled unmodified. It is 3,417 lines and
+    # its entire operating-system surface is work items, logging and settings --
+    # everything else is PSA crypto and this project's own modules. That makes
+    # it the same kind of file as the Thread transport: shared behaviour wearing
+    # a Zephyr include block. It lives under apps/ rather than ports/ only
+    # because that is where the Zephyr build wanted it.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src/matter_commission.c"
+    "${WOZ_REPO_ROOT}/ports/zephyr/store/matter_fab_settings.c"
   )
   target_include_directories(woz_matter_transport PUBLIC
     "${WOZ_PORT_DIR}/matter"
+    # matter_commission.h, which the application includes to call
+    # matter_commission_init(). PUBLIC for that header alone; the app's own
+    # quoted includes still resolve to its own directory first, so putting the
+    # other product's src tree on the path cannot capture them.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
   )
   target_include_directories(woz_matter_transport PRIVATE
     "${WOZ_PORT_DIR}/matter/matter_compat"
+    # The fabric store's own header, and the app's LED contract. The FreeRTOS
+    # app's status_led.h is used, not the Zephyr one: the two declare the same
+    # functions and the same signal enum, and this image must drive ITS leds.
+    "${WOZ_REPO_ROOT}/ports/zephyr/store"
+    # ORDER MATTERS. Both app trees carry a status_led.h declaring the same
+    # functions and the same signal enum, and this image must drive ITS leds --
+    # the Zephyr one includes zephyr/sys/util.h and would not compile here
+    # anyway, which is the loud half of the failure. The quiet half is that a
+    # build which found it first would be reaching into the other product.
+    # The Zephyr app tree is on the path only for matter_commission.h.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock-freertos/src"
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
   )
-  target_link_libraries(woz_matter_transport PUBLIC woz_matter woz_thread woz_nimble woz_radio)
+  # --------------------------------------------------------------------------
+  # SPAKE2+ over P-256, from Nordic's oberon library.
+  # --------------------------------------------------------------------------
+  # matter_spake2p.c and matter_pase_sm.c call ocrypto_spake2p_p256_*. Mbed TLS
+  # does not implement SPAKE2+ -- it is not a general primitive, it is the
+  # augmented PAKE Matter commissioning is defined on -- so this is the one
+  # binary this image takes for crypto. The Zephyr oracle lands on the same
+  # library through PSA's nrf_oberon backend, because nRF52833 has no
+  # CryptoCell.
+  #
+  # HARD-FLOAT, matching WOZ_ARCH_FLAGS. The soft-float variant links without
+  # complaint on many toolchains and passes arguments in the wrong registers.
+  set(WOZ_OBERON_LIB
+    "${WOZ_NCS_WORKSPACE}/nrfxlib/crypto/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.19.a")
+  if(NOT EXISTS "${WOZ_OBERON_LIB}")
+    message(FATAL_ERROR
+      "nrf_oberon is missing: ${WOZ_OBERON_LIB}. Matter commissioning needs "
+      "SPAKE2+ over P-256 and no other library in this image provides it.")
+  endif()
+  add_library(woz_oberon STATIC IMPORTED GLOBAL)
+  set_target_properties(woz_oberon PROPERTIES IMPORTED_LOCATION "${WOZ_OBERON_LIB}")
+  target_include_directories(woz_oberon INTERFACE
+    "${WOZ_NCS_WORKSPACE}/nrfxlib/crypto/nrf_oberon/include")
+
+  # woz_dfu because the commissioning gesture opens the update window alongside
+  # the commissioning one, and asks woz_dfu_rx for it directly.
+  target_link_libraries(woz_matter_transport
+    PUBLIC woz_matter woz_thread woz_nimble woz_radio woz_dfu woz_oberon)
+  target_link_libraries(woz_matter PUBLIC woz_oberon)
   # The port's own files in this library are held to the port's standard. The
   # shared transport is not: it is compiled unmodified and belongs to a build
   # with different warning flags, so -Werror here would make an unrelated
@@ -673,6 +726,16 @@ set(OT_PROJECT_CONFIG "openthread_project_config.h" CACHE STRING "" FORCE)
 # The project config is found by name, so its directory has to be reachable
 # from every OpenThread translation unit.
 include_directories("${WOZ_PORT_DIR}/thread")
+
+# The project config gates the SRP client on this, and OpenThread is built by
+# its own CMake in a subdirectory -- so it has to be a GLOBAL definition, set
+# before that subdirectory is added. A target-scoped one would leave the config
+# reading it as undefined and silently build an OpenThread with no SRP client,
+# which fails at link with otSrpClient* missing rather than quietly, but only
+# after a full build of the wrong thing.
+if(WOZ_MATTER)
+  add_compile_definitions(WOZ_HAVE_MATTER=1)
+endif()
 
 add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 
@@ -1016,6 +1079,26 @@ endforeach()
 # the boundary the deadline lives on. Until that measurement exists this stays
 # an option rather than the default.
 option(WOZ_LTO "Build the image with link-time optimisation" OFF)
+# 1to1 keeps code generation on translation-unit boundaries and was forced by
+# an assembler "offset out of range" under the default partitioning, back when
+# the kernel, device and Thread layers were still inside the LTO set. That set
+# has since shrunk, so the restriction is a variable rather than a constant --
+# it costs cross-unit code motion, which is most of what LTO is for.
+set(WOZ_LTO_PARTITION "1to1" CACHE STRING "GCC -flto-partition mode")
+
+# ----------------------------------------------------------------------------
+# How much of the log survives compilation.
+# ----------------------------------------------------------------------------
+# 1 error, 2 warning, 3 info, 4 debug, matching enum woz_freertos_log_level.
+# The gate is at the call site (see woz_freertos_platform.h), so a level below a
+# call's own removes its format string from the image as well as its output --
+# which is the whole point, and was not true until that gate moved.
+#
+# 3 keeps the boot log this port has been debugged against. A build that needs
+# the flash takes 2 and loses the narration, not the diagnosis: every failure
+# path in this port reports at error or warning.
+set(WOZ_LOG_LEVEL "3" CACHE STRING "Highest log level compiled in (1 error .. 4 debug)")
+add_compile_definitions(WOZ_FREERTOS_LOG_MAX_LEVEL=${WOZ_LOG_LEVEL})
 
 if(WOZ_LTO)
   # THE RULE, learned one link failure at a time: a layer may be optimised
@@ -1121,7 +1204,7 @@ function(woz_freertos_image target)
     # cross-unit analysis that produces the saving. It also makes the build
     # reproducible unit by unit, which matters when something has to be
     # disassembled to find out what the image actually does.
-    target_link_options(${target} PRIVATE -flto-partition=1to1)
+    target_link_options(${target} PRIVATE -flto-partition=${WOZ_LTO_PARTITION})
   endif()
   target_link_options(${target} PRIVATE
     "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
