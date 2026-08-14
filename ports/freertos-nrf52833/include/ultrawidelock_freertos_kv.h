@@ -53,6 +53,22 @@
 #define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT_LIMIT 0x2030u
 #define ULTRAWIDELOCK_KV_KEY_MATTER_LIMIT 0x2100u
 
+/*
+ * PSA Internal Trusted Storage, which exists for exactly one reason: OpenThread
+ * signs its SRP registrations with an ECDSA key that must survive a reboot, and
+ * routing that through PSA key references is what keeps Mbed TLS's PK, ECP and
+ * BIGNUM modules out of the image.
+ *
+ * A directory record plus a fixed set of slots. The directory maps the 64-bit
+ * PSA uid onto a slot, because a uid cannot be hashed into 16 bits without the
+ * possibility of aliasing two keys -- and two aliased keys is a node that signs
+ * with the wrong one.
+ */
+#define ULTRAWIDELOCK_KV_KEY_PSA_ITS_DIR 0x3000u
+#define ULTRAWIDELOCK_KV_KEY_PSA_ITS_SLOT0 0x3001u
+#define ULTRAWIDELOCK_KV_KEY_PSA_ITS_SLOTS 8u
+#define ULTRAWIDELOCK_KV_KEY_PSA_ITS_LIMIT 0x3100u
+
 /* A key no record can carry: erased flash reads as all ones. */
 #define ULTRAWIDELOCK_KV_KEY_NONE 0xffffu
 

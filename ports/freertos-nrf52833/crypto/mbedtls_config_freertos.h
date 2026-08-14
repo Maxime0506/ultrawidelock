@@ -109,49 +109,59 @@ void ultrawidelock_freertos_mbedtls_free(void *block);
  * OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS means, and leaving it at that default is
  * what keeps the port from having to implement otPlatCrypto itself. The cost is
  * this module, and the alternative cost was the whole otPlatCrypto surface.
+ *
+ * A MATTER BUILD DOES NOT NEED IT. There the crypto library is PSA and
+ * OpenThread's HMAC goes through Nordic's crypto_psa.c, so the only caller this
+ * module ever had is gone. Left defined it would be a module nothing reaches,
+ * which --gc-sections would mostly remove and which would still confuse the
+ * next person reading this file for what the image contains.
  */
+#if !defined(ULTRAWIDELOCK_HAVE_MATTER) || !ULTRAWIDELOCK_HAVE_MATTER
 #define MBEDTLS_MD_C
+#endif
+
+#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
+/*
+ * PERSISTENT PSA KEYS, and NOT the legacy PK layer.
+ *
+ * OpenThread's SRP client signs its registrations with an ECDSA key that has to
+ * survive a reboot. There are two ways to give it one:
+ *
+ *   MBEDTLS  crypto_platform.cpp generates the key, writes it as DER and parses
+ *            it back on every use. That needs PK, PK_PARSE, PK_WRITE, ECP,
+ *            BIGNUM, ASN1 and OID. MEASURED: +9,690 bytes of flash, on an image
+ *            that was already 12 KB over.
+ *   PSA      the key lives in PSA as a key REFERENCE and never leaves it. The
+ *            P-256 arithmetic is already in this image -- the reader has used
+ *            PSA since the beginning -- so the marginal cost is the storage
+ *            layer, not the curve.
+ *
+ * The first was tried and is what this replaces. PSA key references need
+ * persistent storage, which is why STORAGE_C is on; the ITS backend underneath
+ * it is crypto/psa_its_freertos.c, over the port's key-value store, because
+ * Mbed TLS's own backend is file-based and there is no filesystem here.
+ */
+#define MBEDTLS_PSA_CRYPTO_STORAGE_C
 
 /*
- * The public-key layer, for the SRP client's ECDSA key.
+ * ASN.1 PARSING ONLY, for one caller.
  *
- * Only compiled into a build that has Matter. Thread's SRP client signs its
- * registrations, and OpenThread's crypto_platform.cpp reaches that through the
- * legacy PK API: it generates a P-256 key, writes it as DER, and parses it back
- * on each use (otPlatCryptoEcdsaGenerateKey / Sign / GetPublicKey).
- *
- * NOT the PSA path, and that is a decision rather than an oversight.
- * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA moves this surface onto PSA and would drop
- * these modules -- but it also moves OpenThread's keys to PSA key REFERENCES,
- * which want persistent-key storage this image deliberately does not have (see
- * the list below). Trading a known several kilobytes for an unmeasured
- * subsystem on a part with no room is the wrong direction, so this build pays
- * in flash where the cost is visible.
- *
- * DETERMINISTIC is not a preference either: RFC 6979 signatures need no entropy
- * at signing time, which is what makes an SRP registration reproducible and
- * removes the RNG from the signing path.
+ * Nordic's crypto_psa.c unwraps a DER-encoded P-256 private key when
+ * OpenThread hands it one to import -- mbedtls_asn1_get_tag and
+ * mbedtls_asn1_get_int, nothing more. This is the parser alone: no
+ * ASN1_WRITE_C, no OID_C, and none of the PK layer that the Mbed TLS crypto
+ * path would have needed, because nothing here ENCODES a key.
  */
-#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
-#define MBEDTLS_PK_C
-#define MBEDTLS_PK_PARSE_C
-#define MBEDTLS_PK_WRITE_C
-#define MBEDTLS_ECDSA_C
-#define MBEDTLS_ECDSA_DETERMINISTIC
-#define MBEDTLS_ECP_C
-#define MBEDTLS_BIGNUM_C
 #define MBEDTLS_ASN1_PARSE_C
-#define MBEDTLS_ASN1_WRITE_C
-#define MBEDTLS_OID_C
-#define MBEDTLS_ECP_DP_SECP256R1_ENABLED
-#define MBEDTLS_HMAC_DRBG_C
+
 #endif
 
 /*
  * Deliberately absent, each because a caller for it does not exist:
  *
- *   MBEDTLS_PSA_CRYPTO_STORAGE_C   no persistent keys; see the PSA config file
- *   MBEDTLS_PSA_ITS_FILE_C         follows from the above
+ *   MBEDTLS_PK_*, MBEDTLS_ECP_C    the legacy public-key layer. OpenThread
+ *   MBEDTLS_BIGNUM_C, ASN1, OID    reaches ECDSA through PSA here, so nothing
+ *                                  parses or writes a DER key
  *   MBEDTLS_SSL_*, MBEDTLS_X509_*  no TLS and no certificates in this image
  *   MBEDTLS_ERROR_C                error strings, flash for text nothing reads
  *   MBEDTLS_SELF_TEST              the host suite and the gates test this port

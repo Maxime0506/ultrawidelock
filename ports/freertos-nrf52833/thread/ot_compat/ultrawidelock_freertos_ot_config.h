@@ -46,6 +46,44 @@
 #define CONFIG_OPENTHREAD_PLATFORM_LOG_LEVEL 3
 
 /*
+ * Nordic's PSA crypto platform, compiled only into a build that has Matter.
+ *
+ * crypto_psa.c selects its behaviour with these the same way radio_nrf5.c
+ * selects its own. It supplies the whole otPlatCrypto surface, which
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA makes the platform's responsibility.
+ */
+#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
+#define CONFIG_OPENTHREAD_CRYPTO_PSA 1
+/* The SRP client signs with ECDSA; this is what compiles that half in. */
+#define CONFIG_OPENTHREAD_ECDSA 1
+/*
+ * Keys persist through PSA's Internal Trusted Storage, which is
+ * crypto/psa_its_freertos.c over the port's key-value store. The KMU backend is
+ * the alternative and belongs to parts that have a Key Management Unit; this
+ * one does not.
+ */
+#define CONFIG_OPENTHREAD_PSA_NVM_BACKEND_ITS 1
+/*
+ * Where OpenThread's PSA key ids start. Matches the oracle, which the shared
+ * Matter transport records as OPENTHREAD_CONFIG_PSA_ITS_NVM_OFFSET (0x20000)
+ * plus 1..7. The value only has to avoid colliding with another PSA user's
+ * ids, and nothing else in this image allocates persistent PSA keys.
+ */
+#define CONFIG_OPENTHREAD_PSA_ITS_NVM_OFFSET 0x20000
+#endif
+
+/*
+ * Deliberately left undefined for crypto_psa.c:
+ *
+ *   CONFIG_BUILD_WITH_TFM              no TrustZone on this part, so no secure
+ *                                      partition to call across
+ *   CONFIG_OPENTHREAD_PSA_NVM_BACKEND_KMU  no Key Management Unit either; that
+ *                                      backend is for nRF54L and pulls in
+ *                                      cracen_psa_kmu.h, which does not exist
+ *                                      in this workspace
+ */
+
+/*
  * Deliberately left undefined, each for a reason:
  *
  *   CONFIG_NRF_802154_SER_HOST            the driver is in this image, not

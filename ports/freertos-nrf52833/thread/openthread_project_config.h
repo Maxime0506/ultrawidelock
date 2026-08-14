@@ -62,6 +62,32 @@
 #if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
 #define OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE 1
 #define OPENTHREAD_CONFIG_ECDSA_ENABLE 1
+
+/*
+ * ECDSA THROUGH PSA, NOT THROUGH MBED TLS'S PK LAYER.
+ *
+ * This selects the second half of crypto_platform.cpp -- the branch at its
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA guard -- so otPlatCryptoEcdsa* is
+ * implemented with psa_sign_hash and friends rather than mbedtls_pk_parse_key
+ * and mbedtls_ecdsa_sign_det_ext.
+ *
+ * The port still implements none of otPlatCrypto: OpenThread compiles the PSA
+ * branch itself, exactly as it compiled the Mbed TLS one. What changes is which
+ * library it lands on, and that is worth 9,690 bytes of flash -- the PK, ECP,
+ * BIGNUM, ASN1 and OID modules stop being linked, while the P-256 arithmetic
+ * this image already carried for the reader is reused.
+ *
+ * KEY REFERENCES are what make it persistent. Without them OpenThread would
+ * hold the SRP key as bytes and this would be a pure code-size trade; with them
+ * the key lives in PSA storage, which is crypto/psa_its_freertos.c over the
+ * port's key-value store. That matters beyond size: name ownership on a border
+ * router is by KEY, so an SRP key that did not survive a reboot would make the
+ * node ask for a name the server still holds under the old one -- refused for
+ * the length of the key lease, with no symptom but a node that attaches to
+ * Thread and never registers.
+ */
+#define OPENTHREAD_CONFIG_CRYPTO_LIB OPENTHREAD_CONFIG_CRYPTO_LIB_PSA
+#define OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE 1
 #endif
 
 #endif /* ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */
