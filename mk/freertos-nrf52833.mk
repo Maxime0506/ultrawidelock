@@ -78,8 +78,15 @@ FREERTOS_BUILD_DIR ?= $(REPO_ROOT)/build/freertos-nrf52833
 # toolchain rather than a lost setting.
 FREERTOS_TOOLCHAIN_ARG = $(if $(WOZ_ARM_TOOLCHAIN_DIR),-DWOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR))
 
+# Off by default until the DW3110 arm deadline is measured under it. Passed
+# explicitly on every configure rather than left to the cache, for the same
+# reason as the toolchain above: a setting the cache remembers and the command
+# line does not is a setting nobody can see in the build they just ran.
+FREERTOS_LTO ?= OFF
+
 FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
+	-DWOZ_LTO=$(FREERTOS_LTO) \
 	-DWOZ_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \

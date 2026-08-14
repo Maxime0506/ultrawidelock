@@ -413,6 +413,48 @@ target_include_directories(woz_aliro PUBLIC
 target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
 
 # ----------------------------------------------------------------------------
+# The Matter node.
+# ----------------------------------------------------------------------------
+# modules/woz_matter is a hand-written minimal Matter node -- CHIP does not fit
+# this part -- and it is platform-agnostic C11 with no operating system
+# dependency at all. The Zephyr build compiles these same fourteen files, and so
+# does tests/host. Nothing here is a port of the protocol; the port is the glue
+# that carries its messages, which lives in this directory and not in modules/.
+#
+# Its only outside dependency is woz_aliro: matter_crypto.c uses aliro_hash.h
+# for SHA-256 and HKDF, and the crypto_aes_ecb_encrypt seam it declares itself.
+# Both are already linked into any image that has the reader, so this is an
+# include path rather than new code.
+#
+# OFF by default while the transport glue is unfinished. A protocol that
+# compiles is not a node that commissions.
+option(WOZ_MATTER "Build the Matter commissioning node into the image" OFF)
+
+if(WOZ_MATTER)
+  set(WOZ_MATTER_SRC "${WOZ_MODULES_DIR}/woz_matter/src")
+  add_library(woz_matter STATIC
+    "${WOZ_MATTER_SRC}/matter_tlv.c"
+    "${WOZ_MATTER_SRC}/matter_msg.c"
+    "${WOZ_MATTER_SRC}/matter_mrp.c"
+    "${WOZ_MATTER_SRC}/matter_crypto.c"
+    "${WOZ_MATTER_SRC}/matter_btp.c"
+    "${WOZ_MATTER_SRC}/matter_pase.c"
+    "${WOZ_MATTER_SRC}/matter_spake2p.c"
+    "${WOZ_MATTER_SRC}/matter_pase_sm.c"
+    "${WOZ_MATTER_SRC}/matter_exchange.c"
+    "${WOZ_MATTER_SRC}/matter_im.c"
+    "${WOZ_MATTER_SRC}/matter_clusters.c"
+    "${WOZ_MATTER_SRC}/matter_attest.c"
+    "${WOZ_MATTER_SRC}/matter_fabric.c"
+    "${WOZ_MATTER_SRC}/matter_case.c"
+  )
+  target_include_directories(woz_matter PUBLIC
+    "${WOZ_MODULES_DIR}/woz_matter/include"
+  )
+  target_link_libraries(woz_matter PUBLIC woz_aliro)
+endif()
+
+# ----------------------------------------------------------------------------
 # 802.15.4 layer: Nordic's radio driver, its service-layer binary, and the
 # platform files this port already supplies in radio/.
 #
@@ -868,10 +910,138 @@ foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbe
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Link-time optimisation.
+# ----------------------------------------------------------------------------
+# Measured on this tree: 418,664 bytes of flash without it and 348,228 with,
+# a saving of 70,436 -- which is the difference between an image with no room
+# for the Matter commissioning stack and one with more headroom than the
+# Zephyr build that ships it. RAM falls 10,912 bytes on the same link.
+#
+# LTO IS NOT FREE HERE, and the risk is specific rather than general. This
+# image's vector table is DATA holding weak aliases that each owner is expected
+# to override. Whole-program optimisation is exactly the pass that can decide an
+# override is unreachable, and the result links cleanly and resolves to
+# default_handler -- an infinite loop the first interrupt falls into. That is
+# the failure this port already paid for twice, on RNG and RTC2.
+#
+# What makes it safe to turn on is not confidence in the optimiser: it is that
+# freertos-vector-check.sh reads the LINKED IMAGE and asserts every vector
+# peripherals.yml gives an owner resolves somewhere other than default_handler.
+# It runs on every build. Ask the artifact what it does, not the toolchain
+# whether it succeeded.
+#
+# The second cost is timing, and it is NOT yet retired: the DW3110 response-arm
+# deadline of ~1.836 ms has never been measured, and inlining moves code across
+# the boundary the deadline lives on. Until that measurement exists this stays
+# an option rather than the default.
+option(WOZ_LTO "Build the image with link-time optimisation" OFF)
+
+if(WOZ_LTO)
+  # THE RULE, learned one link failure at a time: a layer may be optimised
+  # across the program only if every caller it has is also inside the LTO set.
+  # A symbol referenced solely from outside gets dropped, because the plugin
+  # resolves liveness against the LTO objects while the archive holding the
+  # caller has not been scanned yet. The non-LTO build links fine, so ordinary
+  # archive ordering is adequate; it is the plugin that is order-sensitive.
+  #
+  # The failure is always the same pair of messages, and it names the symbol:
+  #
+  #   undefined reference to `X'
+  #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
+  #
+  # Two layers are excluded for exactly this reason, both measured:
+  #
+  #   woz_device  the vendored MDK and nrfx. Holds SystemInit, whose only
+  #               caller in the entire program is the non-LTO startup file.
+  #   woz_thread  the OpenThread platform callouts. libopenthread-mtd.a is
+  #               built by OpenThread's own CMake, outside this set, and it
+  #               calls otPlatAlarmMilliGetNow and the rest of otPlat*.
+  #   woz_kernel  the FreeRTOS kernel. vTaskSwitchContext's only caller is the
+  #               inline assembly in the Cortex-M PendSV handler, and assembly
+  #               is outside the LTO set by construction: the optimiser reads
+  #               IR, never an asm string. It does not merely drop the function
+  #               -- it may localise and rename it, which is why forcing the
+  #               symbol with -Wl,--undefined does NOT help and was tried.
+  #
+  # If a future layer starts being called from a vendored archive or from
+  # assembly, it belongs on this list too, and the link will say so by name.
+  foreach(_woz_target woz_board woz_radio woz_nimble woz_mbedtls
+                      woz_storage woz_uwb woz_aliro woz_dfu woz_usb woz_802154)
+    if(TARGET ${_woz_target})
+      # -ffat-lto-objects is not optional here, and it is not about speed.
+      #
+      # Without it every archive member is IR only, and ld's plugin decides a
+      # symbol is "IR only, no non-IR reference" while the archive holding the
+      # non-IR caller has not been scanned yet. It then never generates code for
+      # it. Measured on this tree: 167 symbols went missing from libwoz_thread
+      # alone -- the whole mbedtls surface OpenThread calls, all of nrf_802154,
+      # every aliro_* entry point -- each reported as
+      #
+      #   undefined reference to `X'
+      #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
+      #
+      # A fat object carries real machine code and a real symbol table beside
+      # the IR, so ordinary archive resolution works and the plugin still gets
+      # to optimise across the ones it can see. The cost is build time and
+      # intermediate object size; the final image is unaffected, because only
+      # one of the two forms is ever linked.
+      target_compile_options(${_woz_target} PRIVATE -flto -ffat-lto-objects)
+    endif()
+  endforeach()
+
+  # THE STARTUP FILE MUST NOT BE OPTIMISED ACROSS THE PROGRAM, and the reason
+  # is not caution -- it was measured. With this file in LTO the link says:
+  #
+  #   ld: warning: cannot find entry symbol Reset_Handler; defaulting to 0000a200
+  #
+  # and produces an ELF with no default_handler and no vector table. Nothing in
+  # C ever references Reset_Handler or .isr_vector; only the linker script does.
+  # The LTO plugin decides which symbols are live BEFORE code generation emits
+  # any section, so the script's KEEP(*(.isr_vector)) has nothing to hold: KEEP
+  # operates on input sections, and at that point the section does not exist
+  # yet. Whole-program analysis therefore concludes the entire startup object is
+  # dead and drops it, which is a correct answer to the question it was asked.
+  #
+  # The result links with one warning and is a brick. Compiling this one file
+  # normally leaves a real object with real symbols, and the handlers it names
+  # in other translation units are then live because a non-LTO object refers to
+  # them. freertos-vector-check.sh is what caught this, on the linked image.
+  set_source_files_properties("${WOZ_PORT_DIR}/board/startup_freertos.c"
+    TARGET_DIRECTORY woz_board
+    PROPERTIES COMPILE_OPTIONS "-fno-lto"
+  )
+endif()
+
+# ----------------------------------------------------------------------------
 # A helper the application uses to turn a linked ELF into something flashable
 # and to print what it cost.
 # ----------------------------------------------------------------------------
 function(woz_freertos_image target)
+  if(WOZ_LTO)
+    # The link needs the flag too: with LTO the code generator runs HERE, so
+    # the optimisation level has to be restated on the link line or the final
+    # pass runs at -O0 and gives most of the saving back. The arch flags do not
+    # need restating -- CMAKE_EXE_LINKER_FLAGS_INIT in the toolchain file
+    # already carries -mcpu/-mfpu, and without them this link would quietly
+    # generate soft-float objects for a hard-float image.
+    target_compile_options(${target} PRIVATE -flto)
+    target_link_options(${target} PRIVATE -flto -Os)
+
+    # KEEP CODE GENERATION ON THE ORIGINAL TRANSLATION-UNIT BOUNDARIES.
+    #
+    # The default partitioning merges translation units before generating code,
+    # and with -Os inlining across the whole program that produced functions
+    # large enough to break Thumb branch range. The assembler, not the linker,
+    # is what failed:
+    #
+    #   ccydKnE6.s:2017: Error: offset out of range
+    #
+    # 1to1 keeps each unit's code generation to itself while still allowing the
+    # cross-unit analysis that produces the saving. It also makes the build
+    # reproducible unit by unit, which matters when something has to be
+    # disassembled to find out what the image actually does.
+    target_link_options(${target} PRIVATE -flto-partition=1to1)
+  endif()
   target_link_options(${target} PRIVATE
     "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
     "-L${WOZ_PORT_DIR}/board"
