@@ -231,6 +231,7 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		case MATTER_ATTR_DL_LOCK_STATE:
 		case MATTER_ATTR_DL_LOCK_TYPE:
 		case MATTER_ATTR_DL_ACTUATOR_ENABLED:
+		case MATTER_ATTR_DL_AUTO_RELOCK_TIME:
 		case MATTER_ATTR_DL_OPERATING_MODE:
 		case MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES:
 		case MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY:
@@ -462,6 +463,12 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		 * honour. The Aliro half is what this device is for.
 		 */
 		(void)matter_tlv_put_bool(w, tag, false);
+		return;
+	case MATTER_ATTR_DL_AUTO_RELOCK_TIME:
+		/* Whatever the controller last wrote; 0 (never set) = no
+		 * automatic relock. Reported so the controller shows its
+		 * timing UI instead of improvising a relock of its own. */
+		(void)matter_tlv_put_u64(w, tag, info->auto_relock_time_s);
 		return;
 	case MATTER_ATTR_DL_OPERATING_MODE:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_OPERATING_MODE_NORMAL);
@@ -977,6 +984,7 @@ static const uint32_t k_lock_attrs[] = {
 	MATTER_ATTR_DL_LOCK_STATE,
 	MATTER_ATTR_DL_LOCK_TYPE,
 	MATTER_ATTR_DL_ACTUATOR_ENABLED,
+	MATTER_ATTR_DL_AUTO_RELOCK_TIME,
 	MATTER_ATTR_DL_OPERATING_MODE,
 	MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES,
 	MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY,
@@ -2578,7 +2586,39 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 {
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
 
-	if (info == NULL || path->endpoint != MATTER_ENDPOINT_ROOT) {
+	if (info == NULL) {
+		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
+	}
+	if (path->endpoint == MATTER_ENDPOINT_LOCK) {
+		if (path->cluster != MATTER_CLUSTER_DOOR_LOCK) {
+			return has_cluster(ctx, path->endpoint, path->cluster)
+				       ? MATTER_IM_STATUS_UNSUPPORTED_WRITE
+				       : MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		if (path->attribute != MATTER_ATTR_DL_AUTO_RELOCK_TIME) {
+			return MATTER_IM_STATUS_UNSUPPORTED_WRITE;
+		}
+		{
+			struct matter_tlv_reader r;
+			uint64_t v = 0u;
+
+			if (data == NULL || data_len == 0u) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			matter_tlv_reader_init(&r, data, data_len);
+			if (matter_tlv_next(&r) != 0 || matter_tlv_get_u64(&r, &v) != 0) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			/* uint32 per the cluster spec; a wider value is the
+			 * controller's error, not something to truncate. */
+			if (v > 0xFFFFFFFFu) {
+				return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+			}
+			info->auto_relock_time_s = (uint32_t)v;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
+	}
+	if (path->endpoint != MATTER_ENDPOINT_ROOT) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
 	if (path->cluster != MATTER_CLUSTER_ACCESS_CONTROL) {

@@ -104,6 +104,7 @@ extern "C" {
 #define MATTER_ATTR_DL_LOCK_STATE                0x0000u
 #define MATTER_ATTR_DL_LOCK_TYPE                 0x0001u
 #define MATTER_ATTR_DL_ACTUATOR_ENABLED          0x0002u
+#define MATTER_ATTR_DL_AUTO_RELOCK_TIME          0x0023u
 #define MATTER_ATTR_DL_OPERATING_MODE            0x0025u
 #define MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES 0x0026u
 
@@ -572,6 +573,18 @@ struct matter_device_info {
 	 * refuses to send UnlockDoor to something already reporting Unlocked.
 	 */
 	uint8_t lock_state;
+	/**
+	 * AutoRelockTime, in seconds; 0 means no automatic relock.
+	 *
+	 * Implemented because its ABSENCE changes controller behaviour: Apple
+	 * Home shows an auto-lock timing control for locks that carry this
+	 * attribute and improvises without it -- observed on hardware as an
+	 * unrequested LockDoor a few seconds after every UnlockDoor. The node
+	 * itself enforces nothing here yet: the value is reported and writable
+	 * so the controller owns the policy. NOT persisted yet; a reboot
+	 * returns it to 0.
+	 */
+	uint32_t auto_relock_time_s;
 	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *

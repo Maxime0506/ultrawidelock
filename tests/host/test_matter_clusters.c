@@ -608,7 +608,7 @@ void test_matter_clusters(void)
 		T_EQ("index stays zero", info.last_user_index, 0u);
 	}
 
-	t_group("the ACL is the only writable attribute");
+	t_group("the ACL is one of two writable attributes");
 	{
 		struct matter_im_path path;
 		uint8_t acl[64];
@@ -671,6 +671,73 @@ void test_matter_clusters(void)
 		path.endpoint = MATTER_ENDPOINT_ROOT;
 		T_EQ("a null device refuses every write", srv.write(NULL, &path, acl, sizeof(acl)),
 		     MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT);
+	}
+
+	t_group("AutoRelockTime is the lock endpoint's writable attribute");
+	{
+		struct matter_im_path path;
+		struct matter_tlv_writer w;
+		uint8_t tlv[16];
+		uint8_t out[64];
+		size_t n;
+
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		memset(&path, 0, sizeof(path));
+		path.endpoint = MATTER_ENDPOINT_LOCK;
+		path.cluster = MATTER_CLUSTER_DOOR_LOCK;
+		path.attribute = MATTER_ATTR_DL_AUTO_RELOCK_TIME;
+
+		T_EQ("readable before any write",
+		     srv.status(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+				MATTER_ATTR_DL_AUTO_RELOCK_TIME),
+		     MATTER_IM_STATUS_SUCCESS);
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 120u);
+		T_EQ("a u32 write is accepted",
+		     srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("the seconds are stored", info.auto_relock_time_s, 120u);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_DL_AUTO_RELOCK_TIME, &w, MATTER_TLV_ANON);
+		n = w.len;
+		T_OK("the read emits a value", n > 0u);
+		{
+			struct matter_tlv_reader r;
+			uint64_t v = 0u;
+
+			matter_tlv_reader_init(&r, out, n);
+			T_OK("read decodes", matter_tlv_next(&r) == 0 &&
+					     matter_tlv_get_u64(&r, &v) == 0);
+			T_EQ("read value matches", (uint32_t)v, 120u);
+		}
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 0x100000000ull);
+		T_EQ("a value wider than u32 is a constraint error",
+		     srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		T_EQ("and the stored value is untouched", info.auto_relock_time_s, 120u);
+
+		T_EQ("an empty write is an invalid command",
+		     srv.write(srv.ctx, &path, tlv, 0u), MATTER_IM_STATUS_INVALID_COMMAND);
+
+		path.attribute = MATTER_ATTR_DL_LOCK_STATE;
+		T_EQ("LockState itself is not writable",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+
+		path.cluster = MATTER_CLUSTER_DESCRIPTOR;
+		T_EQ("the lock's Descriptor is read-only",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+
+		path.cluster = 0x1234u;
+		T_EQ("a cluster the lock endpoint lacks says UNSUPPORTED_CLUSTER",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_CLUSTER);
 	}
 
 	t_group("the lock endpoint answers its own commands");
