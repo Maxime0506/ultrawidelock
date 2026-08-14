@@ -32,6 +32,24 @@
 #define OPENTHREAD_CONFIG_ENABLE_BUILTIN_MBEDTLS_MANAGEMENT 0
 
 /*
+ * NO TCP. Upstream defaults OPENTHREAD_CONFIG_TCP_ENABLE to ON, and this file
+ * takes upstream defaults for everything it does not name -- so leaving it out
+ * was a choice by omission, which is the kind this port keeps paying for.
+ *
+ * The oracle turns it off (its .config carries
+ * "# CONFIG_OPENTHREAD_TCP_ENABLE is not set"), and it is right to: Matter over
+ * Thread is UDP, the SRP client is UDP, and a lock MTD has no TCP caller
+ * anywhere. What the default was buying is tcplp, OpenThread's TCP-lite stack,
+ * MEASURED at 17,715 bytes of flash in this image's linker map before it was
+ * turned off.
+ *
+ * Found by a review comparing this port's config against the oracle's, not by
+ * anything in this build complaining. Nothing would have: an unreachable TCP
+ * stack links quietly.
+ */
+#define OPENTHREAD_CONFIG_TCP_ENABLE 0
+
+/*
  * The microsecond alarm stays at upstream's default of off, which
  * thread/ot_alarm_freertos.c relies on: it implements the millisecond alarm
  * only, and make freertos-radio-source-check fails if that default ever
