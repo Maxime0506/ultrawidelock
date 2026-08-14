@@ -89,6 +89,11 @@ FREERTOS_LTO ?= OFF
 # node self-provisions and does not need it.
 FREERTOS_PROV_CONSOLE ?= ON
 
+# The Matter node. Off until the BLE commissioning transport exists: the
+# protocol and the Thread half link today, but a node a commissioner cannot
+# reach over BLE is not one anybody can add to a home.
+FREERTOS_MATTER ?= OFF
+
 # Turning the console off removes the USBD vector, and freertos-vector-check.sh
 # is told which OWNER went rather than being left to infer it from a missing
 # handler. Inferring it would make a deliberate exclusion and a dropped handler
@@ -99,6 +104,7 @@ FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
 	-DWOZ_LTO=$(FREERTOS_LTO) \
 	-DWOZ_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
+	-DWOZ_MATTER=$(FREERTOS_MATTER) \
 	-DWOZ_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
@@ -137,6 +143,12 @@ freertos-build:
 		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
 		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf \
 		$(FREERTOS_VECTOR_EXCLUDES)
+	@# The shared Matter Thread transport is compiled from the Zephyr port
+	@# tree unmodified. A rename on that side compiles fine THERE and lands
+	@# here as an unknown settings path at run time, whose only symptom is an
+	@# SRP host name that changes every boot -- a node that attaches to
+	@# Thread and never registers. Held closed at build time instead.
+	@$(if $(filter ON,$(FREERTOS_MATTER)),$(REPO_ROOT)/scripts/freertos-matter-source-check.sh)
 	@# newlib-nano's printf does not implement ll. A format it cannot honour
 	@# consumes the wrong argument width, so the next %s dereferences a data
 	@# value -- a bus fault into default_handler, which spins and takes the

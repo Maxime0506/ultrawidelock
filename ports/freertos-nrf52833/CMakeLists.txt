@@ -452,6 +452,35 @@ if(WOZ_MATTER)
     "${WOZ_MODULES_DIR}/woz_matter/include"
   )
   target_link_libraries(woz_matter PUBLIC woz_aliro)
+
+  # --------------------------------------------------------------------------
+  # The Thread transport, compiled from the Zephyr port tree unmodified.
+  # --------------------------------------------------------------------------
+  # Not a copy, and not a rewrite. matter_thread_port.c is 1,227 lines of which
+  # the Zephyr-specific part is three headers and four openthread_*() helpers;
+  # everything else is OpenThread's own API, which is the same library this
+  # image already runs. matter_compat/ supplies the three headers and maps the
+  # four helpers onto this port's equivalents.
+  #
+  # Compiling it in place keeps one copy of behaviour that was expensive to
+  # learn -- the SRP host-name suffix that dodges a 14-day key-lease collision
+  # is the example that costs a fortnight to rediscover. Its proper home is
+  # modules/, and moving it means editing the Zephyr module's CMakeLists, which
+  # this build cannot verify; scripts/freertos-matter-source-check.sh holds the
+  # seam closed until then.
+  add_library(woz_matter_transport STATIC
+    "${WOZ_REPO_ROOT}/ports/zephyr/matter/matter_thread_port.c"
+    "${WOZ_PORT_DIR}/matter/matter_settings_freertos.c"
+  )
+  target_include_directories(woz_matter_transport PRIVATE
+    "${WOZ_PORT_DIR}/matter/matter_compat"
+  )
+  target_link_libraries(woz_matter_transport PUBLIC woz_matter woz_thread)
+  # The Kconfig symbols the file selects its behaviour with. This port has no
+  # Kconfig, so they are forced on from a header, exactly as the pinned radio
+  # platform's are.
+  target_compile_options(woz_matter_transport PRIVATE
+    "-include;${WOZ_PORT_DIR}/matter/matter_compat/woz_freertos_matter_config.h")
 endif()
 
 # ----------------------------------------------------------------------------
