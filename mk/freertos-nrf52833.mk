@@ -3,7 +3,7 @@
 # maintained upstream OpenThread and Nordic radio integration. The host port
 # test compiles the production OSAL and OpenThread runtime implementations.
 
-.PHONY: check-freertos freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-crypto-source-check freertos-ncs-source-check freertos-build
+.PHONY: check-freertos freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-crypto-source-check freertos-ncs-source-check freertos-build freertos-sign freertos-keycheck freertos-flash freertos-ota-patch freertos-ota-push freertos-dfu
 
 ##@ DWM3001CDK FreeRTOS  ·  custom radio port in progress
 ## check-freertos: every host suite plus the opt-in FreeRTOS port contract
@@ -185,3 +185,148 @@ freertos-build:
 	@# tick with it. The board then prints a complete boot log and goes
 	@# silent, which is why this is a build failure and not a review item.
 	@$(REPO_ROOT)/scripts/freertos-printf-check.sh
+	@# And sign it, when a key was named. Part of the build rather than a
+	@# target someone remembers to run: the linker script puts this image at
+	@# 0xa200, the MCUboot application slot, so an UNSIGNED image is not a
+	@# thing the board can boot -- it is a file that looks like firmware and
+	@# is refused by the bootloader with nothing on the wire to say why.
+	@$(if $(FREERTOS_SIGN_KEY),$(MAKE) --no-print-directory freertos-sign)
+
+# ---- signing and over-the-air update ----------------------------------------
+#
+# The Zephyr build signs inside sysbuild; this port has no sysbuild, so the
+# same imgtool invocation lives here. The parameters are NOT free choices --
+# they describe the partition map the installed bootloader was built against,
+# and a disagreement produces an image that flashes cleanly and never boots:
+#
+#   --slot-size 0x6a000   mcuboot_primary, from the Zephyr build's partitions.yml
+#   --header-size 0x200   mcuboot_pad; also the ld script's 0xa200 minus 0xa000
+#   --align 4             nRF52833 flash write unit
+#
+# Taken from the command the Zephyr build actually runs, not from imgtool's
+# defaults, so the two ports produce images the same bootloader accepts.
+FREERTOS_SLOT_SIZE   ?= 0x6a000
+FREERTOS_HEADER_SIZE ?= 0x200
+FREERTOS_IMG_VERSION ?= 0.0.0+0
+FREERTOS_PATCH_STAGING_SIZE ?= 0xa000
+
+FREERTOS_HEX        := $(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.hex
+# THE .hex, NOT THE .bin, for the reason mk/cdk.mk sets out at CDK_SIGNED_HEX:
+# ECDSA signatures are randomised, so signing twice gives two artifacts holding
+# the same code under different signatures. A delta is computed against the
+# bytes on the part, so only the artifact that was flashed can be the from-image.
+FREERTOS_SIGNED_HEX := $(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.signed.hex
+FREERTOS_DEPLOYED   ?= $(ULTRAWIDELOCK_BUILD_ROOT)/freertos-deployed/dwm3001cdk-lock-freertos.signed.hex
+FREERTOS_PATCH      ?= $(FREERTOS_BUILD_DIR)/update.wdfu
+
+# The key that signs the image. Defaults to SIGN_KEY, the checkout-wide default
+# the Zephyr build already uses, so one board trusts one key across both ports.
+FREERTOS_SIGN_KEY ?= $(SIGN_KEY)
+
+FREERTOS_IMGTOOL ?= $(NCS_WORKSPACE)/bootloader/mcuboot/scripts/imgtool.py
+
+## freertos-sign: sign the built image for the MCUboot slot the board runs
+freertos-sign: $(CDK_OTA_PY)
+	@test -n '$(FREERTOS_SIGN_KEY)' || { \
+	  printf '  set SIGN_KEY=<absolute path to the signing key>\n' >&2; \
+	  printf '  NEVER run `make dfu-key` to make one: it mints a NEW keypair, and\n' >&2; \
+	  printf '  every already-flashed board refuses images signed by anything but\n' >&2; \
+	  printf '  the key its bootloader was built with.\n' >&2; exit 2; }
+	@test -f '$(FREERTOS_HEX)' || { \
+	  printf '  no image at %s  ·  run `make freertos-build` first\n' '$(FREERTOS_HEX)' >&2; \
+	  exit 2; }
+	@test -f '$(FREERTOS_IMGTOOL)' || { \
+	  printf '  no imgtool at %s  ·  set NCS_WORKSPACE\n' '$(FREERTOS_IMGTOOL)' >&2; exit 2; }
+	@# imgtool needs click and intelhex on top of what the OTA venv carries for
+	@# the patch tooling. Installed here rather than in the venv recipe: that
+	@# venv belongs to the update path, and a signing dependency added to it
+	@# silently would make `make ota-patch` fail for a reason about signing.
+	@'$(CDK_OTA_VENV)/bin/pip' install --quiet --disable-pip-version-check \
+	  click intelhex pyyaml cbor
+	@$(CDK_OTA_PY) '$(FREERTOS_IMGTOOL)' sign \
+	  --version $(FREERTOS_IMG_VERSION) --align 4 \
+	  --slot-size $(FREERTOS_SLOT_SIZE) --pad-header \
+	  --header-size $(FREERTOS_HEADER_SIZE) \
+	  -k '$(FREERTOS_SIGN_KEY)' '$(FREERTOS_HEX)' '$(FREERTOS_SIGNED_HEX)'
+	@printf '  signed  ·  %s\n' '$(FREERTOS_SIGNED_HEX)'
+
+## freertos-keycheck: will the board's installed bootloader accept this image?
+#
+# Reads the bootloader off the part rather than trusting a build directory, and
+# compares its compiled-in public key against the image's KEYHASH TLV. Everything
+# it touches is public; it never reads a private key. This is the check that was
+# missing when three candidate images were signed and flashed one after another,
+# each refused, with nothing to say which key the board actually trusted.
+freertos-keycheck:
+	@test -f '$(FREERTOS_SIGNED_HEX)' || { \
+	  printf '  no signed image  ·  run `make freertos-sign`\n' >&2; exit 2; }
+	@mkdir -p '$(FREERTOS_BUILD_DIR)'
+	@printf 'si SWD\nspeed 4000\ndevice NRF52833_XXAA\nconnect\nsavebin %s 0x0 0xa000\nq\n' \
+	  '$(FREERTOS_BUILD_DIR)/installed_boot.bin' > '$(FREERTOS_BUILD_DIR)/keycheck.jlink'
+	@JLinkExe -nogui 1 -CommandFile '$(FREERTOS_BUILD_DIR)/keycheck.jlink' >/dev/null 2>&1 || true
+	@test -s '$(FREERTOS_BUILD_DIR)/installed_boot.bin' || { \
+	  printf '  could not read the bootloader over SWD  ·  is the probe attached?\n' >&2; exit 2; }
+	@python3 $(REPO_ROOT)/scripts/mcuboot-keyhash-check.py \
+	  --bootloader '$(FREERTOS_BUILD_DIR)/installed_boot.bin' \
+	  --image '$(FREERTOS_SIGNED_HEX)'
+
+## freertos-flash: write the signed image to the app slot, leaving the KV store
+#
+# THE APP SLOT ONLY. The settings/KV store at 0x7e000 holds the fabric and the
+# credential reader identity, and a chip erase takes both -- which costs a re-pair
+# and a re-provision, not a reflash. `loadfile` writes only the sectors the hex
+# names, and the signed hex names 0xa000..0x74000.
+freertos-flash: freertos-keycheck
+	@printf 'si SWD\nspeed 4000\ndevice NRF52833_XXAA\nconnect\nloadfile %s\nr\ngo\nq\n' \
+	  '$(FREERTOS_SIGNED_HEX)' > '$(FREERTOS_BUILD_DIR)/flash.jlink'
+	@JLinkExe -nogui 1 -CommandFile '$(FREERTOS_BUILD_DIR)/flash.jlink'
+	@# What the board is running, so a delta has a from-image. The board
+	@# cannot be asked over the air, so if this record goes stale the update
+	@# is REFUSED rather than mis-applied -- the patch header carries a CRC of
+	@# the from-image and the bootloader checks it.
+	@mkdir -p '$(dir $(FREERTOS_DEPLOYED))'
+	@cp '$(FREERTOS_SIGNED_HEX)' '$(FREERTOS_DEPLOYED)'
+	@printf '  recorded as deployed  ·  %s\n' '$(FREERTOS_DEPLOYED)'
+
+## freertos-ota-patch: build a signed delta from the deployed image to the built one
+#
+# --memory-size and --staging-size rather than --build-dir: that flag reads a
+# partitions.yml, which sysbuild writes and this port has none of. The two sizes
+# are the same partitions by another route, and the tool offers this pair for
+# exactly this case.
+freertos-ota-patch: $(CDK_OTA_PY)
+	@if [ ! -f '$(FREERTOS_DEPLOYED)' ]; then \
+	  printf '  no record of what the board is running  ·  %s\n' '$(FREERTOS_DEPLOYED)' >&2; \
+	  printf '  A delta needs the image it starts from. Either `make freertos-flash`\n' >&2; \
+	  printf '  once over SWD, or point FREERTOS_DEPLOYED at the signed .hex it runs.\n' >&2; \
+	  exit 1; \
+	fi
+	@test -f '$(FREERTOS_SIGNED_HEX)' || { \
+	  printf '  no signed image  ·  run `make freertos-sign`\n' >&2; exit 2; }
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_patch.py build \
+	  --from '$(FREERTOS_DEPLOYED)' --to '$(FREERTOS_SIGNED_HEX)' \
+	  --memory-size $(FREERTOS_SLOT_SIZE) --staging-size $(FREERTOS_PATCH_STAGING_SIZE) \
+	  --key '$(FREERTOS_SIGN_KEY)' --out '$(FREERTOS_PATCH)'
+
+## freertos-ota-push: send an already-built patch over Bluetooth
+#
+# The board refuses every frame until an update window is open: press SW2, or
+# open a Matter commissioning window, which opens this one alongside it.
+freertos-ota-push: $(CDK_OTA_PY)
+	@test -f '$(FREERTOS_PATCH)' || { \
+	  printf '  no patch at %s  ·  run `make freertos-ota-patch`\n' '$(FREERTOS_PATCH)' >&2; \
+	  exit 1; }
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_push.py '$(FREERTOS_PATCH)' \
+	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
+	@mkdir -p '$(dir $(FREERTOS_DEPLOYED))' && cp '$(FREERTOS_SIGNED_HEX)' '$(FREERTOS_DEPLOYED)'
+	@printf '  recorded as deployed  ·  %s\n' '$(FREERTOS_DEPLOYED)'
+
+## freertos-dfu: update the board over Bluetooth  ·  no cable, no probe
+#
+# Deliberately does NOT rebuild. `make dfu` on the Zephyr side does, and can,
+# because its build is one command; this port's build needs the four
+# configuration switches passed on the command line, and a rebuild here with
+# different switches would produce a delta against an image nobody asked for.
+freertos-dfu:
+	@$(MAKE) --no-print-directory freertos-ota-patch
+	@$(MAKE) --no-print-directory freertos-ota-push
