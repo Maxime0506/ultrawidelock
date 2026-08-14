@@ -19,7 +19,16 @@
  * time. This backend refuses instead, and says which path.
  */
 
-#include <zephyr/settings/settings.h>
+/*
+ * The port's own header, not <zephyr/settings/settings.h>.
+ *
+ * This file is port code and nothing forces the foreign spelling on it. The
+ * Zephyr-named header in matter_compat/ forwards HERE; only the shared sources,
+ * which live in the Zephyr tree and are compiled unmodified, reach it. Written
+ * the other way round this file was the single Zephyr include under
+ * ports/freertos-nrf52833/, and the purity guard was right to say so.
+ */
+#include "matter_settings_freertos.h"
 
 #include <string.h>
 
