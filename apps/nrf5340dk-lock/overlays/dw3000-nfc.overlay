@@ -1,5 +1,5 @@
 /*
- * DW3000 (UWB) + NFC12A1 pin overlay for matter-ultrawidelock-door-lock-app.
+ * DW3000 (UWB) + NFC12A1 pin overlay for matter-aliro-door-lock-app.
  * Applied AFTER the app's own board overlay, so these values override the
  * upstream defaults via DTS merge.
  *

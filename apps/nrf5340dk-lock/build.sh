@@ -55,7 +55,7 @@ fi
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$APP_DIR/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
-APP="$ADDON/applications/matter-ultrawidelock-door-lock-app"
+APP="$ADDON/applications/matter-aliro-door-lock-app"
 PATCH_DIR="$TREE/integrations/nrfconnect-door-lock/patches"
 PATCH_STATE="$WS/.ultrawidelock-patches.sha256"
 # One build root for the whole repo (Makefile exports ULTRAWIDELOCK_BUILD_ROOT); every
@@ -429,7 +429,7 @@ do_build() {
   # from the generated .config silently (see overlays/lto.conf), and the build then
   # succeeds while measuring nothing. Read it back off the artefact instead.
   if [ -n "$lto_conf" ]; then
-    local app_config="$BUILD/matter-ultrawidelock-door-lock-app/zephyr/.config"
+    local app_config="$BUILD/matter-aliro-door-lock-app/zephyr/.config"
     [ -f "$app_config" ] || die "app .config not found" "$app_config"
     local sym
     for sym in CONFIG_LTO CONFIG_ISR_TABLES_LOCAL_DECLARATION; do
@@ -478,7 +478,7 @@ do_build() {
   fi
 
   if [ "$ultrawidelock_source" = 1 ]; then
-    local ultrawidelock_map="$BUILD/matter-ultrawidelock-door-lock-app/zephyr/zephyr.map"
+    local ultrawidelock_map="$BUILD/matter-aliro-door-lock-app/zephyr/zephyr.map"
     [ -f "$ultrawidelock_map" ] || die "credential source link map not found" "$ultrawidelock_map"
     if grep -q 'libaliro_ble\.a' "$ultrawidelock_map"; then
       die "proprietary credential archive still contributed linked code" \

@@ -60,7 +60,7 @@ NRF_BUILD_SH := $(REPO_ROOT)/apps/nrf5340dk-lock/build.sh
 # built here, not whatever is on the board. Mirrors the lock app's build.sh
 # ULTRAWIDELOCK_SOURCE split so the code shown belongs to the variant you built.
 NRF_BUILD_DIR := $(ULTRAWIDELOCK_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ULTRAWIDELOCK_SOURCE)),-blob)
-NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-ultrawidelock-door-lock-app/zephyr/factory_data.txt
+NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
 
 # The credential initiator is a second application on the same board, so it gets its
 # own build directory rather than sharing the door lock's.
@@ -139,7 +139,7 @@ nrf-flash-erase:
 # sysbuild-shaped, so only the image name and the baseline location differ.
 # Reports (ram_report/rom_report) are left off: they relink through west and
 # this target must stay a measure, not a build.
-NRF_IMAGE         := matter-ultrawidelock-door-lock-app
+NRF_IMAGE         := matter-aliro-door-lock-app
 NRF_SIZE_JSON     ?= $(NRF_BUILD_DIR)/size-report.json
 NRF_SIZE_BASELINE ?= $(REPO_ROOT)/apps/nrf5340dk-lock/size-baseline.json
 
