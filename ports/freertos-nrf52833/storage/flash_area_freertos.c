@@ -30,6 +30,8 @@
 
 #include <nrfx.h>
 
+#define FLASH_AREA_TAG "flash_area"
+
 #define TAG "flash_area"
 
 /* Placed by board/nrf52833_lock.ld. Their addresses are the values; the
@@ -80,6 +82,25 @@ int ultrawidelock_flash_open(enum ultrawidelock_flash_area_id id, const struct u
 	case ULTRAWIDELOCK_FLASH_AREA_STAGING:
 		s_staging.offset = staging_start;
 		s_staging.size = staging_end - staging_start;
+		/*
+		 * The driver confines writes to a window, and that window is a
+		 * BUILD-TIME constant while this partition is a LINKER one. When
+		 * they disagree the receiver still advertises an update channel,
+		 * still opens a window, still accepts the connection, and then
+		 * refuses the first erase -- which reaches the user as "a flash
+		 * write or erase failed" and reads like broken hardware. It
+		 * shipped that way. Said once, here, where both numbers are
+		 * visible, rather than discovered during an update.
+		 */
+		if (!ultrawidelock_freertos_flash_writable(s_staging.offset, s_staging.size)) {
+			ultrawidelock_freertos_log(
+				ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_AREA_TAG,
+				"staging at 0x%08x..0x%08x is outside the writable window; "
+				"no update can be staged",
+				(unsigned)s_staging.offset,
+				(unsigned)(s_staging.offset + s_staging.size));
+			return -1;
+		}
 		*fa = &s_staging;
 		return 0;
 	default:

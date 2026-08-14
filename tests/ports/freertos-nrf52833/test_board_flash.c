@@ -160,6 +160,33 @@ static void test_write_rejections(void)
 	CHECK("no rejected write reached the controller", fake_nvmc.word_writes == 0u);
 	CHECK("no rejected write changed the mode", fake_nvmc.mode_changes == 0u);
 	CHECK("no rejected write broke a rule", fake_nvmc.violations == 0u);
+
+	/*
+	 * The predicate the partition owners ask before they promise anything.
+	 *
+	 * It exists because the window is a build-time constant and the
+	 * partitions are a linker one, and when they disagreed the DFU receiver
+	 * advertised an update channel it could not write a byte to: the failure
+	 * surfaced as "a flash write or erase failed" during a real update,
+	 * months from the decision that caused it. Asked at start-up instead.
+	 *
+	 * This suite compiles the DEFAULT window -- the store's two pages -- so
+	 * the staging partition at 0x74000 is correctly outside it here. The
+	 * target build widens the base to cover staging; what is pinned here is
+	 * that the predicate agrees with the window it was compiled against,
+	 * whatever that window is.
+	 */
+	CHECK("the writable predicate accepts the store's own pages",
+	      ultrawidelock_freertos_flash_writable(KV_BASE, KV_LIMIT - KV_BASE));
+	CHECK("and agrees with the write path below the window",
+	      !ultrawidelock_freertos_flash_writable(KV_BASE - 4u, 4u));
+	CHECK("and past it", !ultrawidelock_freertos_flash_writable(KV_LIMIT - 4u, 8u));
+	CHECK("and over the application image",
+	      !ultrawidelock_freertos_flash_writable(0x8000u, 4u));
+	/* A partition the default window does not cover: the DFU staging area,
+	 * which is exactly the case that shipped broken. */
+	CHECK("a staging partition below the window is reported unwritable",
+	      !ultrawidelock_freertos_flash_writable(0x74000u, 0xa000u));
 }
 
 /* ---- erases ------------------------------------------------------------- */
