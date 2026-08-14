@@ -39,6 +39,9 @@
 #if WOZ_HAVE_PROV_CONSOLE
 #include <woz_freertos_usb.h>
 #endif
+#if WOZ_HAVE_MATTER
+#include <matter_ble_freertos.h>
+#endif
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
 #include <woz_freertos_platform.h>
@@ -379,6 +382,28 @@ static void boot_task(void *arg)
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no update channel; this board can only be updated by cable");
 	}
+
+#if WOZ_HAVE_MATTER
+	/*
+	 * The 0xFFF6 commissioning transport, registered for the same reason and
+	 * in the same window as the update channel above: before the reader
+	 * starts the host, because a GATT service cannot be added to a running
+	 * one.
+	 *
+	 * Not fatal, and for the same shape of reason. A board that fails to
+	 * register this one is still an Aliro reader that opens doors; refusing
+	 * to boot would take the working half away too.
+	 *
+	 * This call is also what puts the Matter code in the image at all.
+	 * Nothing else references it, so without this line --gc-sections removes
+	 * the protocol, the transport and the Thread glue, and every build check
+	 * still passes -- which is exactly what the first Matter build did.
+	 */
+	if (matter_ble_start() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "no commissioning transport; this board cannot be added to a home");
+	}
+#endif
 
 	/*
 	 * The Aliro reader, which brings the BLE host up underneath itself.

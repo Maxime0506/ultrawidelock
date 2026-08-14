@@ -471,11 +471,28 @@ if(WOZ_MATTER)
   add_library(woz_matter_transport STATIC
     "${WOZ_REPO_ROOT}/ports/zephyr/matter/matter_thread_port.c"
     "${WOZ_PORT_DIR}/matter/matter_settings_freertos.c"
+    # The BLE half is written, not shimmed: Zephyr's bt_* GATT and NimBLE's
+    # differ in shape, not spelling. It carries the oracle's hard-won behaviour
+    # across rather than its code -- see the four numbered lessons in the file.
+    "${WOZ_PORT_DIR}/matter/matter_ble_freertos.c"
+  )
+  target_include_directories(woz_matter_transport PUBLIC
+    "${WOZ_PORT_DIR}/matter"
   )
   target_include_directories(woz_matter_transport PRIVATE
     "${WOZ_PORT_DIR}/matter/matter_compat"
   )
-  target_link_libraries(woz_matter_transport PUBLIC woz_matter woz_thread)
+  target_link_libraries(woz_matter_transport PUBLIC woz_matter woz_thread woz_nimble woz_radio)
+  # The port's own files in this library are held to the port's standard. The
+  # shared transport is not: it is compiled unmodified and belongs to a build
+  # with different warning flags, so -Werror here would make an unrelated
+  # change over there fail this image for style.
+  set_source_files_properties(
+    "${WOZ_PORT_DIR}/matter/matter_ble_freertos.c"
+    "${WOZ_PORT_DIR}/matter/matter_settings_freertos.c"
+    TARGET_DIRECTORY woz_matter_transport
+    PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-Wshadow"
+  )
   # The Kconfig symbols the file selects its behaviour with. This port has no
   # Kconfig, so they are forced on from a header, exactly as the pinned radio
   # platform's are.
@@ -932,7 +949,11 @@ endif()
 # branch that does not apply, and a branch that cannot run should not be in
 # the image being measured.
 target_compile_definitions(woz_freertos_port INTERFACE
-  WOZ_HAVE_PROV_CONSOLE=$<BOOL:${WOZ_PROV_CONSOLE}>)
+  WOZ_HAVE_PROV_CONSOLE=$<BOOL:${WOZ_PROV_CONSOLE}>
+  WOZ_HAVE_MATTER=$<BOOL:${WOZ_MATTER}>)
+if(WOZ_MATTER)
+  target_link_libraries(woz_freertos_port INTERFACE woz_matter_transport)
+endif()
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.

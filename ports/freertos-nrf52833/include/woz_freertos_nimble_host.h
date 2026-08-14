@@ -52,8 +52,14 @@ struct woz_freertos_nimble_host_hooks {
  * CoC server, and neither knows the other exists -- the reader is shared with
  * the ESP32 port and the update channel is shared with the Zephyr one. Making
  * one call the other would couple two layers that have no reason to meet.
+ *
+ * Three since the Matter commissioning transport joined them: it owns the
+ * 0xFFF6 service and observes GAP through a listener rather than the connection
+ * callback, for the same reason -- the reader owns the advertising set and
+ * therefore that callback. A build without WOZ_MATTER simply never adds the
+ * third, so the slot costs one pointer pair it does not use.
  */
-#define WOZ_FREERTOS_NIMBLE_HOST_HOOKS_MAX 2u
+#define WOZ_FREERTOS_NIMBLE_HOST_HOOKS_MAX 3u
 
 /**
  * Add a registrant to the startup sequence.
