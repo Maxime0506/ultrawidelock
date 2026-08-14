@@ -70,6 +70,31 @@
  * ids, and nothing else in this image allocates persistent PSA keys.
  */
 #define CONFIG_OPENTHREAD_PSA_ITS_NVM_OFFSET 0x20000
+/*
+ * EXPORTABLE MAC KEYS, which key references make mandatory rather than optional.
+ *
+ * Once OpenThread holds its keys as PSA references, otPlatRadioSetMacKeys is
+ * handed OT_KEY_TYPE_KEY_REF instead of key bytes. The nRF 802.15.4 driver
+ * cannot use a reference: it encrypts frames in hardware and needs the sixteen
+ * literal bytes in its own key store. radio_nrf5.c bridges that by exporting
+ * each key through otPlatCryptoExportKey -- but only inside
+ * #if defined(CONFIG_OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE). Without this
+ * symbol it compiles the other branch, which asserts the type is a literal key,
+ * and that assertion is unreachable-by-design code that this port reached.
+ *
+ * Zephyr coupled the two: modules/openthread/Kconfig has
+ * "imply OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE" on OPENTHREAD_CRYPTO_PSA,
+ * so no Kconfig build can choose PSA crypto and forget this. A hand-written
+ * config has no imply, and the omission is invisible until a radio key is set.
+ *
+ * It also has to be told to OpenThread itself, as
+ * OPENTHREAD_CONFIG_PLATFORM_MAC_KEYS_EXPORTABLE_ENABLE in
+ * thread/openthread_project_config.h: this symbol only decides what radio_nrf5.c
+ * compiles, while that one decides whether KeyManager imports the MAC keys with
+ * PSA_KEY_USAGE_EXPORT set. Enabling one without the other trades the assert for
+ * an export that PSA refuses.
+ */
+#define CONFIG_OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE 1
 #endif
 
 /*
