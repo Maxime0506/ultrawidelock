@@ -57,6 +57,9 @@
 
 #define MAIN_TAG "main"
 
+/* The UWB bring-up trace's runtime gate (modules/woz_uwb, woz_diag.h). */
+extern volatile int woz_uwb_diag_on;
+
 /*
  * The housekeeping cadence, and how many of those passes make one log line.
  *
@@ -501,6 +504,18 @@ static void settle_pullup(void)
 int main(void)
 {
 	int err;
+
+	/*
+	 * Off before the radio comes up, exactly as the Zephyr application's
+	 * main() does: the per-round DIAGK budget re-arms at every session
+	 * start, so a shipping image would otherwise print synchronously from
+	 * the ranging callbacks for each walk-up's first 16 rounds -- after the
+	 * arm, but ahead of the next dispatch. The arm-leg histograms this
+	 * build carries are plain statics, so the latency picture stays fully
+	 * readable over J-Link with the trace off; a debugger can also write
+	 * this variable back to 1 to re-enable the trace without reflashing.
+	 */
+	woz_uwb_diag_on = 0;
 
 	/*
 	 * Crypto first, because it is the one bring-up step that can be retried:

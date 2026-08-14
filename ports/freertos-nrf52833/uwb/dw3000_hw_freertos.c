@@ -82,10 +82,13 @@ _Static_assert(WOZ_DW3000_IRQ_PRIORITY >= configMAX_SYSCALL_INTERRUPT_PRIORITY,
 #endif
 
 /*
- * Above the application and the Thread task, below nothing that matters. The
- * ESP-IDF port measured what happens when this is merely high rather than
- * highest: other work preempted the worker for about 2.4 ms per TX-done, so
- * the Final arm always ran after the Final had already passed.
+ * The top priority, and the worker holds it ALONE -- FreeRTOSConfig.h grew the
+ * extra level for exactly this task, and radio/mpsl_freertos.c keeps the MPSL
+ * pump one below, because with configUSE_TIME_SLICING 0 an equal-priority pump
+ * mid-pass would hold the notified worker off until it blocked. The ESP-IDF
+ * port measured what happens when this is merely high rather than highest:
+ * other work preempted the worker for about 2.4 ms per TX-done, so the Final
+ * arm always ran after the Final had already passed.
  */
 #ifndef WOZ_DW3000_ISR_TASK_PRIORITY
 #define WOZ_DW3000_ISR_TASK_PRIORITY (configMAX_PRIORITIES - 1)
@@ -95,6 +98,15 @@ _Static_assert(WOZ_DW3000_IRQ_PRIORITY >= configMAX_SYSCALL_INTERRUPT_PRIORITY,
  * Cycle counters the vendored decadriver reads through extern declarations to
  * trace the RF-arm path. They are diagnostics, but they are referenced from
  * dw3000_device.c, so the port has to define them or the image does not link.
+ *
+ * The stamps are CPU cycles from the Cortex-M4 DWT cycle counter, because that
+ * is the unit every consumer divides by g_dw_cyc_per_us: the Zephyr port reads
+ * DWT_CYCCNT and the ESP-IDF port esp_cpu_get_cycle_count for the same
+ * globals. This port used to stamp woz_freertos_cycle_get_32 -- RTC1 at
+ * 32,768 Hz -- so a bucket held 30.5 us ticks and the decode divided them by
+ * 64 as if they were 15.6 ns cycles, reading ~zero everywhere. The counter is
+ * enabled in dw3000_hw_init(); a stamp taken before that reads 0, and every
+ * consumer only ever differences two stamps from the same event.
  */
 volatile uint32_t g_dw_cyc_gpio;
 volatile uint32_t g_dw_cyc_work;
@@ -103,7 +115,14 @@ volatile uint32_t g_dw_cyc_per_us = 64u; /* nRF52833 core clock, MHz. */
 
 uint32_t dw3000_dwt_cyccnt(void)
 {
-	return woz_freertos_cycle_get_32();
+	return DWT->CYCCNT;
+}
+
+static void dw_cyccnt_enable(void)
+{
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->CYCCNT = 0u;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
 static StaticTask_t s_task_tcb;
@@ -125,6 +144,8 @@ bool dw3000_hw_is_asleep(void)
 
 int dw3000_hw_init(void)
 {
+	dw_cyccnt_enable();
+
 	/*
 	 * Reset released: an input, held high by the module's pull-up. Driving
 	 * it high instead would fight the chip whenever it resets itself.
@@ -152,7 +173,7 @@ void woz_freertos_dw3000_irq_handler(void)
 	}
 	nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
-	g_dw_cyc_gpio = woz_freertos_cycle_get_32();
+	g_dw_cyc_gpio = DWT->CYCCNT;
 	if (s_task != NULL) {
 		vTaskNotifyGiveFromISR(s_task, &wake);
 		portYIELD_FROM_ISR(wake);
@@ -165,7 +186,7 @@ static void dw3000_isr_task(void *arg)
 
 	for (;;) {
 		(void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		g_dw_cyc_work = woz_freertos_cycle_get_32();
+		g_dw_cyc_work = DWT->CYCCNT;
 		/*
 		 * The line stays high until every pending event has been read
 		 * out, so one notification can owe several passes. Draining it
@@ -175,7 +196,7 @@ static void dw3000_isr_task(void *arg)
 		while (nrf_gpio_pin_read(WOZ_DW3000_PIN_IRQ)) {
 			dwt_isr();
 		}
-		g_dw_cyc_isrdone = woz_freertos_cycle_get_32();
+		g_dw_cyc_isrdone = DWT->CYCCNT;
 	}
 }
 

@@ -52,4 +52,15 @@ int woz_freertos_uwb_start(void);
  * falsifiable about the radio rather than that it was asked to start. */
 bool woz_freertos_uwb_ready(void);
 
+/*
+ * True while a UWB ranging session is listening. The flash driver defers NVMC
+ * work behind it: MPSL grants flash timeslots against BLE and 802.15.4 only,
+ * the UWB slot grid is invisible to it, and NVMC stalls the CPU -- so an
+ * unlucky grant lands a multi-millisecond stall inside the ~1,836 us window
+ * between a DW3110 frame and its armed response. The strong definition lives
+ * with the UWB bring-up; board/flash_freertos.c carries a weak false default
+ * so the host tests and a UWB-less image link unchanged.
+ */
+bool woz_freertos_uwb_ranging_active(void);
+
 #endif /* WOZ_FREERTOS_UWB_H */

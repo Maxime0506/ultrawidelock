@@ -71,4 +71,27 @@ unsigned fake_dsb_count(void);
 #define __set_PRIMASK(v)   fake_primask_set(v)
 #define __disable_irq()    fake_primask_disable_irq()
 
+/*
+ * The DWT cycle counter and its CoreDebug enable, which the UWB worker's
+ * IRQ-path latency stamps read. The model is the register contract only --
+ * TRCENA, then CYCCNTENA, then CYCCNT is a plain readable counter -- so a test
+ * can preload CYCCNT and prove a stamp is a read, not a computation.
+ */
+typedef struct {
+	uint32_t CTRL;
+	uint32_t CYCCNT;
+} fake_dwt_type;
+
+typedef struct {
+	uint32_t DEMCR;
+} fake_coredebug_type;
+
+extern fake_dwt_type fake_dwt;
+extern fake_coredebug_type fake_coredebug;
+
+#define DWT (&fake_dwt)
+#define CoreDebug (&fake_coredebug)
+#define CoreDebug_DEMCR_TRCENA_Msk (1uL << 24)
+#define DWT_CTRL_CYCCNTENA_Msk (1uL << 0)
+
 #endif /* TEST_NRFX_H */

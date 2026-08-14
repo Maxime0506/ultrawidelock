@@ -25,7 +25,17 @@
 #define configIDLE_SHOULD_YIELD 1
 #define configUSE_16_BIT_TICKS 0
 #define configMAX_TASK_NAME_LEN 12
-#define configMAX_PRIORITIES 7
+/*
+ * Eight rather than seven, so the top level can belong to the DW3110 worker
+ * ALONE. configUSE_TIME_SLICING is 0, so a task made ready at the priority of
+ * the RUNNING task does not preempt it -- and when the worker shared its level
+ * with the MPSL pump, a pump pass that happened to be running when the DW3110
+ * raised its line held the worker off until it blocked, spending an unbounded
+ * bite of the ~1,836 us window the chip gives to arm a response. The pump sits
+ * one below (radio/mpsl_freertos.c) and still outranks everything else. The
+ * extra level costs one ready list.
+ */
+#define configMAX_PRIORITIES 8
 #define configENABLE_BACKWARD_COMPATIBILITY 0
 
 /*

@@ -15,6 +15,7 @@
  */
 #include <stdbool.h>
 
+#include <ccc_shim.h>
 #include <ultrawidelock/uwb.h>
 
 #include "woz_freertos_platform.h"
@@ -61,4 +62,10 @@ int woz_freertos_uwb_start(void)
 bool woz_freertos_uwb_ready(void)
 {
 	return s_ready;
+}
+
+/* Overrides the weak default in board/flash_freertos.c; the header says why. */
+bool woz_freertos_uwb_ranging_active(void)
+{
+	return ccc_prepoll_listening();
 }
