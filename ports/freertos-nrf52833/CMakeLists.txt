@@ -103,9 +103,18 @@ option(WOZ_LTO "Build the image with link-time optimisation" OFF)
 
 # 1to1 keeps code generation on translation-unit boundaries. It was forced by an
 # assembler "offset out of range" -- the assembler, not the linker -- when -Os
-# inlining across merged units produced functions past Thumb branch range. It
-# costs most of the cross-unit code motion LTO exists for, so it is a variable:
-# a build that links and passes the vector check under "balanced" should use it.
+# inlining across merged units produced functions past Thumb branch range.
+#
+# THAT IS NO LONGER WHY IT IS HERE. Re-measured on the whole-program set,
+# Matter configuration, 2026-08-14: balanced links clean, passes the vector
+# check, and is 628 B LARGER (391,552 vs 390,924 flash) for 80 B less RAM. An
+# earlier run on the old partial set put balanced 920 B behind. Two measurements
+# on different sets agree on the direction, so this stays 1to1 because it is
+# smaller, not because the assembler forbids the alternative.
+#
+# Left as a cache variable because the finding is worth re-testing whenever the
+# set changes again -- and it should be re-tested by BUILDING, not reasoned
+# about from what LTO is supposed to do.
 set(WOZ_LTO_PARTITION "1to1" CACHE STRING "GCC -flto-partition mode")
 
 if(WOZ_LTO)
