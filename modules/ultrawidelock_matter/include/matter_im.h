@@ -118,10 +118,49 @@ static inline bool matter_im_path_is_wildcard(const struct matter_im_path *p)
 	return !p->have_endpoint || !p->have_cluster || !p->have_attribute;
 }
 
+/**
+ * How many event paths one request may carry.
+ *
+ * Smaller than MATTER_IM_MAX_PATHS on purpose: a controller subscribes to every
+ * attribute it can name, but the event set is one wildcard in practice, and each
+ * path costs stack in a structure that is already static for that reason.
+ */
+#define MATTER_IM_MAX_EVENT_PATHS 4
+
+/**
+ * One requested EventPathIB.
+ *
+ * NOT the same shape as an attribute path, and not the same tag numbers either
+ * (EventPathIB.h:38-44 puts Endpoint at 1 where AttributePathIB.h puts it at 2),
+ * so it is a separate structure rather than a reused one. An absent field is a
+ * wildcard, as it is for attributes.
+ */
+struct matter_im_event_path {
+	uint16_t endpoint;
+	uint32_t cluster;
+	uint32_t event;
+	bool have_endpoint;
+	bool have_cluster;
+	bool have_event;
+};
+
 /** A decoded ReadRequest. */
 struct matter_im_read {
 	struct matter_im_path paths[MATTER_IM_MAX_PATHS];
 	uint8_t n_paths;
+	/**
+	 * The events asked for, if any. A request carrying none gets an empty
+	 * EventReports array -- not every event this node happens to hold.
+	 */
+	struct matter_im_event_path event_paths[MATTER_IM_MAX_EVENT_PATHS];
+	uint8_t n_event_paths;
+	/**
+	 * The lowest EventNumber the peer still wants, from EventFilterIB
+	 * (EventFilterIB.h:38-41). A subscriber that has already seen event 7
+	 * sends 8 here, and re-reporting 7 would have it show the same unlock
+	 * twice. Zero asks for everything held.
+	 */
+	uint64_t event_min;
 	/** As sent; recorded rather than acted on, since nothing here is fabric-scoped yet. */
 	bool fabric_filtered;
 	/**
@@ -334,6 +373,51 @@ typedef uint8_t (*matter_im_write_fn)(void *ctx, const struct matter_im_path *pa
 				      const uint8_t *data, size_t data_len);
 
 /**
+ * One event this node is holding, as a report needs to describe it.
+ *
+ * The DATA is not here: it is written straight into the report by
+ * @ref matter_im_event_data_fn, because an event's fields are cluster-specific
+ * and copying them through a union would make this structure grow with every
+ * event the node learns to emit.
+ */
+struct matter_im_event {
+	uint16_t endpoint;
+	uint32_t cluster;
+	uint32_t event;
+	/**
+	 * Monotonic within a boot and never reused. A subscriber uses it to ask
+	 * for what it has not seen (EventFilterIB), so an id that repeats after a
+	 * reboot has the subscriber silently skip a real unlock.
+	 */
+	uint64_t number;
+	/** Milliseconds since boot. Not a wall clock; see the encoder's note. */
+	uint64_t timestamp_ms;
+	/** MATTER_EVENT_PRIORITY_*, from EventLoggingTypes.h:51-36. */
+	uint8_t priority;
+};
+
+/**
+ * How many events this node currently holds.
+ *
+ * The set is walked by INDEX, oldest first, and an index is only valid until the
+ * ring evicts. Nothing here caches one across a call.
+ */
+typedef size_t (*matter_im_event_count_fn)(void *ctx);
+
+/**
+ * Describe event @p index. @return false when the index is out of range, which
+ * is how a walk stops if the ring changed under it.
+ */
+typedef bool (*matter_im_event_at_fn)(void *ctx, size_t index, struct matter_im_event *out);
+
+/**
+ * Write event @p index's fields as EXACTLY ONE element, tagged @p tag -- the
+ * same contract as @ref matter_im_value_fn, and a structure counts as one.
+ */
+typedef void (*matter_im_event_data_fn)(void *ctx, size_t index, struct matter_tlv_writer *w,
+					matter_tlv_tag_t tag);
+
+/**
  * Callback table for the Matter interaction model server, defining functions to query attribute
  * status, read values, list endpoints and clusters, and handle write and command operations.
  */
@@ -348,6 +432,10 @@ struct matter_im_server {
 	matter_im_command_fields_fn command_fields;
 	/** NULL means this node accepts no writes at all. */
 	matter_im_write_fn write;
+	/** All three NULL together means this node reports no events. */
+	matter_im_event_count_fn event_count;
+	matter_im_event_at_fn event_at;
+	matter_im_event_data_fn event_data;
 	void *ctx;
 };
 

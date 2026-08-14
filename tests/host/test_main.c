@@ -82,6 +82,7 @@ int main(void)
 		{ "matter_im", test_matter_im },
 		{ "matter_im_invoke", test_matter_im_invoke },
 		{ "matter_im_write", test_matter_im_write },
+		{ "matter_im_events", test_matter_im_events },
 		{ "matter_attest", test_matter_attest },
 		{ "matter_fabric", test_matter_fabric },
 		{ "matter_addnoc", test_matter_addnoc },
