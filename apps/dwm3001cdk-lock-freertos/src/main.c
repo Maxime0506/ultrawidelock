@@ -93,6 +93,15 @@ static struct aliro_trust_store s_trust;
 /* Latched in main() from SW2 before the scheduler starts; see the note there. */
 static bool s_prov_mode;
 
+/*
+ * Written to GPREGRET2 to ask the NEXT boot for the provisioning console. The
+ * value is arbitrary but must not be 0 or 0xFF: those are what the register
+ * reads as when it has never been written and after some resets, and a magic
+ * that collides with either would put the board into provisioning mode by
+ * accident. 0x5A is neither, and is distinctive in a memory dump.
+ */
+#define WOZ_PROV_REQUEST_MAGIC 0x5Au
+
 static StaticTask_t s_boot_tcb;
 
 /*
@@ -510,6 +519,32 @@ int main(void)
 	nrf_gpio_cfg_input(WOZ_FREERTOS_PIN_SW2, NRF_GPIO_PIN_PULLUP);
 	settle_pullup();
 	s_prov_mode = (nrf_gpio_pin_read(WOZ_FREERTOS_PIN_SW2) == 0u);
+
+	/*
+	 * The same request, without a finger on the board.
+	 *
+	 * GPREGRET2 survives a soft reset and a watchdog reset but not a power
+	 * cycle, which is exactly the lifetime this needs: a debugger or a future
+	 * console command writes the magic, resets, and the next boot answers a
+	 * serial port. Nothing else in this image or in MCUboot's configuration
+	 * touches this register -- GPREGRET (the first one) is left alone because
+	 * Nordic's own bootloaders claim it, and a collision here would look like
+	 * a board that randomly refuses to run the application.
+	 *
+	 * CLEARED BEFORE IT IS ACTED ON, and that ordering is the whole safety
+	 * argument. A board that entered provisioning mode and then lost power
+	 * mid-session must come back as a lock, not as a console that answers
+	 * nothing over the radio: leaving the magic set would make one operator
+	 * mistake permanent until someone reflashed.
+	 *
+	 * It only ever ADDS the mode. Holding SW2 still works and still wins, so
+	 * the documented recovery path is unchanged for anyone who does not have
+	 * a debugger attached.
+	 */
+	if (NRF_POWER->GPREGRET2 == WOZ_PROV_REQUEST_MAGIC) {
+		NRF_POWER->GPREGRET2 = 0u;
+		s_prov_mode = true;
+	}
 
 	err = woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher());
 	if (err != 0) {
