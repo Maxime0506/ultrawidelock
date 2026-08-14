@@ -36,7 +36,9 @@
 #include <woz_freertos_board.h>
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_dfu.h>
+#if WOZ_HAVE_PROV_CONSOLE
 #include <woz_freertos_usb.h>
+#endif
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
 #include <woz_freertos_platform.h>
@@ -277,6 +279,7 @@ static void boot_task(void *arg)
 	 * runs. What the two images share is the property that matters: in
 	 * provisioning mode the board is not reachable over any radio.
 	 */
+#if WOZ_HAVE_PROV_CONSOLE
 	if (s_prov_mode) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG,
 				 "provisioning mode: radios stay down, console on USB");
@@ -289,6 +292,26 @@ static void boot_task(void *arg)
 		}
 		woz_freertos_prov_console_run();
 	}
+#else
+	/*
+	 * Built without the console, which is what a Matter node is: the fabric
+	 * arrives from a commissioner, so there is nothing to type in.
+	 *
+	 * SW2 STILL MEANS SOMETHING and it is not this. The button opens the DFU
+	 * window later in this file, and it is read again there. What is gone is
+	 * only the branch that would have answered a serial port, along with the
+	 * 18,151 bytes of flash and 10,249 of RAM behind it.
+	 *
+	 * Saying so out loud costs one log line and removes the one way this can
+	 * be misread on a bench: a board held on SW2 that comes up as a normal
+	 * lock has not ignored the button, it was built without the mode.
+	 */
+	if (s_prov_mode) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "SW2 held, but this image has no provisioning "
+				 "console; continuing as a lock");
+	}
+#endif
 
 	/*
 	 * Thread.

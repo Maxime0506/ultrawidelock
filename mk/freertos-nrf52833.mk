@@ -84,9 +84,21 @@ FREERTOS_TOOLCHAIN_ARG = $(if $(WOZ_ARM_TOOLCHAIN_DIR),-DWOZ_ARM_TOOLCHAIN_DIR=$
 # line does not is a setting nobody can see in the build they just ran.
 FREERTOS_LTO ?= OFF
 
+# The USB provisioning console: 18,151 B of flash and 10,249 B of RAM, all of
+# it serving a mode that runs only when SW2 is held through reset. A Matter
+# node self-provisions and does not need it.
+FREERTOS_PROV_CONSOLE ?= ON
+
+# Turning the console off removes the USBD vector, and freertos-vector-check.sh
+# is told which OWNER went rather than being left to infer it from a missing
+# handler. Inferring it would make a deliberate exclusion and a dropped handler
+# look identical, which is the failure that check exists to prevent.
+FREERTOS_VECTOR_EXCLUDES = $(if $(filter OFF,$(FREERTOS_PROV_CONSOLE)),--without=usb_provisioning_console)
+
 FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
 	-DWOZ_LTO=$(FREERTOS_LTO) \
+	-DWOZ_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
 	-DWOZ_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
@@ -123,7 +135,8 @@ freertos-build:
 	@# session; this makes the next one a build failure.
 	@WOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR) \
 		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
-		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf
+		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf \
+		$(FREERTOS_VECTOR_EXCLUDES)
 	@# newlib-nano's printf does not implement ll. A format it cannot honour
 	@# consumes the wrong argument width, so the next %s dereferences a data
 	@# value -- a bus fault into default_handler, which spins and takes the

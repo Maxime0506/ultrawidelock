@@ -745,6 +745,23 @@ set(WOZ_NRF5_USBD "${WOZ_NRF5_SDK}/components/libraries/usbd")
 set(WOZ_NRF5_NRFX "${WOZ_NRF5_SDK}/modules/nrfx")
 
 # ----------------------------------------------------------------------------
+# The provisioning console is optional, and a Matter build does not have one.
+# ----------------------------------------------------------------------------
+# It costs 18,151 bytes of flash and 10,249 of RAM -- measured on this tree, and
+# the RAM is the larger number in a part where RAM is what runs out. All of it
+# serves a mode that runs only when SW2 is held through reset.
+#
+# A Matter node self-provisions: the commissioner supplies the fabric, so
+# typing a credential over a serial port is the thing Matter replaces. The
+# Zephyr oracle reaches the same conclusion in prj.conf, where the console is
+# off for the same reason and with the note that reader + console + Thread
+# overflows RAM by 1,752 bytes regardless.
+#
+# ON by default, because that is the image that exists today and the one that
+# provisions a board with no Matter fabric to join.
+option(WOZ_PROV_CONSOLE "Build the USB provisioning console into the image" ON)
+
+# ----------------------------------------------------------------------------
 # The one SDK source this image does not compile verbatim, and why.
 #
 # app_usbd_core.c builds its device descriptor with bDeviceClass,
@@ -774,6 +791,8 @@ set(WOZ_NRF5_NRFX "${WOZ_NRF5_SDK}/modules/nrfx")
 # --wrap does not see it. That version linked cleanly, defined the wrapper, and
 # still shipped zeros. Checked by disassembly, not by the build succeeding.
 # ----------------------------------------------------------------------------
+if(WOZ_PROV_CONSOLE)
+
 set(WOZ_USBD_CORE_SRC "${WOZ_NRF5_USBD}/app_usbd_core.c")
 set(WOZ_USBD_CORE_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_usbd_core_iad.c")
 file(READ "${WOZ_USBD_CORE_SRC}" _woz_usbd_core_txt)
@@ -870,9 +889,21 @@ target_include_directories(woz_usb PRIVATE
 # path, never through a second copy of that logic.
 target_link_libraries(woz_usb PUBLIC woz_board woz_radio woz_aliro)
 
+endif(WOZ_PROV_CONSOLE)
+
 add_library(woz_freertos_port INTERFACE)
 target_link_libraries(woz_freertos_port INTERFACE
-  woz_storage woz_uwb woz_thread woz_aliro woz_dfu woz_usb)
+  woz_storage woz_uwb woz_thread woz_aliro woz_dfu)
+if(WOZ_PROV_CONSOLE)
+  target_link_libraries(woz_freertos_port INTERFACE woz_usb)
+endif()
+# Carried to every consumer rather than tested as a CMake variable in the app,
+# so the application source says in C which mode it was built for. A build
+# without the console must not merely fail to start it -- main() has a whole
+# branch that does not apply, and a branch that cannot run should not be in
+# the image being measured.
+target_compile_definitions(woz_freertos_port INTERFACE
+  WOZ_HAVE_PROV_CONSOLE=$<BOOL:${WOZ_PROV_CONSOLE}>)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
