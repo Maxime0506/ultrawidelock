@@ -468,6 +468,14 @@ static enum aliro_uwb_err parse_slot_bitmask(struct aliro_uwb_session *session,
 		/* No bit 0-6 set in common: keep the seeded raw bitmask value. */
 		break;
 	}
+	/* BENCH PROBE: the offered slot menu, once per M2. We take the LOWEST common
+	 * bit, and the arm deadline is one slot minus the ~160 us POLL lead, so any
+	 * offered bit above the chosen one is arm headroom we decline. idx==7 = no
+	 * common bit (chaps_per_slot is then the raw masked value). */
+	LOG_INF("slot bm peer=0x%02x ours=0x%02x common=0x%02x -> bit%u chaps=%u dur=%u rstu",
+		(unsigned)bitmask, (unsigned)session->aliro_ctx->ccc_caps.slot_bitmask,
+		(unsigned)common, (unsigned)idx, (unsigned)chaps_per_slot,
+		(unsigned)(400u * chaps_per_slot));
 	session->ccc_aliro_config.slot_duration = 400 * chaps_per_slot;
 	return ALIRO_UWB_ERR_NONE;
 }
