@@ -49,6 +49,40 @@ foreach(_ultrawidelock_path "${ULTRAWIDELOCK_FREERTOS_SRC}/source/tasks.c" "${UL
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Code generation applied to the WHOLE program.
+# ----------------------------------------------------------------------------
+# Same placement argument as the LTO block below, and the same defect behind it:
+# these four flags were a hand-maintained nine-target foreach 400 lines down,
+# which left out ultrawidelock_thread, ultrawidelock_matter,
+# ultrawidelock_matter_transport, ultrawidelock_dfu, ultrawidelock_usb
+# and the OpenThread subdirectory -- libopenthread-mtd.a being the largest
+# archive in the image. Without -ffunction-sections there, --gc-sections can
+# only drop whole objects, never individual functions.
+#
+#   -ffunction-sections   one section per function, so the linker can drop them
+#   -fdata-sections       the same for objects
+#   -fno-common           tentative definitions become real ones, so two
+#                         translation units defining the same name is an error
+#                         rather than a silent merge
+#   -fno-strict-aliasing  the vendored radio and kernel sources punch through
+#                         types in ways the optimiser is otherwise entitled to
+#                         assume cannot happen
+#
+# WHAT HOISTING THEM WAS WORTH, measured on the Matter image: NOTHING. Byte for
+# byte identical at 373,288 flash before and after, because with ULTRAWIDELOCK_LTO=ON the
+# IR-level dead-code elimination has already dropped everything --gc-sections
+# would have. The change is kept because it removes the second hand-maintained
+# list from this file and because it is the ULTRAWIDELOCK_LTO=OFF build that needs it --
+# but that build has NOT been measured, so this is a correctness argument and
+# not a size claim. Do not quote a saving for it.
+add_compile_options(
+  -ffunction-sections
+  -fdata-sections
+  -fno-common
+  -fno-strict-aliasing
+)
+
+# ----------------------------------------------------------------------------
 # Link-time optimisation, applied to the WHOLE program.
 # ----------------------------------------------------------------------------
 # This block sits here, ahead of every add_library() and every
@@ -1194,15 +1228,14 @@ target_compile_options(ultrawidelock_cred PRIVATE
   -Wshadow
 )
 
-foreach(_ultrawidelock_target ultrawidelock_soc ultrawidelock_kernel ultrawidelock_board ultrawidelock_radio ultrawidelock_nimble ultrawidelock_mbedtls
-                    ultrawidelock_storage ultrawidelock_uwb ultrawidelock_cred)
-  target_compile_options(${_ultrawidelock_target} PRIVATE
-    -ffunction-sections
-    -fdata-sections
-    -fno-common
-    -fno-strict-aliasing
-  )
-endforeach()
+# -ffunction-sections and friends used to be a nine-target foreach here. They
+# are now in the global block at the top of this file, for the same reason the
+# LTO flags are: the list left out ultrawidelock_thread, ultrawidelock_matter,
+# ultrawidelock_matter_transport, ultrawidelock_dfu, ultrawidelock_usb and the
+# whole OpenThread subdirectory, so --gc-sections could only drop entire objects
+# from the largest archive in the image rather than individual functions. Two
+# hand-maintained lists in one file, with the same defect, found by a review
+# comparing this port against the oracle.
 
 # ----------------------------------------------------------------------------
 # Link-time optimisation.
