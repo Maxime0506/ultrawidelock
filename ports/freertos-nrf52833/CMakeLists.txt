@@ -700,15 +700,25 @@ if(WOZ_MATTER)
     # app's status_led.h is used, not the Zephyr one: the two declare the same
     # functions and the same signal enum, and this image must drive ITS leds.
     "${WOZ_REPO_ROOT}/ports/zephyr/store"
-    # ORDER MATTERS. Both app trees carry a status_led.h declaring the same
-    # functions and the same signal enum, and this image must drive ITS leds --
-    # the Zephyr one includes zephyr/sys/util.h and would not compile here
-    # anyway, which is the loud half of the failure. The quiet half is that a
-    # build which found it first would be reaching into the other product.
-    # The Zephyr app tree is on the path only for matter_commission.h.
+    # Both app trees carry a status_led.h declaring the same functions and the
+    # same signal enum. The -I order below is NOT what decides which one
+    # matter_commission.c gets: a quoted include resolves relative to the
+    # INCLUDING file's own directory before any -I, and matter_commission.c
+    # lives in the Zephyr app tree, so it always reads the Zephyr header. That
+    # header compiles fine here -- matter_compat supplies zephyr/sys/util.h --
+    # and it hides its declarations behind IS_ENABLED(CONFIG_ALIRO_STATUS_LED),
+    # turning every LED call into a silent no-op when the macro is missing.
+    # That was found on hardware, not in review: a Home tile tap that answered
+    # SUCCESS and reported LockState while the lock LED never moved.
     "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock-freertos/src"
     "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
   )
+  # See the include-order note above: matter_commission.c reads the ZEPHYR
+  # status_led.h no matter what, so this build must satisfy that header's
+  # config gate or lose every LED call in the file to the no-op stub. The
+  # declarations behind the gate match this port's status_led.c exactly, and
+  # the linker binds them to it.
+  target_compile_definitions(woz_matter_transport PRIVATE CONFIG_ALIRO_STATUS_LED=1)
   # --------------------------------------------------------------------------
   # SPAKE2+ over P-256, from Nordic's oberon library.
   # --------------------------------------------------------------------------
