@@ -261,6 +261,7 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		case MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX:
 		case MATTER_ATTR_DL_USERS_MAX:
 		case MATTER_ATTR_DL_CREDS_PER_USER_MAX:
+		case MATTER_ATTR_DL_CREDENTIAL_RULES:
 		/*
 		 * FeatureMap is answered here for the same reason it is on
 		 * NetworkCommissioning: it is what a controller reads to decide
@@ -434,6 +435,7 @@ static const uint32_t k_lock_attrs[] = {
 	MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX,
 	MATTER_ATTR_DL_USERS_MAX,
 	MATTER_ATTR_DL_CREDS_PER_USER_MAX,
+	MATTER_ATTR_DL_CREDENTIAL_RULES,
 	MATTER_ATTR_CLUSTER_REVISION,
 	MATTER_ATTR_ATTRIBUTE_LIST,
 	MATTER_ATTR_ACCEPTED_CMD_LIST,
@@ -584,6 +586,9 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		return;
 	case MATTER_ATTR_DL_CREDS_PER_USER_MAX:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_CREDS_PER_USER_MAX);
+		return;
+	case MATTER_ATTR_DL_CREDENTIAL_RULES:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_CREDENTIAL_RULES);
 		return;
 	case MATTER_ATTR_DL_LOCK_STATE:
 		/*

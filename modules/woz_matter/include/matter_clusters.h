@@ -331,8 +331,22 @@ struct matter_user {
 #define MATTER_DL_LOCK_STATE_LOCKED         1u
 #define MATTER_DL_LOCK_STATE_UNLOCKED       2u
 #define MATTER_DL_OPERATING_MODE_NORMAL     0u
-/** SupportedOperatingModes is a bitmap; bit 0 is Normal and it is the only one. */
-#define MATTER_DL_SUPPORTED_OPERATING_MODES 0x0001u
+/**
+ * SupportedOperatingModes is INVERTED: a bit CLEARED to 0 means the mode is
+ * supported (DoorLock cluster spec, DlSupportedOperatingModes). The previous
+ * 0x0001 therefore claimed "everything except Normal", the opposite of the
+ * truth. 0xFFF6 is CHIP's default and what the reference builds report:
+ * Normal (bit 0) and NoRemoteLockUnlock (bit 3) supported, the rest not.
+ */
+#define MATTER_DL_SUPPORTED_OPERATING_MODES 0xFFF6u
+
+/**
+ * CredentialRulesSupport (0x001B): mandatory with the User feature. Bit 0 is
+ * Single -- one credential authorises an operation on its own -- and it is
+ * the only rule this node implements (a normal bitmap, unlike the one above).
+ */
+#define MATTER_ATTR_DL_CREDENTIAL_RULES 0x001Bu
+#define MATTER_DL_CREDENTIAL_RULES      0x0001u
 
 /*
  * The one Aliro protocol version this reader speaks, big-endian, reported for
