@@ -94,7 +94,6 @@ UwbAliroFlow
 # --- CSA documents, cited by section or table --------------------------------
 Aliro Lab
 Aliro Specification
-Aliro Spec[^a-z]
 Aliro Table
 Aliro §
 
@@ -107,3 +106,23 @@ add-on Aliro UWB facade
 
 # --- Wire bytes: CBOR docTypes from the spec, not names we chose --------------
 aliro-[ar]
+
+# --- The add-on's build-system names ------------------------------------------
+# Upstream's imported CMake target is called `aliro`, and lib/aliro/CMakeLists.txt
+# gates the prebuilt blob on if(NOT TARGET aliro). The source stack has to spell
+# it exactly to displace it from ZEPHYR_LIBS.
+#
+# Every other entry in this file is protected by something about the token: a
+# namespace, a case convention, an include delimiter. A bare CMake identifier
+# has none of those, so the rename reached it, and list(REMOVE_ITEM) removed
+# nothing and said nothing. Named here one line at a time for the same reason
+# the ALIRO_ codes above are.
+`aliro`
+lib/aliro/CMakeLists\.txt
+"aliro" IN_LIST
+REMOVE_ITEM _zephyr_libraries aliro
+
+# The one add-on include we reach by quoted path rather than angle brackets.
+# <aliro/ above covers the other thirteen; it is spelled with the delimiter, so
+# it never covered this one, which is how the rename got it.
+"aliro/platform/
