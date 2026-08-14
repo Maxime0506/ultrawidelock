@@ -51,23 +51,32 @@ endforeach()
 # ----------------------------------------------------------------------------
 # Which product this image is, declared before anything is built.
 # ----------------------------------------------------------------------------
-# WOZ_HAVE_MATTER used to be set 830 lines down, next to the OpenThread
-# subdirectory whose config reads it. That was early enough for OpenThread and
-# too late for everything else: add_compile_definitions only reaches targets
-# created AFTER the call, and woz_aliro, woz_matter and woz_matter_transport are
-# all created above it. Their sources compiled with the symbol undefined, so
-# every "#if defined(WOZ_HAVE_MATTER)" in them silently took the other branch.
+# Position is for readers, NOT for correctness, and the difference is worth
+# stating because the two blocks below look like this one and do not behave like
+# it.
 #
-# That is the same defect as the LTO block below and the section-splitting block
-# after it -- three placements, one cause -- and this one is the quietest of the
-# three, because the other two only cost bytes. This one costs behaviour: the
-# advertiser in modules/woz_aliro/src/aliro_ble_nimble.c decides whether the
-# board is discoverable as a commissionable Matter node, and with the symbol
-# undefined it could only ever advertise the Aliro reader tag.
+#   add_compile_definitions  sets a directory property that CMake reads when it
+#                            GENERATES. Every target in this directory gets it,
+#                            including targets created above the call.
+#   add_compile_options      is captured when each target is CREATED. Targets
+#                            above the call never see it.
+#
+# Verified with a two-target scratch project rather than reasoned about: a
+# library created before both calls received the definition and did not receive
+# the option. So this could sit where it used to, 830 lines down beside the
+# OpenThread subdirectory whose config reads it, and woz_aliro would still have
+# compiled with WOZ_HAVE_MATTER defined. It is up here because a symbol that
+# says which product the image is belongs before anything is built, not because
+# moving it fixed anything -- it fixed nothing, and an earlier version of this
+# comment claimed otherwise.
 #
 # The app gets the same symbol a second way, through woz_freertos_port's
-# INTERFACE definitions further down. That is deliberate and stays: the app is a
-# different directory, which a directory-scoped definition does not reach at all.
+# INTERFACE definitions further down. That one IS load-bearing: the app is a
+# different directory, and no directory property here reaches it.
+#
+# OpenThread still constrains this. Its subdirectory is added below and its
+# config reads the symbol, so the definition has to exist by then -- which any
+# position in this file satisfies, and a target-scoped definition would not.
 if(WOZ_MATTER)
   add_compile_definitions(WOZ_HAVE_MATTER=1)
 endif()
@@ -916,13 +925,14 @@ include_directories("${WOZ_PORT_DIR}/thread")
 
 # WOZ_HAVE_MATTER is what the project config gates the SRP client on, and
 # OpenThread is built by its own CMake in the subdirectory below -- so it has to
-# be a GLOBAL definition set before that subdirectory is added. A target-scoped
-# one would leave the config reading it as undefined and silently build an
-# OpenThread with no SRP client, which fails at link with otSrpClient* missing
-# rather than quietly, but only after a full build of the wrong thing.
+# be a GLOBAL definition rather than a target-scoped one, which would leave the
+# config reading it as undefined and silently build an OpenThread with no SRP
+# client. That fails at link with otSrpClient* missing rather than quietly, but
+# only after a full build of the wrong thing.
 #
-# It is now set at the top of this file instead of here. This position satisfied
-# OpenThread and nothing else; see the block up there for what it cost.
+# It is set at the top of this file. Anywhere above this line would do; see the
+# block up there for why position is a readability choice and not a functional
+# one for definitions.
 
 add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 
