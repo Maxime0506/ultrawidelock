@@ -71,6 +71,23 @@ static const struct ultrawidelock_matter_setting s_settings[] = {
 	{ "mfab/f0", ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 + 0u, ULTRAWIDELOCK_SETTING_VARIABLE },
 	{ "mfab/f1", ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 + 1u, ULTRAWIDELOCK_SETTING_VARIABLE },
 	{ "mfab/f2", ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 + 2u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	/*
+	 * Subscriptions held over a reboot, one per CASE session slot ("msub" in
+	 * matter_commission.c). Variable length: the record layout belongs to
+	 * the app, and its loader discards a record whose size it does not
+	 * recognise.
+	 */
+	{ "msub/0", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 0u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	{ "msub/1", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 1u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	{ "msub/2", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 2u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	{ "msub/3", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 3u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	{ "msub/4", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 4u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	{ "msub/5", ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 5u, ULTRAWIDELOCK_SETTING_VARIABLE },
+	/* The two Door Lock attributes a controller writes ("mdl" in
+	 * matter_commission.c). Fixed-width: the value is the attribute itself,
+	 * so a record of any other size is not a record. */
+	{ "mdl/art", ULTRAWIDELOCK_KV_KEY_MATTER_DL_AUTO_RELOCK, sizeof(uint32_t) },
+	{ "mdl/apd", ULTRAWIDELOCK_KV_KEY_MATTER_DL_APPROACH, sizeof(uint8_t) },
 };
 
 /*
@@ -82,6 +99,8 @@ static const struct ultrawidelock_matter_setting s_settings[] = {
  */
 _Static_assert(ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 + 3u <= ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT_LIMIT,
 	       "fabric slot keys have outgrown their window");
+_Static_assert(ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 + 6u <= ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT_LIMIT,
+	       "subscription slot keys have outgrown their window");
 
 static const struct ultrawidelock_matter_setting *lookup(const char *path)
 {

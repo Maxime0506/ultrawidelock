@@ -1279,6 +1279,8 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 static void on_write_request(const struct matter_exchange_in *in)
 {
 	static struct matter_im_write wr;
+	uint32_t prev_relock_s;
+	uint8_t prev_approach;
 	size_t resp_len = 0u;
 	int rc;
 
@@ -1291,11 +1293,21 @@ static void on_write_request(const struct matter_exchange_in *in)
 		(unsigned int)wr.path.cluster, (unsigned int)wr.path.attribute,
 		(unsigned int)wr.data_len);
 
+	/*
+	 * Persisted by VALUE CHANGE rather than by write status: the encoder
+	 * only mutates s_info on a write it accepted, so a changed field is
+	 * exactly a write that ran. Re-writing an unchanged value costs no
+	 * flash, which matters because the store shares its pages with the
+	 * fabric table.
+	 */
+	prev_relock_s = s_info.auto_relock_time_s;
+	prev_approach = s_info.approach_direction;
 	rc = matter_im_write_response_encode(&s_im, &wr, s_report, sizeof(s_report), &resp_len);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build WriteResponse (%d)", rc);
 		return;
 	}
+	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach);
 	if (resp_len == 0u) {
 		/* The write ran; the peer asked not to be told. */
 		LOG_INF("  write done, response suppressed");
@@ -3377,6 +3389,12 @@ int matter_commission_init(void)
 	 * point, a node that hides it can never be shared with a second
 	 * ecosystem -- but every command answers FAILURE. */
 	matter_clusters_set_admin_hooks(&k_admin_hooks);
+	/*
+	 * Unconditional, unlike the subscriptions below: these are attribute
+	 * values, and a stored value is right even on a node whose fabric did
+	 * not survive -- the next commissioner reads what the last one set.
+	 */
+	(void)matter_dl_attr_load(&s_info);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
 	ultrawidelock_reader_set_lock_state_listener(on_ultrawidelock_lock_state);

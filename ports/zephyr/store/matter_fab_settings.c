@@ -444,3 +444,121 @@ int matter_fab_erase(void)
 	LOG_WRN("operational identity erased");
 	return 0;
 }
+
+/* ---- the writable Door Lock attributes ------------------------------------ */
+
+/*
+ * A tree of their own rather than more keys under "mfab".
+ *
+ * These are not part of the operational identity and must not share its
+ * lifetime: matter_fab_erase() un-commissions the node, and a controller's
+ * auto-lock timing is not something to forget while doing that. Separated, a
+ * factory reset that clears the whole store still clears both, which is the
+ * only case where they should go.
+ */
+#define DL_TREE          "mdl"
+#define KEY_AUTO_RELOCK  DL_TREE "/art"
+#define KEY_APPROACH     DL_TREE "/apd"
+
+/**
+ * Load one fixed-width attribute. A record of any other length is left for the
+ * caller's boot default -- it was written by a layout this build does not know,
+ * and half of it is not a value.
+ */
+struct dl_attr_target {
+	void *value;
+	size_t len;
+	bool found;
+};
+
+static int dl_attr_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg,
+		       void *param)
+{
+	struct dl_attr_target *t = param;
+
+	(void)name;
+
+	if (len != t->len) {
+		LOG_WRN("stored Door Lock attribute is %u B, this build wants %u -- discarding",
+			(unsigned int)len, (unsigned int)t->len);
+		return 0;
+	}
+	if (read_cb(cb_arg, t->value, t->len) < 0) {
+		return 0;
+	}
+	t->found = true;
+	return 0;
+}
+
+int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
+			 uint8_t prev_approach_direction)
+{
+	int first_err = 0;
+	int rc;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+	if (info->auto_relock_time_s != prev_auto_relock_s) {
+		rc = settings_save_one(KEY_AUTO_RELOCK, &info->auto_relock_time_s,
+				       sizeof(info->auto_relock_time_s));
+		if (rc != 0) {
+			LOG_ERR("AutoRelockTime not persisted (rc=%d); a reboot forgets it", rc);
+			first_err = rc;
+		}
+	}
+	if (info->approach_direction != prev_approach_direction) {
+		rc = settings_save_one(KEY_APPROACH, &info->approach_direction,
+				       sizeof(info->approach_direction));
+		if (rc != 0) {
+			LOG_ERR("approach direction not persisted (rc=%d); a reboot forgets it",
+				rc);
+			if (first_err == 0) {
+				first_err = rc;
+			}
+		}
+	}
+	return first_err;
+}
+
+int matter_dl_attr_load(struct matter_device_info *info)
+{
+	struct dl_attr_target relock;
+	struct dl_attr_target approach;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	relock.value = &info->auto_relock_time_s;
+	relock.len = sizeof(info->auto_relock_time_s);
+	relock.found = false;
+	(void)settings_load_subtree_direct(KEY_AUTO_RELOCK, dl_attr_set, &relock);
+
+	approach.value = &info->approach_direction;
+	approach.len = sizeof(info->approach_direction);
+	approach.found = false;
+	(void)settings_load_subtree_direct(KEY_APPROACH, dl_attr_set, &approach);
+
+	if (relock.found || approach.found) {
+		LOG_INF("Door Lock settings restored (auto-relock %u s, approach 0x%02x)",
+			(unsigned int)info->auto_relock_time_s,
+			(unsigned int)info->approach_direction);
+	}
+	return 0;
+}
+
+int matter_dl_attr_erase(void)
+{
+	static const char *const keys[] = { KEY_AUTO_RELOCK, KEY_APPROACH };
+	int first_err = 0;
+
+	for (size_t i = 0u; i < ARRAY_SIZE(keys); i++) {
+		int rc = settings_delete(keys[i]);
+
+		if (rc != 0 && first_err == 0) {
+			first_err = rc;
+		}
+	}
+	return first_err;
+}

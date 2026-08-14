@@ -51,6 +51,16 @@
 /* One per fabric slot; MATTER_SUPPORTED_FABRICS is 3, the window holds 16. */
 #define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 0x2020u
 #define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT_LIMIT 0x2030u
+/* One per persisted subscription ("msub/N"); one per CASE session, the window
+ * holds 16. */
+#define ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT0 0x2040u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_SUB_SLOT_LIMIT 0x2050u
+/*
+ * Door Lock attributes a controller writes and expects to read back after a
+ * reboot: AutoRelockTime and the Approach Direction bitmap.
+ */
+#define ULTRAWIDELOCK_KV_KEY_MATTER_DL_AUTO_RELOCK 0x2060u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_DL_APPROACH 0x2061u
 #define ULTRAWIDELOCK_KV_KEY_MATTER_LIMIT 0x2100u
 
 /*

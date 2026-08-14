@@ -36,4 +36,31 @@ int matter_fab_load(struct matter_device_info *info);
 /** Forget it, so the next boot comes up commissionable. */
 int matter_fab_erase(void);
 
+/**
+ * Write the two Door Lock attributes a controller sets and expects to read
+ * back: AutoRelockTime and the Approach Direction bitmap.
+ *
+ * Only what CHANGED is written, which is why the previous values are asked
+ * for: a controller re-writing a value it already set should cost no flash.
+ * Call after a successful attribute write.
+ *
+ * @return 0, or the first negative errno from the settings backend. A failure
+ *         is not fatal -- the RAM value stands for this boot.
+ */
+int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
+			 uint8_t prev_approach_direction);
+
+/**
+ * Read them back over whatever the port initialised them to.
+ *
+ * Fields with nothing stored are LEFT ALONE rather than zeroed, because zero is
+ * a legal value for both and the caller's boot default is the better answer.
+ *
+ * @return 0 always; there is nothing here a caller could do differently.
+ */
+int matter_dl_attr_load(struct matter_device_info *info);
+
+/** Forget them, so the next boot uses the port's defaults. */
+int matter_dl_attr_erase(void);
+
 #endif /* MATTER_FAB_SETTINGS_H */

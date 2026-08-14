@@ -397,6 +397,25 @@ OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 	-o "$OT_SETTINGS_BIN"
 "$OT_SETTINGS_BIN"
 
+# The Matter settings backend, over the real store: the property under test is
+# that the records matter_commission.c writes -- the msub subscriptions and the
+# two writable Door Lock attributes -- come back after a reset. Scenarios fork
+# for the same reason the store's own do.
+MATTER_SETTINGS_BIN="$OUT/freertos_matter_settings_test"
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/matter" \
+	"$HERE/test_matter_settings.c" \
+	"$HERE/fake/fake_flash.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/matter/matter_settings_freertos.c" \
+	-o "$MATTER_SETTINGS_BIN"
+"$MATTER_SETTINGS_BIN"
+
 # The grant decision, driven as walk-ups. test_approach.c covers the controller
 # -- given ranges, does it unlock. This covers the code that chooses WHICH
 # ranges the controller ever sees, which no test on any port asked before: the
