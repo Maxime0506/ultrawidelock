@@ -29,8 +29,14 @@
 #define ULTRAWIDELOCK_FREERTOS_OSAL_QUEUE_DEPTH 16
 #endif
 
+/*
+ * Sized from paint, not guessed: 1,224 B peak read off the hardware on
+ * 2026-08-14 after commissioning-restore plus a full UWB walk-up unlock,
+ * the heaviest workload this dispatcher has run. 2,560 keeps 2x the peak;
+ * configCHECK_FOR_STACK_OVERFLOW=2 names any future violation.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_OSAL_STACK_BYTES
-#define ULTRAWIDELOCK_FREERTOS_OSAL_STACK_BYTES 4096
+#define ULTRAWIDELOCK_FREERTOS_OSAL_STACK_BYTES 2560
 #endif
 
 #ifndef ULTRAWIDELOCK_FREERTOS_OSAL_TASK_PRIORITY

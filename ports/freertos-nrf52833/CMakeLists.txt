@@ -113,6 +113,12 @@ add_compile_options(
   -fdata-sections
   -fno-common
   -fno-strict-aliasing
+  # Without this, configASSERT and the vendor asserts bake absolute source
+  # paths into .rodata: 12 strings carrying the developer's username and
+  # machine layout in every shipped image, and a binary that differs by
+  # checkout location. Maps both __FILE__ and debug info.
+  "-ffile-prefix-map=${ULTRAWIDELOCK_REPO_ROOT}=."
+  "-fmacro-prefix-map=${ULTRAWIDELOCK_REPO_ROOT}=."
 )
 
 # ----------------------------------------------------------------------------

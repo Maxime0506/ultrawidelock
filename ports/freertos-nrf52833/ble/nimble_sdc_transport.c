@@ -21,8 +21,13 @@
 #error "The NimBLE/SDC receive pump requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
+/*
+ * Measured on hardware 2026-08-14: 264 B peak across a full credential
+ * session plus Matter traffic. The pump only moves HCI messages into the
+ * host's mbufs; 1024 is 3.9x that peak.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES
-#define ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES 2048u
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES 1024u
 #endif
 
 #ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_TASK_PRIORITY

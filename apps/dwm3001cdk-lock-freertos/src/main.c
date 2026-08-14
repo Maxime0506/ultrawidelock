@@ -122,8 +122,17 @@ static StaticTask_t s_boot_tcb;
  * The console's own header already said this stack was "sized for the P-256
  * derive inside import". It never was; that comment described an intent nobody
  * implemented. It is now, with headroom to measure against rather than trust.
+ *
+ * The Matter build never runs the console, so its only peaks are the boot
+ * path and the run loop: 2,604 B measured on hardware 2026-08-14 across a
+ * commissioning restore and a full walk-up unlock. 1,024 words keeps 1.5 KB
+ * over that; the console build keeps the import-proof depth.
  */
+#if ULTRAWIDELOCK_HAVE_PROV_CONSOLE
 static StackType_t s_boot_stack[1536];
+#else
+static StackType_t s_boot_stack[1024];
+#endif
 
 /*
  * What the board does once it is a lock: sample, decide, report, forever.

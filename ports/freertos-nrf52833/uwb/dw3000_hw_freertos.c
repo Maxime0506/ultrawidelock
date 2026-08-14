@@ -72,12 +72,13 @@ _Static_assert(ULTRAWIDELOCK_DW3000_IRQ_PRIORITY >= configMAX_SYSCALL_INTERRUPT_
 
 /*
  * Deep enough for dwt_isr and everything it calls: the RX shim, the DS-TWR
- * choreography and the CCC key derivation underneath it. Carried over from the
- * ESP-IDF port, where this worker runs the same call tree; the true figure is a
- * first-link measurement like the rest of this port's stack sizes.
+ * choreography and the CCC key derivation underneath it. No longer a
+ * carried-over guess: paint read off the hardware on 2026-08-14, after full
+ * DS-TWR rounds against a real iPhone, peaked at 1,236 B. 2048 keeps 1.6x
+ * that, and configCHECK_FOR_STACK_OVERFLOW=2 names any future violation.
  */
 #ifndef ULTRAWIDELOCK_DW3000_ISR_TASK_STACK
-#define ULTRAWIDELOCK_DW3000_ISR_TASK_STACK 4096u
+#define ULTRAWIDELOCK_DW3000_ISR_TASK_STACK 2048u
 #endif
 
 /*

@@ -16,8 +16,13 @@
 #error "The MPSL worker requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
+/*
+ * Measured on hardware 2026-08-14: 300 B peak with BLE and 802.15.4 both
+ * live (commissioned node, active ranging). The worker only pumps
+ * mpsl_low_priority_process(); 1024 is 3.4x that peak.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES
-#define ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES 2048u
+#define ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES 1024u
 #endif
 
 #ifndef ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY
