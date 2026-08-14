@@ -11,9 +11,26 @@
 # Controller asked for entropy. This check is what makes the next one a build
 # failure instead of a debugging session.
 set -eu
-ELF=${1:?usage: freertos-vector-check.sh <image.elf>}
+ELF=${1:?usage: freertos-vector-check.sh <image.elf> [--without=<owner>]...}
+shift
 NM=${ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR:+$ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR/}arm-none-eabi-nm
 YML=$(dirname "$0")/../ports/freertos-nrf52833/peripherals.yml
+
+# A BUILD MAY LEAVE A SUBSYSTEM OUT; IT MAY NOT LEAVE THE CHECK OUT.
+#
+# peripherals.yml describes the full image. An image built without the
+# provisioning console has no USBD vector and should not be asked for one --
+# but "this vector is absent on purpose" has to be stated by the build that
+# made it absent, by OWNER, not inferred here from the vector being missing.
+# Inferring it is the fail-open shape this file exists to avoid: it would make
+# a dropped handler and a deliberate exclusion indistinguishable.
+EXCLUDED_OWNERS=""
+for _arg in "$@"; do
+    case "$_arg" in
+        --without=*) EXCLUDED_OWNERS="$EXCLUDED_OWNERS ${_arg#--without=}" ;;
+        *) echo "vector-check: unknown argument '$_arg'" >&2; exit 1 ;;
+    esac
+done
 
 # READ from peripherals.yml, never restated here.
 #
@@ -33,14 +50,51 @@ YML=$(dirname "$0")/../ports/freertos-nrf52833/peripherals.yml
 # TIMER1 is driven inside the 802.15.4 service layer) and never reach this list.
 [ -f "$YML" ] || { echo "vector-check: no peripherals.yml at $YML" >&2; exit 1; }
 
-REQUIRED=$(awk '
+REQUIRED_PAIRS=$(awk '
     /^interrupts:/       { in_blk = 1; next }
     in_blk && /^[a-z]/   { in_blk = 0 }
     in_blk && /^[ \t]+[A-Z0-9_]+:/ {
         if ($0 ~ /enabled:[ \t]*false/) next
-        name = $1; sub(/:$/, "", name); print name
+        name = $1; sub(/:$/, "", name)
+        owner = "-"
+        if (match($0, /owner:[ \t]*[A-Za-z0-9_]+/)) {
+            owner = substr($0, RSTART, RLENGTH)
+            sub(/owner:[ \t]*/, "", owner)
+        }
+        print name, owner
     }
 ' "$YML")
+
+# Drop the excluded owners here, AFTER the completeness cross-check below has
+# seen the file whole, and say which ones went. An exclusion nobody can see in
+# the output is an exclusion that outlives the reason for it.
+REQUIRED=""
+excluded_seen=""
+while read -r _name _owner; do
+    [ -n "$_name" ] || continue
+    _skip=0
+    for _ex in $EXCLUDED_OWNERS; do
+        if [ "$_owner" = "$_ex" ]; then
+            _skip=1
+            excluded_seen="$excluded_seen $_name"
+        fi
+    done
+    [ "$_skip" -eq 1 ] || REQUIRED="$REQUIRED $_name"
+done <<EOF
+$REQUIRED_PAIRS
+EOF
+
+# An owner named on the command line that matches nothing in the yml is a
+# selector that matches nothing, and those read as a clean scan. Refuse.
+for _ex in $EXCLUDED_OWNERS; do
+    if ! printf '%s\n' "$REQUIRED_PAIRS" | awk '{print $2}' | grep -qx "$_ex"; then
+        printf 'vector-check: --without=%s names no owner in %s.\n' "$_ex" "$YML" >&2
+        printf '  Nothing was excluded by it, so the flag is either stale or\n' >&2
+        printf '  misspelled, and a build is being told a vector is absent on\n' >&2
+        printf '  purpose when the file never gave that owner one.\n' >&2
+        exit 1
+    fi
+done
 
 # A NON-EMPTY PARSE IS NOT A COMPLETE ONE.
 #
@@ -99,4 +153,10 @@ if [ "$rc" -ne 0 ]; then
     printf '  mark it `enabled: false` in peripherals.yml with the reason.\n' >&2
     exit 1
 fi
-printf '  vectors: %s routed, all named by peripherals.yml\n' "$(echo $REQUIRED | wc -w | tr -d ' ')"
+if [ -n "$excluded_seen" ]; then
+    printf '  vectors: %s routed, all named by peripherals.yml (excluded:%s)\n' \
+        "$(echo $REQUIRED | wc -w | tr -d ' ')" "$excluded_seen"
+else
+    printf '  vectors: %s routed, all named by peripherals.yml\n' \
+        "$(echo $REQUIRED | wc -w | tr -d ' ')"
+fi

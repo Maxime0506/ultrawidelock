@@ -78,8 +78,33 @@ FREERTOS_BUILD_DIR ?= $(REPO_ROOT)/build/freertos-nrf52833
 # toolchain rather than a lost setting.
 FREERTOS_TOOLCHAIN_ARG = $(if $(ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR),-DULTRAWIDELOCK_ARM_TOOLCHAIN_DIR=$(ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR))
 
+# Off by default until the DW3110 arm deadline is measured under it. Passed
+# explicitly on every configure rather than left to the cache, for the same
+# reason as the toolchain above: a setting the cache remembers and the command
+# line does not is a setting nobody can see in the build they just ran.
+FREERTOS_LTO ?= OFF
+
+# The USB provisioning console: 18,151 B of flash and 10,249 B of RAM, all of
+# it serving a mode that runs only when SW2 is held through reset. A Matter
+# node self-provisions and does not need it.
+FREERTOS_PROV_CONSOLE ?= ON
+
+# The Matter node. Off until the BLE commissioning transport exists: the
+# protocol and the Thread half link today, but a node a commissioner cannot
+# reach over BLE is not one anybody can add to a home.
+FREERTOS_MATTER ?= OFF
+
+# Turning the console off removes the USBD vector, and freertos-vector-check.sh
+# is told which OWNER went rather than being left to infer it from a missing
+# handler. Inferring it would make a deliberate exclusion and a dropped handler
+# look identical, which is the failure that check exists to prevent.
+FREERTOS_VECTOR_EXCLUDES = $(if $(filter OFF,$(FREERTOS_PROV_CONSOLE)),--without=usb_provisioning_console)
+
 FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
+	-DULTRAWIDELOCK_LTO=$(FREERTOS_LTO) \
+	-DULTRAWIDELOCK_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
+	-DULTRAWIDELOCK_MATTER=$(FREERTOS_MATTER) \
 	-DULTRAWIDELOCK_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DULTRAWIDELOCK_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
@@ -116,7 +141,14 @@ freertos-build:
 	@# session; this makes the next one a build failure.
 	@ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR=$(ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR) \
 		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
-		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf
+		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf \
+		$(FREERTOS_VECTOR_EXCLUDES)
+	@# The shared Matter Thread transport is compiled from the Zephyr port
+	@# tree unmodified. A rename on that side compiles fine THERE and lands
+	@# here as an unknown settings path at run time, whose only symptom is an
+	@# SRP host name that changes every boot -- a node that attaches to
+	@# Thread and never registers. Held closed at build time instead.
+	@$(if $(filter ON,$(FREERTOS_MATTER)),$(REPO_ROOT)/scripts/freertos-matter-source-check.sh)
 	@# newlib-nano's printf does not implement ll. A format it cannot honour
 	@# consumes the wrong argument width, so the next %s dereferences a data
 	@# value -- a bus fault into default_handler, which spins and takes the

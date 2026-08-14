@@ -36,7 +36,12 @@
 #include <ultrawidelock_freertos_board.h>
 #include <ultrawidelock_freertos_crypto.h>
 #include <ultrawidelock_freertos_dfu.h>
+#if ULTRAWIDELOCK_HAVE_PROV_CONSOLE
 #include <ultrawidelock_freertos_usb.h>
+#endif
+#if ULTRAWIDELOCK_HAVE_MATTER
+#include <matter_ble_freertos.h>
+#endif
 #include <ultrawidelock_freertos_nimble_host.h>
 #include <ultrawidelock_freertos_openthread.h>
 #include <ultrawidelock_freertos_platform.h>
@@ -277,6 +282,7 @@ static void boot_task(void *arg)
 	 * runs. What the two images share is the property that matters: in
 	 * provisioning mode the board is not reachable over any radio.
 	 */
+#if ULTRAWIDELOCK_HAVE_PROV_CONSOLE
 	if (s_prov_mode) {
 		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG,
 				 "provisioning mode: radios stay down, console on USB");
@@ -289,6 +295,26 @@ static void boot_task(void *arg)
 		}
 		ultrawidelock_freertos_prov_console_run();
 	}
+#else
+	/*
+	 * Built without the console, which is what a Matter node is: the fabric
+	 * arrives from a commissioner, so there is nothing to type in.
+	 *
+	 * SW2 STILL MEANS SOMETHING and it is not this. The button opens the DFU
+	 * window later in this file, and it is read again there. What is gone is
+	 * only the branch that would have answered a serial port, along with the
+	 * 18,151 bytes of flash and 10,249 of RAM behind it.
+	 *
+	 * Saying so out loud costs one log line and removes the one way this can
+	 * be misread on a bench: a board held on SW2 that comes up as a normal
+	 * lock has not ignored the button, it was built without the mode.
+	 */
+	if (s_prov_mode) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "SW2 held, but this image has no provisioning "
+				 "console; continuing as a lock");
+	}
+#endif
 
 	/*
 	 * Thread.
@@ -356,6 +382,28 @@ static void boot_task(void *arg)
 		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no update channel; this board can only be updated by cable");
 	}
+
+#if ULTRAWIDELOCK_HAVE_MATTER
+	/*
+	 * The 0xFFF6 commissioning transport, registered for the same reason and
+	 * in the same window as the update channel above: before the reader
+	 * starts the host, because a GATT service cannot be added to a running
+	 * one.
+	 *
+	 * Not fatal, and for the same shape of reason. A board that fails to
+	 * register this one is still a credential reader that opens doors; refusing
+	 * to boot would take the working half away too.
+	 *
+	 * This call is also what puts the Matter code in the image at all.
+	 * Nothing else references it, so without this line --gc-sections removes
+	 * the protocol, the transport and the Thread glue, and every build check
+	 * still passes -- which is exactly what the first Matter build did.
+	 */
+	if (matter_ble_start() != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "no commissioning transport; this board cannot be added to a home");
+	}
+#endif
 
 	/*
 	 * The credential reader, which brings the BLE host up underneath itself.

@@ -25,6 +25,15 @@
  * range so they cannot land on a credential key. */
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE 0x1000u
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_LIMIT 0x1100u
+/*
+ * Matter's own records, above OpenThread's window. Only the shared Thread
+ * transport's SRP host-name suffix lives here so far; it is deliberately NOT
+ * under a tree the factory reset clears, because the SRP client's ECDSA key
+ * survives that too and the two have to be erased together or not at all.
+ */
+#define ULTRAWIDELOCK_KV_KEY_MATTER_BASE 0x2000u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_SRP_HOST_ID 0x2000u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_LIMIT 0x2100u
 
 /* A key no record can carry: erased flash reads as all ones. */
 #define ULTRAWIDELOCK_KV_KEY_NONE 0xffffu
