@@ -50,6 +50,32 @@
 #define OPENTHREAD_CONFIG_TCP_ENABLE 0
 
 /*
+ * STATELESS ADDRESS AUTOCONFIGURATION, which is what makes this node reachable
+ * rather than merely attached.
+ *
+ * Upstream defaults OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE to 0, and this file
+ * takes upstream defaults for everything it does not name -- the same choice by
+ * omission that left TCP linked above, except this one costs function instead
+ * of flash. Without SLAAC the node holds only link-local and mesh-local
+ * addresses, and neither leaves the Thread mesh.
+ *
+ * WHAT THAT LOOKS LIKE, because every layer reports success: PASE completes,
+ * AddNOC returns status 0, the node attaches as a child, and the SRP client
+ * registers with host state 6. Then the commissioner resolves the name it just
+ * registered, gets the mesh-local EID, routes nowhere from Wi-Fi, and sits on
+ * "connecting" until it gives up. Confirmed from the other side on 2026-08-14:
+ * the border router republished this node as
+ * _matter._tcp / F4CE3633412E4223-F94FD6FF.local, and dns-sd resolved it to a
+ * single FDE0:E83D:... address -- the mesh-local prefix. matter_thread_port.c
+ * warns about it in exactly those words, and the warning was right.
+ *
+ * The oracle carries this as CONFIG_OPENTHREAD_SLAAC=y in overlay-thread.conf
+ * and its comment describes this failure from having measured it. Being ON a
+ * network is not being REACHABLE on it.
+ */
+#define OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE 1
+
+/*
  * The microsecond alarm stays at upstream's default of off, which
  * thread/ot_alarm_freertos.c relies on: it implements the millisecond alarm
  * only, and make freertos-radio-source-check fails if that default ever

@@ -74,9 +74,27 @@ static uint16_t s_read_payload_len;
 
 static uint8_t s_own_addr_type;
 
-/* start_attached() has brought the advertiser up on the shared host. Guards
- * aliro_ble_readvertise() so a params update before start is a no-op (start_attached
- * advertises with the current params itself). */
+/*
+ * The advertiser is up and its event queue exists. Guards aliro_ble_readvertise()
+ * and aliro_ble_time_updated(), both of which are no-ops before there is
+ * something to re-emit -- the bring-up path advertises with the current params
+ * itself, so a params update that arrives first needs no action.
+ *
+ * SET BY BOTH BRING-UP PATHS, which is the part that was missing. There are two:
+ * start_attached() for a port that shares an already-running host, and
+ * aliro_ble_host_sync() for a port that owns the host and advertises from
+ * NimBLE's sync callback. Only the first set this, so on the FreeRTOS port the
+ * flag stayed false forever and every refresh silently did nothing.
+ *
+ * What that cost: Apple sends SetAliroReaderConfig AFTER commissioning
+ * completes, so the reader is necessarily advertising something else when the
+ * GRK lands -- re-emitting is the whole mechanism by which a commissioned lock
+ * becomes approach-resolvable. With the refresh disabled the board kept
+ * advertising its commissionable payload, and a phone that had just been given
+ * a home key had no reader to approach: no ranging, no Wallet animation, and
+ * nothing in any log saying so, because refusing to re-advertise is what the
+ * flag is FOR.
+ */
 static bool s_attached;
 
 /* Provisioned Aliro advertising params (set via aliro_ble_set_adv_params). With
@@ -803,6 +821,9 @@ void aliro_ble_host_sync(void)
 	}
 	LOG_INF("NimBLE synced; advertising as Aliro reader (SPSM 0x%04x)",
 		 (unsigned)ALIRO_L2CAP_SPSM);
+	/* Before advertising, not after: this is what lets a later
+	 * SetAliroReaderConfig re-emit the payload. See s_attached. */
+	s_attached = true;
 	aliro_advertise();
 }
 

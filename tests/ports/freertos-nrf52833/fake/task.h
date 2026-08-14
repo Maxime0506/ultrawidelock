@@ -22,4 +22,31 @@ TickType_t xTaskGetTickCountFromISR(void);
 void fake_task_set_tick_count(TickType_t ticks);
 void fake_task_advance_tick_count(TickType_t ticks);
 
+/*
+ * Scheduler state and critical sections, for code that must decide whether
+ * locking is possible at all. The flash and key-value layers both take a mutex
+ * only once the scheduler is running -- before that there is nothing to contend
+ * with, and taking one would be a call into a kernel that has not started.
+ *
+ * The model defaults to RUNNING so the locked path is what tests exercise
+ * unless they say otherwise; fake_task_set_scheduler_state() reaches the other
+ * branch, which is the one that runs during bring-up.
+ */
+#define taskSCHEDULER_NOT_STARTED 0
+#define taskSCHEDULER_SUSPENDED	  1
+#define taskSCHEDULER_RUNNING	  2
+
+BaseType_t xTaskGetSchedulerState(void);
+void fake_task_set_scheduler_state(BaseType_t state);
+
+/* Counted rather than merely flagged, so a test can assert they nest and
+ * balance instead of only that they were reached. */
+void vTaskEnterCritical(void);
+void vTaskExitCritical(void);
+unsigned fake_task_critical_depth(void);
+unsigned fake_task_critical_entries(void);
+
+#define taskENTER_CRITICAL() vTaskEnterCritical()
+#define taskEXIT_CRITICAL()  vTaskExitCritical()
+
 #endif /* TEST_FREERTOS_TASK_H */

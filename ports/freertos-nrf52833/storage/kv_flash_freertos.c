@@ -21,6 +21,10 @@
 
 #include <woz_freertos_platform.h>
 
+#include <FreeRTOS.h>
+#include <semphr.h>
+#include <task.h>
+
 #ifndef WOZ_FREERTOS_KV_BASE
 #define WOZ_FREERTOS_KV_BASE 0x7e000u
 #endif
@@ -65,6 +69,77 @@ static bool s_mounted;
 static uint32_t s_active_page;
 static uint32_t s_sequence;
 static uint32_t s_write_offset; /* page-relative, always aligned */
+
+/*
+ * ONE OPERATION AT A TIME, and the flash layer's own lock is not enough.
+ *
+ * board/flash_freertos.c serialises individual erases and writes, which is what
+ * keeps two callers from colliding over the single MPSL timeslot session. It
+ * cannot help here, because a key-value operation is MANY of those: an append,
+ * and when the page fills a compaction that erases the far page, copies every
+ * live record across, writes the new header and erases the old page. The four
+ * variables above describe where all of that is up to.
+ *
+ * Two writers exist and neither knows about the other. OpenThread persists its
+ * SRP key and PSA ITS records from the Thread task; the Matter handler stores
+ * the reader identity and the fabric from the commissioning path. During
+ * commissioning they overlap. An append that lands using s_active_page and
+ * s_write_offset read before a concurrent compaction moved them writes into a
+ * page that is about to be erased -- so the record is acknowledged, the caller
+ * is told it succeeded, and it is gone at the next boot.
+ *
+ * WHICH IS WHAT HAPPENED, on 2026-08-14, after the flash-level lock had already
+ * fixed the timeslot collision. Commissioning completed, "provisioning
+ * persisted (292 B, 2 trusted)" and "operational identity stored" were both
+ * logged, and the next boot came up with no reader identity, no trust anchors
+ * and no fabric -- and a store holding nothing but OpenThread's own keys. The
+ * partition was 760 bytes into a 4096-byte page, so it was never full: nothing
+ * about the symptom pointed at storage capacity, and the logs said success.
+ *
+ * NOT RECURSIVE. Every public entry point takes this once and calls the
+ * unlocked internals, so kv_set() reaching mount does not re-enter.
+ */
+static StaticSemaphore_t s_lock_storage;
+static SemaphoreHandle_t s_lock;
+
+static SemaphoreHandle_t kv_lock(void)
+{
+	if (s_lock == NULL) {
+		taskENTER_CRITICAL();
+		if (s_lock == NULL) {
+			s_lock = xSemaphoreCreateMutexStatic(&s_lock_storage);
+		}
+		taskEXIT_CRITICAL();
+	}
+	return s_lock;
+}
+
+/*
+ * Skipped before the scheduler runs, where the settings load happens and
+ * nothing else is running to contend with it.
+ *
+ * Waits forever once it is running. Unlike the flash layer there is no bound
+ * worth choosing: giving up here would report a failed write for a store that
+ * is merely busy, and a caller that treats that as "not stored" is the failure
+ * this whole comment is about. Every holder completes -- the flash operations
+ * beneath it are individually bounded.
+ */
+static bool kv_lock_take(void)
+{
+	SemaphoreHandle_t lock = kv_lock();
+
+	if (lock == NULL || xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) {
+		return false;
+	}
+	return xSemaphoreTake(lock, portMAX_DELAY) == pdTRUE;
+}
+
+static void kv_lock_give(bool held)
+{
+	if (held) {
+		(void)xSemaphoreGive(s_lock);
+	}
+}
 
 static uint32_t align_up(uint32_t value)
 {
@@ -357,7 +432,7 @@ static int compact(uint16_t skip_key)
 	return WOZ_KV_OK;
 }
 
-int woz_freertos_kv_init(void)
+static int kv_init_unlocked(void)
 {
 	struct kv_page_header headers[KV_PAGE_COUNT];
 	bool valid[KV_PAGE_COUNT];
@@ -416,7 +491,7 @@ int woz_freertos_kv_init(void)
 	return WOZ_KV_OK;
 }
 
-int woz_freertos_kv_get(uint16_t key, void *value, size_t *length)
+static int kv_get_unlocked(uint16_t key, void *value, size_t *length)
 {
 	struct find_context find;
 	size_t capacity;
@@ -425,7 +500,7 @@ int woz_freertos_kv_get(uint16_t key, void *value, size_t *length)
 	if (length == NULL || key == WOZ_KV_KEY_NONE) {
 		return WOZ_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
+	rc = kv_init_unlocked();
 	if (rc != WOZ_KV_OK) {
 		return rc;
 	}
@@ -448,7 +523,7 @@ int woz_freertos_kv_get(uint16_t key, void *value, size_t *length)
 	return WOZ_KV_OK;
 }
 
-int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
+static int kv_set_unlocked(uint16_t key, const void *value, size_t length)
 {
 	int rc;
 
@@ -456,7 +531,7 @@ int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
 	    (length != 0u && value == NULL)) {
 		return WOZ_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
+	rc = kv_init_unlocked();
 	if (rc != WOZ_KV_OK) {
 		return rc;
 	}
@@ -478,7 +553,7 @@ int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
 	return append(key, value, (uint16_t)length);
 }
 
-int woz_freertos_kv_delete(uint16_t key)
+static int kv_delete_unlocked(uint16_t key)
 {
 	struct find_context find;
 	uint32_t state = KV_STATE_DELETED;
@@ -489,7 +564,7 @@ int woz_freertos_kv_delete(uint16_t key)
 	if (key == WOZ_KV_KEY_NONE) {
 		return WOZ_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
+	rc = kv_init_unlocked();
 	if (rc != WOZ_KV_OK) {
 		return rc;
 	}
@@ -518,7 +593,7 @@ int woz_freertos_kv_delete(uint16_t key)
 	return struck != 0u ? WOZ_KV_OK : WOZ_KV_NOT_FOUND;
 }
 
-int woz_freertos_kv_erase_all(void)
+static int kv_erase_all_unlocked(void)
 {
 	int rc;
 
@@ -543,4 +618,58 @@ size_t woz_freertos_kv_free_bytes(void)
 		return 0;
 	}
 	return KV_PAGE_SIZE - s_write_offset;
+}
+
+/*
+ * The public surface: take the lock, run the unlocked body, give it back.
+ *
+ * READS ARE LOCKED TOO, and that is not caution. page_walk() follows records
+ * using s_active_page and s_write_offset, and a compaction running underneath a
+ * reader erases the page it is walking -- so an unlocked get() can return a
+ * short read, a stale value from the page about to disappear, or an IO error
+ * for a key that is present and intact.
+ */
+int woz_freertos_kv_init(void)
+{
+	bool held = kv_lock_take();
+	int rc = kv_init_unlocked();
+
+	kv_lock_give(held);
+	return rc;
+}
+
+int woz_freertos_kv_get(uint16_t key, void *value, size_t *length)
+{
+	bool held = kv_lock_take();
+	int rc = kv_get_unlocked(key, value, length);
+
+	kv_lock_give(held);
+	return rc;
+}
+
+int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
+{
+	bool held = kv_lock_take();
+	int rc = kv_set_unlocked(key, value, length);
+
+	kv_lock_give(held);
+	return rc;
+}
+
+int woz_freertos_kv_delete(uint16_t key)
+{
+	bool held = kv_lock_take();
+	int rc = kv_delete_unlocked(key);
+
+	kv_lock_give(held);
+	return rc;
+}
+
+int woz_freertos_kv_erase_all(void)
+{
+	bool held = kv_lock_take();
+	int rc = kv_erase_all_unlocked();
+
+	kv_lock_give(held);
+	return rc;
 }

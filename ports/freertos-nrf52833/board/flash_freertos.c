@@ -36,6 +36,7 @@
 #include <nrfx.h>
 
 #include <FreeRTOS.h>
+#include <semphr.h>
 #include <task.h>
 
 #include <woz_freertos_platform.h>
@@ -88,6 +89,101 @@
 #ifndef WOZ_FREERTOS_FLASH_TIMEOUT_MS
 #define WOZ_FREERTOS_FLASH_TIMEOUT_MS 10000u
 #endif
+
+/*
+ * ONE WRITER AT A TIME, and this is not defensive programming.
+ *
+ * Everything below this line is module state: the operation in flight, the
+ * timeslot session id, the request and the done/failed flags. There is also
+ * exactly ONE MPSL timeslot session, because mpsl_timeslot_session_count_set()
+ * below asks for one -- so a second task entering while the first holds the
+ * session does not merely interleave the statics, it gets a hard failure from
+ * mpsl_timeslot_session_open().
+ *
+ * WHICH IS WHAT HAPPENED. Two subsystems persist independently and neither
+ * knows about the other: OpenThread writes its SRP key and PSA ITS records from
+ * the Thread task, and the Matter handler writes the reader identity from the
+ * commissioning path. During commissioning they overlap, and on 2026-08-14 the
+ * collision landed exactly on SetAliroReaderConfig:
+ *
+ *   invoke: endpoint 1 cluster 0x0101 command 0x0028, 144 B fields
+ *   E flash: timeslot session open failed
+ *   W aliro_prov: kv set rc=-4
+ *   E reader identity NOT stored (-4)
+ *
+ * and the controller, having provisioned a reader the device then failed to
+ * keep, removed the fabric and reported "unable to add accessory". Writes
+ * before and after it succeeded, which is what makes an unserialised race look
+ * like flaky hardware.
+ *
+ * A mutex rather than a critical section: an erase can hold this for the whole
+ * WOZ_FREERTOS_FLASH_TIMEOUT_MS, and blocking the scheduler for that long would
+ * take the radio down with it. Priority inheritance comes with FreeRTOS mutexes
+ * and is wanted here, since the Thread task outranks the work queue.
+ */
+static StaticSemaphore_t s_lock_storage;
+static SemaphoreHandle_t s_lock;
+
+/*
+ * Created on first use inside a critical section rather than from an init hook,
+ * because the first flash access happens while settings are loaded during
+ * bring-up and adding an ordering requirement between that and a new init call
+ * is a worse trade than one uncontended critical section.
+ */
+static SemaphoreHandle_t flash_lock(void)
+{
+	if (s_lock == NULL) {
+		taskENTER_CRITICAL();
+		if (s_lock == NULL) {
+			s_lock = xSemaphoreCreateMutexStatic(&s_lock_storage);
+		}
+		taskEXIT_CRITICAL();
+	}
+	return s_lock;
+}
+
+/*
+ * Locking is skipped before the scheduler runs and inside an interrupt. Neither
+ * can contend: nothing else is running yet in the first case, and the second is
+ * already refused by run_op() whenever the radio is up, which is the only time
+ * the session matters.
+ *
+ * Returns 0 to proceed and -1 to give up. *held says whether a release is owed,
+ * and the two are deliberately separate: "no lock was needed" and "the lock
+ * could not be had" both mean not-held, and treating them alike would let a
+ * timed-out caller walk into the shared state it just failed to reserve.
+ */
+static int flash_lock_take(bool *held)
+{
+	SemaphoreHandle_t lock = flash_lock();
+
+	*held = false;
+	if (lock == NULL || __get_IPSR() != 0u ||
+	    xTaskGetSchedulerState() != taskSCHEDULER_RUNNING) {
+		return 0;
+	}
+	/*
+	 * Bounded rather than portMAX_DELAY. A holder always finishes -- it
+	 * polls against its own deadline -- so waiting longer than two of those
+	 * means something is wrong that waiting will not fix, and a caller that
+	 * is told no can report a failed write instead of never returning.
+	 */
+	if (xSemaphoreTake(lock, pdMS_TO_TICKS(2u * WOZ_FREERTOS_FLASH_TIMEOUT_MS)) != pdTRUE) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+				 "another task has held the flash for %u ms",
+				 (unsigned)(2u * WOZ_FREERTOS_FLASH_TIMEOUT_MS));
+		return -1;
+	}
+	*held = true;
+	return 0;
+}
+
+static void flash_lock_give(bool held)
+{
+	if (held) {
+		(void)xSemaphoreGive(s_lock);
+	}
+}
 
 /* One session's worth of MPSL context, aligned as the API requires. */
 static uint32_t s_timeslot_context[(MPSL_TIMESLOT_CONTEXT_SIZE + 3u) / 4u];
@@ -463,12 +559,22 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 		return 0;
 	}
 
+	/* Taken BEFORE s_op is touched: the operation record is the shared
+	 * state, not just the timeslot session. */
+	bool held;
+	int rc;
+
+	if (flash_lock_take(&held) != 0) {
+		return -1;
+	}
 	s_op.erase = false;
 	s_op.offset = offset;
 	s_op.data = data;
 	s_op.remaining = length;
 	s_op.slices = 0;
-	return run_op(FLASH_SLOT_WRITE_US);
+	rc = run_op(FLASH_SLOT_WRITE_US);
+	flash_lock_give(held);
+	return rc;
 }
 
 int woz_freertos_flash_erase(uint32_t offset, size_t length)
@@ -484,6 +590,12 @@ int woz_freertos_flash_erase(uint32_t offset, size_t length)
 		return 0;
 	}
 
+	bool held;
+	int rc;
+
+	if (flash_lock_take(&held) != 0) {
+		return -1;
+	}
 	s_op.erase = true;
 	s_op.offset = offset;
 	s_op.data = NULL;
@@ -496,5 +608,7 @@ int woz_freertos_flash_erase(uint32_t offset, size_t length)
 	 * board that never calls anything else still gets the right value.
 	 */
 	nrf_nvmc_partial_erase_duration_set(NRF_NVMC, FLASH_PARTIAL_ERASE_MS);
-	return run_op(FLASH_PARTIAL_ERASE_US);
+	rc = run_op(FLASH_PARTIAL_ERASE_US);
+	flash_lock_give(held);
+	return rc;
 }

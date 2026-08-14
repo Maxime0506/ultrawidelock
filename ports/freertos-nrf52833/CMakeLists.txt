@@ -1325,6 +1325,22 @@ target_compile_options(woz_aliro PRIVATE
 set(WOZ_LOG_LEVEL "3" CACHE STRING "Highest log level compiled in (1 error .. 4 debug)")
 add_compile_definitions(WOZ_FREERTOS_LOG_MAX_LEVEL=${WOZ_LOG_LEVEL})
 
+# How much of a boot the RTT up-buffer can hold, in bytes of static RAM.
+#
+# The default is the file's own, and the file explains why raising it is a bench
+# decision: the buffer DROPS writes when full rather than overwriting, so on a
+# board with nothing draining it the log stops dead partway through boot and
+# says nothing about having stopped. 1 kB reaches the end of bring-up and no
+# further, which is enough for every failure this port had until commissioning
+# -- a BTP handshake is far more talkative than a boot.
+#
+# It is spent from roughly 8 kB of headroom, so this is not a shipping value and
+# there is no default here that spends it.
+set(WOZ_LOG_RTT_BUFFER "" CACHE STRING "RTT up-buffer size in bytes; empty keeps the built-in 1024")
+if(WOZ_LOG_RTT_BUFFER)
+  add_compile_definitions(WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES=${WOZ_LOG_RTT_BUFFER}u)
+endif()
+
 if(WOZ_LTO)
   # TWO FILES ARE HELD OUT OF THE WHOLE-PROGRAM SET, and only two. Both are
   # reached from something the optimiser cannot read, so neither exclusion is
