@@ -33,6 +33,24 @@
  */
 #define ULTRAWIDELOCK_KV_KEY_MATTER_BASE 0x2000u
 #define ULTRAWIDELOCK_KV_KEY_MATTER_SRP_HOST_ID 0x2000u
+/*
+ * The operational identity, one record per settings path the fabric store
+ * writes. Numbered explicitly rather than hashed: a hash could alias two
+ * records, and the set is small and fixed.
+ *
+ * ULTRAWIDELOCK_KV_KEY_MATTER_FAB_OK is written LAST and erased FIRST by the
+ * store, which is what makes a half-written identity detectable rather than
+ * merely unlikely.
+ */
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_VER 0x2010u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_OK 0x2011u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_TD 0x2012u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_XP 0x2013u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_ICLEN 0x2014u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_ICAC 0x2015u
+/* One per fabric slot; MATTER_SUPPORTED_FABRICS is 3, the window holds 16. */
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT0 0x2020u
+#define ULTRAWIDELOCK_KV_KEY_MATTER_FAB_SLOT_LIMIT 0x2030u
 #define ULTRAWIDELOCK_KV_KEY_MATTER_LIMIT 0x2100u
 
 /* A key no record can carry: erased flash reads as all ones. */

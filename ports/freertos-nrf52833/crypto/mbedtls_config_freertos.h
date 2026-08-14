@@ -113,6 +113,41 @@ void ultrawidelock_freertos_mbedtls_free(void *block);
 #define MBEDTLS_MD_C
 
 /*
+ * The public-key layer, for the SRP client's ECDSA key.
+ *
+ * Only compiled into a build that has Matter. Thread's SRP client signs its
+ * registrations, and OpenThread's crypto_platform.cpp reaches that through the
+ * legacy PK API: it generates a P-256 key, writes it as DER, and parses it back
+ * on each use (otPlatCryptoEcdsaGenerateKey / Sign / GetPublicKey).
+ *
+ * NOT the PSA path, and that is a decision rather than an oversight.
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA moves this surface onto PSA and would drop
+ * these modules -- but it also moves OpenThread's keys to PSA key REFERENCES,
+ * which want persistent-key storage this image deliberately does not have (see
+ * the list below). Trading a known several kilobytes for an unmeasured
+ * subsystem on a part with no room is the wrong direction, so this build pays
+ * in flash where the cost is visible.
+ *
+ * DETERMINISTIC is not a preference either: RFC 6979 signatures need no entropy
+ * at signing time, which is what makes an SRP registration reproducible and
+ * removes the RNG from the signing path.
+ */
+#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
+#define MBEDTLS_PK_C
+#define MBEDTLS_PK_PARSE_C
+#define MBEDTLS_PK_WRITE_C
+#define MBEDTLS_ECDSA_C
+#define MBEDTLS_ECDSA_DETERMINISTIC
+#define MBEDTLS_ECP_C
+#define MBEDTLS_BIGNUM_C
+#define MBEDTLS_ASN1_PARSE_C
+#define MBEDTLS_ASN1_WRITE_C
+#define MBEDTLS_OID_C
+#define MBEDTLS_ECP_DP_SECP256R1_ENABLED
+#define MBEDTLS_HMAC_DRBG_C
+#endif
+
+/*
  * Deliberately absent, each because a caller for it does not exist:
  *
  *   MBEDTLS_PSA_CRYPTO_STORAGE_C   no persistent keys; see the PSA config file

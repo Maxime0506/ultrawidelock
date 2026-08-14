@@ -42,8 +42,21 @@ if [ -z "$real_ceiling" ] || [ "$real_ceiling" != "$fake_ceiling" ]; then
 	exit 1
 fi
 printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "$real_ceiling"
+
+# EVERY TRANSLATION UNIT HERE IS A LOG SINK, so every one of them opts out of
+# the call-site level gate, the same way board/log_rtt_freertos.c does. The gate
+# is a macro spelled exactly like the function it wraps, so inside a file that
+# DEFINES that function it rewrites the definition rather than the calls, and
+# the error lands on the header instead of on the file that caused it.
+#
+# On the command line rather than in each test, because the opt-out has to
+# arrive before anything reaches ultrawidelock_freertos_platform.h -- and it is
+# reached transitively, so "first line of the file" is not reliably early
+# enough. Nothing is lost by disabling it here: the gate exists to keep unused
+# format strings out of the image, and these tests are not an image.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
@@ -66,6 +79,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # state, so it gets its own binary and forks one process per failure scenario.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
@@ -85,6 +99,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The host sequencer starts the radio too, so it also forks per scenario.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
@@ -107,6 +122,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The 802.15.4 clock platform only depends on the MPSL clock double.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/modules/ultrawidelock_port/include" \
@@ -120,6 +136,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The RTC2 low-power timer runs against a register-level RTC model.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/modules/ultrawidelock_port/include" \
@@ -134,6 +151,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The Zephyr kernel objects the pinned OpenThread radio platform uses.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/thread/ot_compat" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
@@ -147,6 +165,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # Starting and servicing the pinned OpenThread radio platform.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_radio.c" \
@@ -159,6 +178,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # OpenThread's millisecond alarm on the port's delayable work.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/modules/ultrawidelock_port/include" \
@@ -170,6 +190,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # OpenThread's entropy, reset, and assertion platform.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_misc.c" \
@@ -184,6 +205,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # static and a remount needs fresh statics over the same flash.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_kv_flash.c" \
@@ -197,6 +219,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # the real store can be wrong about that.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/modules/ultrawidelock_cred/include" \
@@ -211,6 +234,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The board's time and fault hooks, against a free-running RTC model.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_time.c" \
@@ -227,6 +251,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # port believing it had started a generator that is now stopped.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_entropy.c" \
@@ -242,6 +267,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # the way a host does, so what is checked is the buffer a real host would see.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_log.c" \
@@ -255,6 +281,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # controller model, which enforces its modes and its only-clear-bits rule.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	"-DULTRAWIDELOCK_FREERTOS_FLASH_MAPPED(offset)=((const void *)&fake_nvmc_flash[(offset)])" \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
@@ -276,6 +303,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # "threading_alt.h" by that bare name.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/crypto" \
@@ -298,6 +326,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # for a reason the scenario never asked about.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -322,6 +351,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # question of whether it drains the interrupt line is asked of the port.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -354,6 +384,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_settings.c" \
@@ -373,6 +404,7 @@ OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 GRANT_BIN="$OUT/freertos_grant_test"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DULTRAWIDELOCK_PORT_FREERTOS \
+	-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 	-I"$HERE/fake" \
 	-I"$ROOT/apps/dwm3001cdk-lock-freertos/src" \
 	-I"$ROOT/modules/ultrawidelock_cred/include" \

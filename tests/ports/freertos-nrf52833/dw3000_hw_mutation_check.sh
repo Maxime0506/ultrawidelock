@@ -19,7 +19,10 @@ SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c"
 mkdir -p "$OUT"
 
 build() { # <source> <binary>
+	# LOG_NO_MACRO for the same reason run.sh passes it: test_dw3000_hw.c
+	# defines the log sink, so the call-site gate would rewrite the definition.
 	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DULTRAWIDELOCK_PORT_FREERTOS \
+		-DULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO=1 \
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \

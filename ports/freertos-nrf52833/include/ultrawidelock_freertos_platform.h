@@ -62,20 +62,58 @@ int ultrawidelock_freertos_flash_write(uint32_t offset, const void *data, size_t
 int ultrawidelock_freertos_flash_erase(uint32_t offset, size_t length);
 
 /** Platform log sink. It must be safe from every task that uses shared code. */
-void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
-				const char *fmt, ...);
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag, const char *fmt, ...);
 
 /**
  * The same sink taking an already-started va_list, for callers handed one.
  * OpenThread's otPlatLog is the reason this exists: its contract passes the
  * arguments through, so it cannot use the variadic form above.
  */
-void ultrawidelock_freertos_log_va(enum ultrawidelock_freertos_log_level level, const char *tag,
-				   const char *fmt, va_list args);
+void ultrawidelock_freertos_log_va(enum ultrawidelock_freertos_log_level level, const char *tag, const char *fmt,
+			 va_list args);
 
 /** Hex log sink matching the Zephyr LOG_HEXDUMP_* contract. */
-void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
-					const char *tag, const void *data, size_t len,
-					const char *message);
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level, const char *tag,
+			      const void *data, size_t len, const char *message);
+
+/*
+ * THE LEVEL GATE HAS TO BE AT THE CALL SITE, not inside the sink.
+ *
+ * It used to be inside: ultrawidelock_freertos_log() compared the level and returned
+ * early. That suppresses the OUTPUT and keeps every format string, every
+ * argument evaluation and every call in the image, so lowering the level cost a
+ * rebuild and saved nothing. Measured before this changed -- an image built at
+ * WARNING was the same size as one built at INFO, to the byte.
+ *
+ * As a macro over the same name the comparison happens on a constant, the
+ * branch folds away, and the string it referenced becomes unreachable for
+ * --gc-sections to drop. Every existing call site keeps working unchanged: C
+ * forbids a function-like macro from expanding inside its own expansion, so the
+ * inner name is the real function.
+ *
+ * The two calls that pass a computed level both live in the sink's own
+ * implementation, which defines ULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO before including this
+ * header -- it has to, or the macro would rewrite the function's own
+ * definition.
+ */
+#ifndef ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL
+#define ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL ULTRAWIDELOCK_FREERTOS_LOG_INFO
+#endif
+
+#ifndef ULTRAWIDELOCK_FREERTOS_LOG_NO_MACRO
+#define ultrawidelock_freertos_log(level, ...)                                                               \
+	do {                                                                                       \
+		if ((level) <= (ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL)) {                                     \
+			ultrawidelock_freertos_log((level), __VA_ARGS__);                                    \
+		}                                                                                  \
+	} while (0)
+
+#define ultrawidelock_freertos_log_hexdump(level, tag, data, len, message)                                   \
+	do {                                                                                       \
+		if ((level) <= (ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL)) {                                     \
+			ultrawidelock_freertos_log_hexdump((level), (tag), (data), (len), (message));        \
+		}                                                                                  \
+	} while (0)
+#endif
 
 #endif /* ULTRAWIDELOCK_FREERTOS_PLATFORM_H */

@@ -39,4 +39,29 @@
  * lives in tests it with #if and upstream already answers zero.
  */
 
+/*
+ * The SRP client, which is how a Matter node becomes findable on Thread.
+ *
+ * The oracle turns this on as CONFIG_OPENTHREAD_SRP_CLIENT in
+ * overlay-thread.conf. Without it the shared Matter transport does not link --
+ * otSrpClientAddService, otSrpClientRemoveService and the auto-start entry
+ * points are simply absent -- and if it somehow did, the node would attach to
+ * Thread, hold a fabric, and never publish a service for the controller to
+ * find. That failure looks like an accessory that commissions and then goes
+ * missing, which is the expensive kind.
+ *
+ * ECDSA comes with it and is not optional: the SRP client signs its
+ * registrations, and name ownership on the border router is by KEY. The
+ * host-name suffix logic in the shared transport exists precisely because that
+ * key outlives a name.
+ *
+ * Only defined for a build that has Matter. A reader-only image has nothing to
+ * publish, and this is several kilobytes of flash on a part that has none to
+ * spare.
+ */
+#if defined(ULTRAWIDELOCK_HAVE_MATTER) && ULTRAWIDELOCK_HAVE_MATTER
+#define OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE 1
+#define OPENTHREAD_CONFIG_ECDSA_ENABLE 1
+#endif
+
 #endif /* ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */
