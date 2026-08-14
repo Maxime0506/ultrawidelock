@@ -49,6 +49,173 @@ foreach(_woz_path "${WOZ_FREERTOS_SRC}/source/tasks.c" "${WOZ_MDK}/nrf52833.h"
 endforeach()
 
 # ----------------------------------------------------------------------------
+# Which product this image is, declared before anything is built.
+# ----------------------------------------------------------------------------
+# Position is for readers, NOT for correctness, and the difference is worth
+# stating because the two blocks below look like this one and do not behave like
+# it.
+#
+#   add_compile_definitions  sets a directory property that CMake reads when it
+#                            GENERATES. Every target in this directory gets it,
+#                            including targets created above the call.
+#   add_compile_options      is captured when each target is CREATED. Targets
+#                            above the call never see it.
+#
+# Verified with a two-target scratch project rather than reasoned about: a
+# library created before both calls received the definition and did not receive
+# the option. So this could sit where it used to, 830 lines down beside the
+# OpenThread subdirectory whose config reads it, and woz_aliro would still have
+# compiled with WOZ_HAVE_MATTER defined. It is up here because a symbol that
+# says which product the image is belongs before anything is built, not because
+# moving it fixed anything -- it fixed nothing, and an earlier version of this
+# comment claimed otherwise.
+#
+# The app gets the same symbol a second way, through woz_freertos_port's
+# INTERFACE definitions further down. That one IS load-bearing: the app is a
+# different directory, and no directory property here reaches it.
+#
+# OpenThread still constrains this. Its subdirectory is added below and its
+# config reads the symbol, so the definition has to exist by then -- which any
+# position in this file satisfies, and a target-scoped definition would not.
+if(WOZ_MATTER)
+  add_compile_definitions(WOZ_HAVE_MATTER=1)
+endif()
+
+# ----------------------------------------------------------------------------
+# Code generation applied to the WHOLE program.
+# ----------------------------------------------------------------------------
+# Same placement argument as the LTO block below, and the same defect behind it:
+# these four flags were a hand-maintained nine-target foreach 400 lines down,
+# which left out woz_thread, woz_matter, woz_matter_transport, woz_dfu, woz_usb
+# and the OpenThread subdirectory -- libopenthread-mtd.a being the largest
+# archive in the image. Without -ffunction-sections there, --gc-sections can
+# only drop whole objects, never individual functions.
+#
+#   -ffunction-sections   one section per function, so the linker can drop them
+#   -fdata-sections       the same for objects
+#   -fno-common           tentative definitions become real ones, so two
+#                         translation units defining the same name is an error
+#                         rather than a silent merge
+#   -fno-strict-aliasing  the vendored radio and kernel sources punch through
+#                         types in ways the optimiser is otherwise entitled to
+#                         assume cannot happen
+#
+# WHAT HOISTING THEM WAS WORTH, measured on the Matter image: NOTHING. Byte for
+# byte identical at 373,288 flash before and after, because with WOZ_LTO=ON the
+# IR-level dead-code elimination has already dropped everything --gc-sections
+# would have. The change is kept because it removes the second hand-maintained
+# list from this file and because it is the WOZ_LTO=OFF build that needs it --
+# but that build has NOT been measured, so this is a correctness argument and
+# not a size claim. Do not quote a saving for it.
+add_compile_options(
+  -ffunction-sections
+  -fdata-sections
+  -fno-common
+  -fno-strict-aliasing
+  # Without this, configASSERT and the vendor asserts bake absolute source
+  # paths into .rodata: 12 strings carrying the developer's username and
+  # machine layout in every shipped image, and a binary that differs by
+  # checkout location. Maps both __FILE__ and debug info.
+  "-ffile-prefix-map=${WOZ_REPO_ROOT}=."
+  "-fmacro-prefix-map=${WOZ_REPO_ROOT}=."
+)
+
+# ----------------------------------------------------------------------------
+# Link-time optimisation, applied to the WHOLE program.
+# ----------------------------------------------------------------------------
+# This block sits here, ahead of every add_library() and every
+# add_subdirectory(), because add_compile_options() is directory-scoped and
+# applies only to targets created after it. Declaring the option further down --
+# which is where it used to live -- silently limited LTO to the handful of
+# targets that happened to be defined below it, and that is the defect this
+# placement fixes rather than a style preference. See the measurement below.
+#
+# WHY WHOLE-PROGRAM AND NOT A LIST. The list was the bug. An earlier form of
+# this named ten woz_* targets, which read like a considered subset and was in
+# fact an accident of file order: OpenThread, tcplp, the Matter node and the
+# Matter transport were never in it. MEASURED from the two linker map files,
+# Matter configuration, 2026-08-14:
+#
+#   Zephyr oracle       313,572 B of flash inside the LTO set,  74.3%
+#   this port           174,143 B,                              36.6%
+#
+# The Zephyr image's entire non-LTO remainder is prebuilt binary: the
+# SoftDevice Controller, MPSL, nrf_oberon, the 802.15.4 SL and libc. It
+# optimises everything it has source for, and so should this. The single
+# largest line in the difference was libopenthread-mtd.a at 102,396 B compiled
+# per-file here and inside the oracle's LTO set there.
+#
+# WHAT THE FIX WAS WORTH, measured on the linked images, 2026-08-14, text for
+# flash and data+bss for RAM:
+#
+#   Matter, console off, log level 2   446,852 -> 390,924 flash   -55,928
+#                                      129,576 -> 123,076 RAM      -6,500
+#   default, no Matter                 417,348 -> 348,636 flash   -68,712
+#                                      112,196 -> 105,680 RAM      -6,516
+#
+# The Matter image had been 13,188 B OVER the 433,664 B slot and is now 42,740 B
+# inside it. A product decision -- drop UWB from the Matter image, or ship Matter
+# and Aliro as separate images -- was put to the user on the strength of that
+# overflow. It was never a real constraint; it was this misplacement.
+#
+# A 56 KB drop has the same shape as the failure this port has already paid for
+# twice: a link that succeeds by deleting the product. VERIFIED ON THE ELF
+# rather than inferred from the green build -- 384 mangled ot:: symbols with
+# ot::Srp::Client, ot::Mle and ot::MeshForwarder among them, 42 matter_*,
+# 48 aliro_*, 174 nrf_802154*, 60 psa_*, 24 ble_gatts_*, 14 dw3000*, and one
+# each of vTaskSwitchContext and SystemInit. The otSrpClient* and otThread* C
+# wrappers are gone BY NAME because their callers are now inside the set and the
+# calls inlined, which is the optimisation working rather than the node
+# vanishing. Ask the artifact what it does.
+#
+# add_compile_options() rather than CMAKE_INTERPROCEDURAL_OPTIMIZATION: the
+# latter does not reach a vendored subdirectory that sets its own properties,
+# and OpenThread's CMake is exactly such a subdirectory.
+option(WOZ_LTO "Build the image with link-time optimisation" OFF)
+
+# 1to1 keeps code generation on translation-unit boundaries. It was forced by an
+# assembler "offset out of range" -- the assembler, not the linker -- when -Os
+# inlining across merged units produced functions past Thumb branch range.
+#
+# THAT IS NO LONGER WHY IT IS HERE. Re-measured on the whole-program set,
+# Matter configuration, 2026-08-14: balanced links clean, passes the vector
+# check, and is 628 B LARGER (391,552 vs 390,924 flash) for 80 B less RAM. An
+# earlier run on the old partial set put balanced 920 B behind. Two measurements
+# on different sets agree on the direction, so this stays 1to1 because it is
+# smaller, not because the assembler forbids the alternative.
+#
+# Left as a cache variable because the finding is worth re-testing whenever the
+# set changes again -- and it should be re-tested by BUILDING, not reasoned
+# about from what LTO is supposed to do.
+set(WOZ_LTO_PARTITION "1to1" CACHE STRING "GCC -flto-partition mode")
+
+if(WOZ_LTO)
+  # -ffat-lto-objects is not optional, and it is not about build speed.
+  #
+  # Without it every archive member is IR only, and ld's plugin decides a symbol
+  # is "IR only, no non-IR reference" while the archive holding the non-IR
+  # caller has not been scanned yet. It then never generates code for it.
+  # Measured on this tree: 167 symbols went missing from libwoz_thread alone --
+  # the whole Mbed TLS surface OpenThread calls, all of nrf_802154, every
+  # aliro_* entry point -- each reported as
+  #
+  #   undefined reference to `X'
+  #   (X): Unknown destination type (ARM/Thumb) ... dangerous relocation
+  #
+  # A fat object carries real machine code and a real symbol table beside the
+  # IR, so ordinary archive resolution works and the plugin still optimises
+  # across what it can see. Only one of the two forms is ever linked, so the
+  # final image is unaffected.
+  #
+  # It is also what retires the old exclusion list. woz_device held SystemInit,
+  # whose only caller is the non-LTO startup file; woz_thread held the otPlat*
+  # callouts reached from libopenthread-mtd.a. Both were symptoms of thin LTO
+  # objects and of OpenThread sitting outside the set, and both premises are
+  # gone here.
+  add_compile_options(-flto -ffat-lto-objects)
+endif()
+
+# ----------------------------------------------------------------------------
 # Device layer: CMSIS, the pinned MDK, and the nrfx hal.
 #
 # This is the hal_nordic tree the radio stack is built against, deliberately
@@ -131,6 +298,7 @@ add_library(woz_board STATIC
   "${WOZ_PORT_DIR}/board/time_freertos.c"
   "${WOZ_PORT_DIR}/board/fault_freertos.c"
   "${WOZ_PORT_DIR}/board/log_rtt_freertos.c"
+  "${WOZ_PORT_DIR}/board/gpiote_freertos.c"
   # The OSAL sits here rather than in a layer of its own: it is the port's
   # implementation of the shared modules/woz_port contract, it needs nothing but
   # the kernel, and everything above the board uses it.
@@ -180,6 +348,24 @@ add_library(woz_mbedtls STATIC
   "${WOZ_PORT_DIR}/crypto/mbedtls_platform_freertos.c"
   "${WOZ_PORT_DIR}/crypto/crypto_init_freertos.c"
 )
+if(WOZ_MATTER)
+  # PSA's Internal Trusted Storage, over the port's key-value store. Only a
+  # Matter build has a persistent key to hold -- OpenThread's SRP signing key --
+  # and MBEDTLS_PSA_CRYPTO_STORAGE_C is only defined for that build, so
+  # compiling this unconditionally would be four entry points nothing calls.
+  target_sources(woz_mbedtls PRIVATE "${WOZ_PORT_DIR}/crypto/psa_its_freertos.c")
+  # The NATIVE ITS path, which is the supported way to supply a custom backend:
+  # psa_crypto_storage.c takes it whenever MBEDTLS_PSA_ITS_FILE_C is absent, and
+  # then expects public <psa/error.h> and <psa/internal_trusted_storage.h>.
+  # Neither ships in this tree, so the port provides them.
+  #
+  # MBEDTLS_PSA_ITS_FILE_C was tried first and is NOT the door: it selects the
+  # internal interface but requires MBEDTLS_FS_IO, and there is no filesystem
+  # here. Mbed TLS's own psa_its_file.c self-guards on that symbol, so with it
+  # undefined the file compiles to nothing and cannot collide.
+  target_include_directories(woz_mbedtls PRIVATE "${WOZ_PORT_DIR}/crypto/psa_native_its")
+  target_link_libraries(woz_mbedtls PRIVATE woz_storage)
+endif()
 target_include_directories(woz_mbedtls PUBLIC
   "${WOZ_MBEDTLS_DIR}/include"
   "${WOZ_PORT_DIR}/crypto"
@@ -407,9 +593,177 @@ add_library(woz_aliro STATIC
 target_include_directories(woz_aliro PUBLIC
   "${WOZ_MODULES_DIR}/woz_aliro/include"
 )
+if(WOZ_MATTER)
+  # The advertiser has to ask two questions it cannot answer itself: whether the
+  # node already holds a fabric, and what the commissionable payload is. Headers
+  # only, and PRIVATE -- linking woz_aliro against woz_matter_transport would be
+  # a cycle, since woz_matter already links woz_aliro. The symbols resolve when
+  # the executable is linked, which is the one place both archives are present.
+  #
+  # apps/dwm3001cdk-lock/src is the other product's tree and carries a
+  # status_led.h that would be wrong for this image. No woz_aliro source
+  # includes it, which is why this is safe here and is checked rather than
+  # assumed -- the same hazard is called out where woz_matter_transport takes
+  # the same directory.
+  target_include_directories(woz_aliro PRIVATE
+    "${WOZ_PORT_DIR}/matter"
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
+  )
+endif()
 # woz_radio for the NimBLE host and its hooks, woz_storage for the provisioning
 # backend the identity is read through, woz_uwb for the ranging contract.
 target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
+
+# ----------------------------------------------------------------------------
+# The Matter node.
+# ----------------------------------------------------------------------------
+# modules/woz_matter is a hand-written minimal Matter node -- CHIP does not fit
+# this part -- and it is platform-agnostic C11 with no operating system
+# dependency at all. The Zephyr build compiles these same fourteen files, and so
+# does tests/host. Nothing here is a port of the protocol; the port is the glue
+# that carries its messages, which lives in this directory and not in modules/.
+#
+# Its only outside dependency is woz_aliro: matter_crypto.c uses aliro_hash.h
+# for SHA-256 and HKDF, and the crypto_aes_ecb_encrypt seam it declares itself.
+# Both are already linked into any image that has the reader, so this is an
+# include path rather than new code.
+#
+# OFF by default while the transport glue is unfinished. A protocol that
+# compiles is not a node that commissions.
+option(WOZ_MATTER "Build the Matter commissioning node into the image" OFF)
+
+if(WOZ_MATTER)
+  set(WOZ_MATTER_SRC "${WOZ_MODULES_DIR}/woz_matter/src")
+  add_library(woz_matter STATIC
+    "${WOZ_MATTER_SRC}/matter_tlv.c"
+    "${WOZ_MATTER_SRC}/matter_msg.c"
+    "${WOZ_MATTER_SRC}/matter_mrp.c"
+    "${WOZ_MATTER_SRC}/matter_crypto.c"
+    "${WOZ_MATTER_SRC}/matter_btp.c"
+    "${WOZ_MATTER_SRC}/matter_pase.c"
+    "${WOZ_MATTER_SRC}/matter_spake2p.c"
+    "${WOZ_MATTER_SRC}/matter_pase_sm.c"
+    "${WOZ_MATTER_SRC}/matter_exchange.c"
+    "${WOZ_MATTER_SRC}/matter_im.c"
+    "${WOZ_MATTER_SRC}/matter_clusters.c"
+    "${WOZ_MATTER_SRC}/matter_attest.c"
+    "${WOZ_MATTER_SRC}/matter_fabric.c"
+    "${WOZ_MATTER_SRC}/matter_case.c"
+  )
+  target_include_directories(woz_matter PUBLIC
+    "${WOZ_MODULES_DIR}/woz_matter/include"
+  )
+  target_link_libraries(woz_matter PUBLIC woz_aliro)
+
+  # --------------------------------------------------------------------------
+  # The Thread transport, compiled from the Zephyr port tree unmodified.
+  # --------------------------------------------------------------------------
+  # Not a copy, and not a rewrite. matter_thread_port.c is 1,227 lines of which
+  # the Zephyr-specific part is three headers and four openthread_*() helpers;
+  # everything else is OpenThread's own API, which is the same library this
+  # image already runs. matter_compat/ supplies the three headers and maps the
+  # four helpers onto this port's equivalents.
+  #
+  # Compiling it in place keeps one copy of behaviour that was expensive to
+  # learn -- the SRP host-name suffix that dodges a 14-day key-lease collision
+  # is the example that costs a fortnight to rediscover. Its proper home is
+  # modules/, and moving it means editing the Zephyr module's CMakeLists, which
+  # this build cannot verify; scripts/freertos-matter-source-check.sh holds the
+  # seam closed until then.
+  add_library(woz_matter_transport STATIC
+    "${WOZ_REPO_ROOT}/ports/zephyr/matter/matter_thread_port.c"
+    "${WOZ_PORT_DIR}/matter/matter_settings_freertos.c"
+    # The BLE half is written, not shimmed: Zephyr's bt_* GATT and NimBLE's
+    # differ in shape, not spelling. It carries the oracle's hard-won behaviour
+    # across rather than its code -- see the four numbered lessons in the file.
+    "${WOZ_PORT_DIR}/matter/matter_ble_freertos.c"
+    # The commissioning layer, also compiled unmodified. It is 3,417 lines and
+    # its entire operating-system surface is work items, logging and settings --
+    # everything else is PSA crypto and this project's own modules. That makes
+    # it the same kind of file as the Thread transport: shared behaviour wearing
+    # a Zephyr include block. It lives under apps/ rather than ports/ only
+    # because that is where the Zephyr build wanted it.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src/matter_commission.c"
+    "${WOZ_REPO_ROOT}/ports/zephyr/store/matter_fab_settings.c"
+  )
+  target_include_directories(woz_matter_transport PUBLIC
+    "${WOZ_PORT_DIR}/matter"
+    # matter_commission.h, which the application includes to call
+    # matter_commission_init(). PUBLIC for that header alone; the app's own
+    # quoted includes still resolve to its own directory first, so putting the
+    # other product's src tree on the path cannot capture them.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
+  )
+  target_include_directories(woz_matter_transport PRIVATE
+    "${WOZ_PORT_DIR}/matter/matter_compat"
+    # The fabric store's own header, and the app's LED contract. The FreeRTOS
+    # app's status_led.h is used, not the Zephyr one: the two declare the same
+    # functions and the same signal enum, and this image must drive ITS leds.
+    "${WOZ_REPO_ROOT}/ports/zephyr/store"
+    # Both app trees carry a status_led.h declaring the same functions and the
+    # same signal enum. The -I order below is NOT what decides which one
+    # matter_commission.c gets: a quoted include resolves relative to the
+    # INCLUDING file's own directory before any -I, and matter_commission.c
+    # lives in the Zephyr app tree, so it always reads the Zephyr header. That
+    # header compiles fine here -- matter_compat supplies zephyr/sys/util.h --
+    # and it hides its declarations behind IS_ENABLED(CONFIG_ALIRO_STATUS_LED),
+    # turning every LED call into a silent no-op when the macro is missing.
+    # That was found on hardware, not in review: a Home tile tap that answered
+    # SUCCESS and reported LockState while the lock LED never moved.
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock-freertos/src"
+    "${WOZ_REPO_ROOT}/apps/dwm3001cdk-lock/src"
+  )
+  # See the include-order note above: matter_commission.c reads the ZEPHYR
+  # status_led.h no matter what, so this build must satisfy that header's
+  # config gate or lose every LED call in the file to the no-op stub. The
+  # declarations behind the gate match this port's status_led.c exactly, and
+  # the linker binds them to it.
+  target_compile_definitions(woz_matter_transport PRIVATE CONFIG_ALIRO_STATUS_LED=1)
+  # --------------------------------------------------------------------------
+  # SPAKE2+ over P-256, from Nordic's oberon library.
+  # --------------------------------------------------------------------------
+  # matter_spake2p.c and matter_pase_sm.c call ocrypto_spake2p_p256_*. Mbed TLS
+  # does not implement SPAKE2+ -- it is not a general primitive, it is the
+  # augmented PAKE Matter commissioning is defined on -- so this is the one
+  # binary this image takes for crypto. The Zephyr oracle lands on the same
+  # library through PSA's nrf_oberon backend, because nRF52833 has no
+  # CryptoCell.
+  #
+  # HARD-FLOAT, matching WOZ_ARCH_FLAGS. The soft-float variant links without
+  # complaint on many toolchains and passes arguments in the wrong registers.
+  set(WOZ_OBERON_LIB
+    "${WOZ_NCS_WORKSPACE}/nrfxlib/crypto/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.19.a")
+  if(NOT EXISTS "${WOZ_OBERON_LIB}")
+    message(FATAL_ERROR
+      "nrf_oberon is missing: ${WOZ_OBERON_LIB}. Matter commissioning needs "
+      "SPAKE2+ over P-256 and no other library in this image provides it.")
+  endif()
+  add_library(woz_oberon STATIC IMPORTED GLOBAL)
+  set_target_properties(woz_oberon PROPERTIES IMPORTED_LOCATION "${WOZ_OBERON_LIB}")
+  target_include_directories(woz_oberon INTERFACE
+    "${WOZ_NCS_WORKSPACE}/nrfxlib/crypto/nrf_oberon/include")
+
+  # woz_dfu because the commissioning gesture opens the update window alongside
+  # the commissioning one, and asks woz_dfu_rx for it directly.
+  target_link_libraries(woz_matter_transport
+    PUBLIC woz_matter woz_thread woz_nimble woz_radio woz_dfu woz_oberon)
+  target_link_libraries(woz_matter PUBLIC woz_oberon)
+  # The port's own files in this library are held to the port's standard. The
+  # shared transport is not: it is compiled unmodified and belongs to a build
+  # with different warning flags, so -Werror here would make an unrelated
+  # change over there fail this image for style.
+  set_source_files_properties(
+    "${WOZ_PORT_DIR}/matter/matter_ble_freertos.c"
+    "${WOZ_PORT_DIR}/matter/matter_settings_freertos.c"
+    TARGET_DIRECTORY woz_matter_transport
+    PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-Wshadow"
+  )
+  # The Kconfig symbols the file selects its behaviour with. This port has no
+  # Kconfig, so they are forced on from a header, exactly as the pinned radio
+  # platform's are.
+  target_compile_options(woz_matter_transport PRIVATE
+    "-include;${WOZ_PORT_DIR}/matter/matter_compat/woz_freertos_matter_config.h")
+endif()
 
 # ----------------------------------------------------------------------------
 # 802.15.4 layer: Nordic's radio driver, its service-layer binary, and the
@@ -585,6 +939,17 @@ set(OT_PROJECT_CONFIG "openthread_project_config.h" CACHE STRING "" FORCE)
 # from every OpenThread translation unit.
 include_directories("${WOZ_PORT_DIR}/thread")
 
+# WOZ_HAVE_MATTER is what the project config gates the SRP client on, and
+# OpenThread is built by its own CMake in the subdirectory below -- so it has to
+# be a GLOBAL definition rather than a target-scoped one, which would leave the
+# config reading it as undefined and silently build an OpenThread with no SRP
+# client. That fails at link with otSrpClient* missing rather than quietly, but
+# only after a full build of the wrong thing.
+#
+# It is set at the top of this file. Anywhere above this line would do; see the
+# block up there for why position is a readability choice and not a functional
+# one for definitions.
+
 add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 
 add_library(woz_thread STATIC
@@ -603,6 +968,31 @@ add_library(woz_thread STATIC
   "${WOZ_PORT_DIR}/thread/ot_log_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_settings_freertos.c"
 )
+if(WOZ_MATTER)
+  # Nordic's PSA crypto platform, a pinned NCS source compiled unmodified --
+  # the same arrangement as radio_nrf5.c above.
+  #
+  # It is required, not optional, once OPENTHREAD_CONFIG_CRYPTO_LIB is PSA.
+  # OpenThread's own crypto_platform.cpp then contributes only 71 lines of weak
+  # ECDSA stubs and expects the PLATFORM to supply otPlatCrypto -- import,
+  # export, destroy, HMAC, AES, random, the whole surface. Without this file the
+  # link fails on otPlatCryptoImportKey and a dozen others, which is exactly
+  # what it did.
+  #
+  # Writing that surface by hand was the alternative. Nordic already maintains
+  # it against the same OpenThread and the same PSA core, and the oracle ships
+  # it, so this is the file the Zephyr build uses too.
+  target_sources(woz_thread PRIVATE
+    "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/crypto_psa.c")
+  # NOT matter_compat on this target's include path. Both shim trees publish
+  # zephyr/kernel.h and zephyr/logging/log.h, and putting the second one here
+  # let it shadow ot_compat's for radio_nrf5.c -- which then failed to compile
+  # against a struct it had been reading correctly for months. Two shim trees on
+  # one include path is a trap regardless of order.
+  #
+  # crypto_psa.c needs one declaration out of Zephyr's settings API, so
+  # ot_compat carries its own one-function header instead.
+endif()
 target_include_directories(woz_thread PUBLIC
   "${WOZ_PORT_DIR}/thread/ot_compat"
   "${WOZ_OPENTHREAD_DIR}/include"
@@ -617,16 +1007,267 @@ target_link_libraries(woz_thread PUBLIC woz_storage woz_802154 openthread-mtd ot
 # archive is scanned first leaves the other's references open.
 set_property(TARGET openthread-mtd APPEND PROPERTY INTERFACE_LINK_LIBRARIES woz_thread)
 
-# The two vendor sources read their configuration from a forced include, the
-# same way the source-check script compiles them, so neither needs an edit.
-set_source_files_properties(
+# The vendor sources read their configuration from a forced include, the same
+# way the source-check script compiles them, so none of them needs an edit.
+#
+# THIS LIST IS NAMED, so a file added to woz_thread and not added here compiles
+# with every CONFIG_* guard evaluating false -- silently, because an #if on an
+# undefined symbol is 0 rather than an error. That is what happened when
+# crypto_psa.c was added: it compiled to almost nothing and the link failed on
+# otPlatCryptoEcdsaGenerateAndImportKey, three functions that were sitting
+# inside `#if defined(CONFIG_OPENTHREAD_ECDSA)` in a file that had never been
+# told the symbol was set.
+set(WOZ_OT_VENDOR_SOURCES
   "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/radio_nrf5.c"
-  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c")
+if(WOZ_MATTER)
+  list(APPEND WOZ_OT_VENDOR_SOURCES
+    "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/crypto_psa.c")
+endif()
+set_source_files_properties(${WOZ_OT_VENDOR_SOURCES}
   PROPERTIES COMPILE_OPTIONS
   "-include;${WOZ_PORT_DIR}/thread/ot_compat/woz_freertos_ot_config.h;-Wno-unused-parameter")
 
+# ----------------------------------------------------------------------------
+# DFU receiver: take a signed delta patch, verify it, stage it, reboot.
+#
+# The receiver itself is already portable -- modules/woz_dfu/src/dfu_receiver.c
+# names PSA, woz_flash, woz_osal and woz_log and nothing else -- so what this
+# layer adds is the flash backend for the two partitions and the signing key.
+#
+# The APPLIER half is deliberately not here. It runs in MCUboot, because an
+# application cannot rewrite the flash it is executing from, and MCUboot is a
+# separate image this port does not build. See board/nrf52833_lock.ld.
+# ----------------------------------------------------------------------------
+set(WOZ_DFU_DIR "${WOZ_MODULES_DIR}/woz_dfu")
+
+# The same key the Zephyr image signs with, reached the same way: the top-level
+# Makefile computes SIGN_KEY and exports it, and mk/freertos-nrf52833.mk passes
+# it through. Falling back to the environment covers a bare cmake invocation.
+if(NOT WOZ_DFU_KEY AND DEFINED ENV{SIGN_KEY})
+  set(WOZ_DFU_KEY "$ENV{SIGN_KEY}")
+endif()
+if(NOT WOZ_DFU_KEY OR NOT EXISTS "${WOZ_DFU_KEY}")
+  message(FATAL_ERROR
+    "the update-signing key is missing: '${WOZ_DFU_KEY}'\n"
+    "  This image verifies delta patches against its public half, so it cannot\n"
+    "  be built without one.\n"
+    "  Fix: make dfu-key   (once per clone; it refuses to overwrite)\n"
+    "  Or:  pass -DWOZ_DFU_KEY=<absolute path>.")
+endif()
+
+# The public key is generated into the image rather than committed, for the same
+# reason the Zephyr build does it: the private key is the thing that must not be
+# in the tree, and deriving the public half at configure time means the two
+# cannot drift.
+set(WOZ_DFU_PUBKEY_C "${CMAKE_CURRENT_BINARY_DIR}/woz_dfu_pubkey.c")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_custom_command(
+  OUTPUT "${WOZ_DFU_PUBKEY_C}"
+  COMMAND "${Python3_EXECUTABLE}" "${WOZ_DFU_DIR}/scripts/emit_pubkey.py"
+          "${WOZ_DFU_KEY}" "${WOZ_DFU_PUBKEY_C}"
+  DEPENDS "${WOZ_DFU_KEY}" "${WOZ_DFU_DIR}/scripts/emit_pubkey.py"
+  COMMENT "woz_dfu: extracting the update-signing public key")
+
+add_library(woz_dfu STATIC
+  "${WOZ_DFU_DIR}/src/dfu_receiver.c"
+  "${WOZ_DFU_DIR}/src/dfu_crc.c"
+  "${WOZ_PORT_DIR}/storage/flash_area_freertos.c"
+  "${WOZ_PORT_DIR}/dfu/dfu_ble_freertos.c"
+  "${WOZ_DFU_PUBKEY_C}"
+)
+target_include_directories(woz_dfu PUBLIC
+  "${WOZ_DFU_DIR}/include"
+)
+target_include_directories(woz_dfu PRIVATE
+  "${WOZ_DFU_DIR}/src"
+)
+# woz_storage for the flash driver underneath the area backend, woz_mbedtls for
+# the PSA signature check the receiver makes before anything is staged, and
+# woz_nimble for the transport in front of it.
+target_link_libraries(woz_dfu PUBLIC woz_storage woz_mbedtls woz_nimble)
+
+# ----------------------------------------------------------------------------
+# USB device: the provisioning console's transport.
+#
+# The nRF5 SDK's app_usbd framework and CDC ACM class, compiled unmodified,
+# against the nrfx this image already links rather than the one they shipped
+# with. usb/usb_compat/ carries the three headers that makes possible:
+# nrf_drv_usbd.h absorbs a return-type change between nrfx 1.9.0 and 4.2.1, and
+# nrf_drv_clock.h / nrf_drv_power.h replace two SDK drivers that would each have
+# taken POWER_CLOCK away from MPSL.
+#
+# NOT TinyUSB or a hand-written stack. USB enumeration is the kind of code whose
+# bugs only appear against a particular host, and this tree already contains a
+# stack that Nordic ships, tests on this silicon, and that the Qorvo SDK pins.
+# ----------------------------------------------------------------------------
+set(WOZ_NRF5_USBD "${WOZ_NRF5_SDK}/components/libraries/usbd")
+set(WOZ_NRF5_NRFX "${WOZ_NRF5_SDK}/modules/nrfx")
+
+# ----------------------------------------------------------------------------
+# The provisioning console is optional, and a Matter build does not have one.
+# ----------------------------------------------------------------------------
+# It costs 18,151 bytes of flash and 10,249 of RAM -- measured on this tree, and
+# the RAM is the larger number in a part where RAM is what runs out. All of it
+# serves a mode that runs only when SW2 is held through reset.
+#
+# A Matter node self-provisions: the commissioner supplies the fabric, so
+# typing a credential over a serial port is the thing Matter replaces. The
+# Zephyr oracle reaches the same conclusion in prj.conf, where the console is
+# off for the same reason and with the note that reader + console + Thread
+# overflows RAM by 1,752 bytes regardless.
+#
+# ON by default, because that is the image that exists today and the one that
+# provisions a board with no Matter fabric to join.
+option(WOZ_PROV_CONSOLE "Build the USB provisioning console into the image" ON)
+
+# ----------------------------------------------------------------------------
+# The one SDK source this image does not compile verbatim, and why.
+#
+# app_usbd_core.c builds its device descriptor with bDeviceClass,
+# bDeviceSubClass and bDeviceProtocol all zero -- "ask the interfaces". Linux
+# does ask: cdc_acm binds off the interface class and a port appears. macOS does
+# not. AppleUSBCDCACM binds a two-interface CDC function only when the DEVICE
+# descriptor carries the Interface Association triple 0xEF/0x02/0x01, which is
+# what marks the control and data interfaces as one function. With zeros it sees
+# two unrelated interfaces of an unknown device and binds nothing.
+#
+# The failure has no error in it anywhere. The board enumerates, ioreg shows
+# "Provisioning Console" with the right strings and serial, the firmware logs
+# "USB CDC ACM up" -- and there is no /dev/cu.* node. Zephyr sets
+# USB_BCC_MISCELLANEOUS here, which is why the same console works on the same
+# laptop from the oracle build. A permissive host hid a descriptor that was
+# always wrong, which is this port's recurring bug in a new place.
+#
+# THE VENDORED TREE IS NOT EDITED. A corrected copy is generated into the build
+# directory and compiled instead. The three substitutions are asserted present
+# first, so an SDK whose descriptor no longer looks like this stops the build
+# rather than silently producing an image that enumerates into nothing -- the
+# same failure the patch exists to remove.
+#
+# A linker --wrap on app_usbd_core_setup_rsp was tried first and is NOT
+# sufficient: the descriptor is sent from setup_device_req_get_descriptor in the
+# same translation unit, so the call never becomes a cross-object reference and
+# --wrap does not see it. That version linked cleanly, defined the wrapper, and
+# still shipped zeros. Checked by disassembly, not by the build succeeding.
+# ----------------------------------------------------------------------------
+if(WOZ_PROV_CONSOLE)
+
+set(WOZ_USBD_CORE_SRC "${WOZ_NRF5_USBD}/app_usbd_core.c")
+set(WOZ_USBD_CORE_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_usbd_core_iad.c")
+file(READ "${WOZ_USBD_CORE_SRC}" _woz_usbd_core_txt)
+foreach(_pair
+    ".bDeviceClass = 0,|.bDeviceClass = 0xEF,"
+    ".bDeviceSubClass = 0,|.bDeviceSubClass = 0x02,"
+    ".bDeviceProtocol = 0,|.bDeviceProtocol = 0x01,")
+  string(REPLACE "|" ";" _p "${_pair}")
+  list(GET _p 0 _from)
+  list(GET _p 1 _to)
+  string(FIND "${_woz_usbd_core_txt}" "${_from}" _at)
+  if(_at EQUAL -1)
+    message(FATAL_ERROR
+      "app_usbd_core.c no longer contains '${_from}'. The device descriptor "
+      "changed shape in this SDK. Re-check the Interface Association triple "
+      "against the new source: without it macOS enumerates the console and "
+      "creates no serial port, with no error anywhere.")
+  endif()
+  string(REPLACE "${_from}" "${_to}" _woz_usbd_core_txt "${_woz_usbd_core_txt}")
+endforeach()
+file(WRITE "${WOZ_USBD_CORE_GEN}" "${_woz_usbd_core_txt}")
+
+add_library(woz_usb STATIC
+  # The pinned vendor stack, unmodified.
+  "${WOZ_NRF5_NRFX}/drivers/src/nrfx_usbd.c"
+  # The exclusive-access atomics nrfx_usbd's endpoint bitmasks are built on.
+  # The pinned nrfx inlines these; this one does not, so the source is needed.
+  "${WOZ_NRF5_NRFX}/soc/nrfx_atomic.c"
+  "${WOZ_NRF5_USBD}/app_usbd.c"
+  # Generated above from app_usbd_core.c: the device-class triple only.
+  "${WOZ_USBD_CORE_GEN}"
+  "${WOZ_NRF5_USBD}/app_usbd_string_desc.c"
+  "${WOZ_NRF5_USBD}/app_usbd_serial_num.c"
+  "${WOZ_NRF5_USBD}/class/cdc/acm/app_usbd_cdc_acm.c"
+  # The SDK libraries it leans on. nrf_atfifo is the event queue -- see
+  # usb/usb_power_freertos.c for why its being lock-free is load-bearing here.
+  "${WOZ_NRF5_SDK}/components/libraries/atomic_fifo/nrf_atfifo.c"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic/nrf_atomic.c"
+  "${WOZ_NRF5_SDK}/components/libraries/util/app_util_platform.c"
+  # This port's half.
+  "${WOZ_PORT_DIR}/usb/usb_power_freertos.c"
+  "${WOZ_PORT_DIR}/usb/usb_cdc_freertos.c"
+  "${WOZ_PORT_DIR}/usb/prov_console_freertos.c"
+  "${WOZ_PORT_DIR}/usb/sdk_error_freertos.c"
+)
+target_include_directories(woz_usb PUBLIC
+  # First, so the three compat headers shadow the SDK's own.
+  "${WOZ_PORT_DIR}/usb/usb_compat"
+  "${WOZ_NRF5_USBD}"
+  "${WOZ_NRF5_USBD}/class/cdc"
+  "${WOZ_NRF5_USBD}/class/cdc/acm"
+)
+# THE nrfx THIS ONE LIBRARY SEES IS THE SDK'S OWN, and it is the only place in
+# the image where that is true. Everywhere else the rule at the top of this file
+# holds: hal_nordic's nrfx, because the radio stack is built against it.
+#
+# The rule cannot hold here, and the reason is measured rather than assumed.
+# Between nrfx 1.9.0 and 4.2.1 the USBD *driver* API is nearly unchanged -- three
+# return types, absorbed by usb_compat/nrf_drv_usbd.h -- but the *hal* underneath
+# it gained a peripheral-instance argument on every function: this SDK calls
+# nrf_usbd_setup_brequest_get(), the new hal wants nrf_usbd_setup_brequest_get(NRF_USBD).
+# app_usbd.c and app_usbd_core.c do that in dozens of places, and shimming a hal
+# means redeclaring functions the newer nrfx also defines, in an image that
+# compiles both.
+#
+# So the vendor stack gets to be internally consistent instead: driver, hal and
+# framework all from SDK 17.1, on include paths PRIVATE to this library. What is
+# deliberately NOT taken is ${WOZ_NRF5_NRFX}/mdk -- nrf.h still resolves to the
+# pinned MDK through woz_device, so there is still exactly one register map and
+# one device header in the image, which was the property the rule was protecting.
+target_include_directories(woz_usb PRIVATE
+  "${WOZ_NRF5_SDK}/integration/nrfx"
+  "${WOZ_NRF5_NRFX}"
+  "${WOZ_NRF5_NRFX}/hal"
+  "${WOZ_NRF5_NRFX}/drivers/include"
+  "${WOZ_NRF5_NRFX}/soc"
+  # nrf_error.h, from the no-SoftDevice variant. This image has no SoftDevice --
+  # the controller is the SoftDevice Controller library, which is a different
+  # thing -- so the s132/s112 copies would be the wrong ones.
+  "${WOZ_NRF5_SDK}/components/drivers_nrf/nrf_soc_nosd"
+  "${WOZ_NRF5_SDK}/components/libraries/util"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic_fifo"
+  "${WOZ_NRF5_SDK}/components/libraries/log"
+  "${WOZ_NRF5_SDK}/components/libraries/log/src"
+  "${WOZ_NRF5_SDK}/components/libraries/experimental_section_vars"
+  "${WOZ_NRF5_SDK}/components/libraries/delay"
+  "${WOZ_NRF5_SDK}/external/utf_converter"
+)
+# woz_radio for the MPSL clock and the POWER vector fan-out; woz_board for the
+# logger and the device headers underneath both.
+# woz_aliro for the provisioning console, which reads and writes the same
+# identity the reader does -- through aliro_prov_* and the reader's own commit
+# path, never through a second copy of that logic.
+target_link_libraries(woz_usb PUBLIC woz_board woz_radio woz_aliro)
+
+endif(WOZ_PROV_CONSOLE)
+
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread woz_aliro)
+target_link_libraries(woz_freertos_port INTERFACE
+  woz_storage woz_uwb woz_thread woz_aliro woz_dfu)
+if(WOZ_PROV_CONSOLE)
+  target_link_libraries(woz_freertos_port INTERFACE woz_usb)
+endif()
+# Carried to every consumer rather than tested as a CMake variable in the app,
+# so the application source says in C which mode it was built for. A build
+# without the console must not merely fail to start it -- main() has a whole
+# branch that does not apply, and a branch that cannot run should not be in
+# the image being measured.
+target_compile_definitions(woz_freertos_port INTERFACE
+  WOZ_HAVE_PROV_CONSOLE=$<BOOL:${WOZ_PROV_CONSOLE}>
+  WOZ_HAVE_MATTER=$<BOOL:${WOZ_MATTER}>)
+if(WOZ_MATTER)
+  target_link_libraries(woz_freertos_port INTERFACE woz_matter_transport)
+endif()
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
@@ -653,21 +1294,139 @@ target_compile_options(woz_aliro PRIVATE
   -Wshadow
 )
 
-foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls
-                    woz_storage woz_uwb woz_aliro)
-  target_compile_options(${_woz_target} PRIVATE
-    -ffunction-sections
-    -fdata-sections
-    -fno-common
-    -fno-strict-aliasing
+# -ffunction-sections and friends used to be a nine-target foreach here. They
+# are now in the global block at the top of this file, for the same reason the
+# LTO flags are: the list left out woz_thread, woz_matter, woz_matter_transport,
+# woz_dfu, woz_usb and the whole OpenThread subdirectory, so --gc-sections could
+# only drop entire objects from the largest archive in the image rather than
+# individual functions. Two hand-maintained lists in one file, with the same
+# defect, found by a review comparing this port against the oracle.
+
+# ----------------------------------------------------------------------------
+# Link-time optimisation.
+# ----------------------------------------------------------------------------
+# Measured on this tree: 418,664 bytes of flash without it and 348,228 with,
+# a saving of 70,436 -- which is the difference between an image with no room
+# for the Matter commissioning stack and one with more headroom than the
+# Zephyr build that ships it. RAM falls 10,912 bytes on the same link.
+#
+# LTO IS NOT FREE HERE, and the risk is specific rather than general. This
+# image's vector table is DATA holding weak aliases that each owner is expected
+# to override. Whole-program optimisation is exactly the pass that can decide an
+# override is unreachable, and the result links cleanly and resolves to
+# default_handler -- an infinite loop the first interrupt falls into. That is
+# the failure this port already paid for twice, on RNG and RTC2.
+#
+# What makes it safe to turn on is not confidence in the optimiser: it is that
+# freertos-vector-check.sh reads the LINKED IMAGE and asserts every vector
+# peripherals.yml gives an owner resolves somewhere other than default_handler.
+# It runs on every build. Ask the artifact what it does, not the toolchain
+# whether it succeeded.
+#
+# The second cost is timing, and it is NOT yet retired: the DW3110 response-arm
+# deadline of ~1.836 ms has never been measured, and inlining moves code across
+# the boundary the deadline lives on. Until that measurement exists this stays
+# an option rather than the default.
+# ----------------------------------------------------------------------------
+# How much of the log survives compilation.
+# ----------------------------------------------------------------------------
+# 1 error, 2 warning, 3 info, 4 debug, matching enum woz_freertos_log_level.
+# The gate is at the call site (see woz_freertos_platform.h), so a level below a
+# call's own removes its format string from the image as well as its output --
+# which is the whole point, and was not true until that gate moved.
+#
+# 3 keeps the boot log this port has been debugged against. A build that needs
+# the flash takes 2 and loses the narration, not the diagnosis: every failure
+# path in this port reports at error or warning.
+set(WOZ_LOG_LEVEL "3" CACHE STRING "Highest log level compiled in (1 error .. 4 debug)")
+add_compile_definitions(WOZ_FREERTOS_LOG_MAX_LEVEL=${WOZ_LOG_LEVEL})
+
+# How much of a boot the RTT up-buffer can hold, in bytes of static RAM.
+#
+# The default is the file's own, and the file explains why raising it is a bench
+# decision: the buffer DROPS writes when full rather than overwriting, so on a
+# board with nothing draining it the log stops dead partway through boot and
+# says nothing about having stopped. 1 kB reaches the end of bring-up and no
+# further, which is enough for every failure this port had until commissioning
+# -- a BTP handshake is far more talkative than a boot.
+#
+# It is spent from roughly 8 kB of headroom, so this is not a shipping value and
+# there is no default here that spends it.
+set(WOZ_LOG_RTT_BUFFER "" CACHE STRING "RTT up-buffer size in bytes; empty keeps the built-in 1024")
+if(WOZ_LOG_RTT_BUFFER)
+  add_compile_definitions(WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES=${WOZ_LOG_RTT_BUFFER}u)
+endif()
+
+if(WOZ_LTO)
+  # TWO FILES ARE HELD OUT OF THE WHOLE-PROGRAM SET, and only two. Both are
+  # reached from something the optimiser cannot read, so neither exclusion is
+  # caution: each was a measured failure.
+  #
+  # THE FREERTOS PORT LAYER. vTaskSwitchContext's only caller is the inline
+  # assembly in the Cortex-M PendSV handler, and assembly is outside the LTO set
+  # by construction -- the optimiser reads IR, never an asm string. LTO does not
+  # merely drop the function, it may LOCALISE AND RENAME it, which is why
+  # forcing the symbol with -Wl,--undefined does not help and was tried. Only
+  # port.c is held out, not the whole kernel: tasks.c, queue.c and the rest have
+  # every caller in C and belong in the set.
+  set_source_files_properties("${WOZ_FREERTOS_SRC}/portable/GCC/nrf52/port.c"
+    TARGET_DIRECTORY woz_kernel
+    PROPERTIES COMPILE_OPTIONS "-fno-lto"
   )
-endforeach()
+
+  # THE STARTUP FILE MUST NOT BE OPTIMISED ACROSS THE PROGRAM, and the reason
+  # is not caution -- it was measured. With this file in LTO the link says:
+  #
+  #   ld: warning: cannot find entry symbol Reset_Handler; defaulting to 0000a200
+  #
+  # and produces an ELF with no default_handler and no vector table. Nothing in
+  # C ever references Reset_Handler or .isr_vector; only the linker script does.
+  # The LTO plugin decides which symbols are live BEFORE code generation emits
+  # any section, so the script's KEEP(*(.isr_vector)) has nothing to hold: KEEP
+  # operates on input sections, and at that point the section does not exist
+  # yet. Whole-program analysis therefore concludes the entire startup object is
+  # dead and drops it, which is a correct answer to the question it was asked.
+  #
+  # The result links with one warning and is a brick. Compiling this one file
+  # normally leaves a real object with real symbols, and the handlers it names
+  # in other translation units are then live because a non-LTO object refers to
+  # them. freertos-vector-check.sh is what caught this, on the linked image.
+  set_source_files_properties("${WOZ_PORT_DIR}/board/startup_freertos.c"
+    TARGET_DIRECTORY woz_board
+    PROPERTIES COMPILE_OPTIONS "-fno-lto"
+  )
+endif()
 
 # ----------------------------------------------------------------------------
 # A helper the application uses to turn a linked ELF into something flashable
 # and to print what it cost.
 # ----------------------------------------------------------------------------
 function(woz_freertos_image target)
+  if(WOZ_LTO)
+    # The link needs the flag too: with LTO the code generator runs HERE, so
+    # the optimisation level has to be restated on the link line or the final
+    # pass runs at -O0 and gives most of the saving back. The arch flags do not
+    # need restating -- CMAKE_EXE_LINKER_FLAGS_INIT in the toolchain file
+    # already carries -mcpu/-mfpu, and without them this link would quietly
+    # generate soft-float objects for a hard-float image.
+    target_compile_options(${target} PRIVATE -flto)
+    target_link_options(${target} PRIVATE -flto -Os)
+
+    # KEEP CODE GENERATION ON THE ORIGINAL TRANSLATION-UNIT BOUNDARIES.
+    #
+    # The default partitioning merges translation units before generating code,
+    # and with -Os inlining across the whole program that produced functions
+    # large enough to break Thumb branch range. The assembler, not the linker,
+    # is what failed:
+    #
+    #   ccydKnE6.s:2017: Error: offset out of range
+    #
+    # 1to1 keeps each unit's code generation to itself while still allowing the
+    # cross-unit analysis that produces the saving. It also makes the build
+    # reproducible unit by unit, which matters when something has to be
+    # disassembled to find out what the image actually does.
+    target_link_options(${target} PRIVATE -flto-partition=${WOZ_LTO_PARTITION})
+  endif()
   target_link_options(${target} PRIVATE
     "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
     "-L${WOZ_PORT_DIR}/board"

@@ -25,6 +25,48 @@
  * range so they cannot land on an Aliro key. */
 #define WOZ_KV_KEY_OPENTHREAD_BASE 0x1000u
 #define WOZ_KV_KEY_OPENTHREAD_LIMIT 0x1100u
+/*
+ * Matter's own records, above OpenThread's window. Only the shared Thread
+ * transport's SRP host-name suffix lives here so far; it is deliberately NOT
+ * under a tree the factory reset clears, because the SRP client's ECDSA key
+ * survives that too and the two have to be erased together or not at all.
+ */
+#define WOZ_KV_KEY_MATTER_BASE 0x2000u
+#define WOZ_KV_KEY_MATTER_SRP_HOST_ID 0x2000u
+/*
+ * The operational identity, one record per settings path the fabric store
+ * writes. Numbered explicitly rather than hashed: a hash could alias two
+ * records, and the set is small and fixed.
+ *
+ * WOZ_KV_KEY_MATTER_FAB_OK is written LAST and erased FIRST by the store, which
+ * is what makes a half-written identity detectable rather than merely unlikely.
+ */
+#define WOZ_KV_KEY_MATTER_FAB_VER 0x2010u
+#define WOZ_KV_KEY_MATTER_FAB_OK 0x2011u
+#define WOZ_KV_KEY_MATTER_FAB_TD 0x2012u
+#define WOZ_KV_KEY_MATTER_FAB_XP 0x2013u
+#define WOZ_KV_KEY_MATTER_FAB_ICLEN 0x2014u
+#define WOZ_KV_KEY_MATTER_FAB_ICAC 0x2015u
+/* One per fabric slot; MATTER_SUPPORTED_FABRICS is 3, the window holds 16. */
+#define WOZ_KV_KEY_MATTER_FAB_SLOT0 0x2020u
+#define WOZ_KV_KEY_MATTER_FAB_SLOT_LIMIT 0x2030u
+#define WOZ_KV_KEY_MATTER_LIMIT 0x2100u
+
+/*
+ * PSA Internal Trusted Storage, which exists for exactly one reason: OpenThread
+ * signs its SRP registrations with an ECDSA key that must survive a reboot, and
+ * routing that through PSA key references is what keeps Mbed TLS's PK, ECP and
+ * BIGNUM modules out of the image.
+ *
+ * A directory record plus a fixed set of slots. The directory maps the 64-bit
+ * PSA uid onto a slot, because a uid cannot be hashed into 16 bits without the
+ * possibility of aliasing two keys -- and two aliased keys is a node that signs
+ * with the wrong one.
+ */
+#define WOZ_KV_KEY_PSA_ITS_DIR 0x3000u
+#define WOZ_KV_KEY_PSA_ITS_SLOT0 0x3001u
+#define WOZ_KV_KEY_PSA_ITS_SLOTS 8u
+#define WOZ_KV_KEY_PSA_ITS_LIMIT 0x3100u
 
 /* A key no record can carry: erased flash reads as all ones. */
 #define WOZ_KV_KEY_NONE 0xffffu

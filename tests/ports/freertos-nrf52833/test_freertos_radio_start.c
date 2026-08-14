@@ -213,23 +213,38 @@ static void scenario_success(void)
 		      fake_sdc_support_le_2m_phy_called &&
 		      fake_sdc_support_phy_update_peripheral_called);
 
-	CHECK("the controller is configured for one peripheral link and no central",
-	      fake_sdc_cfg_count == 4 &&
-		      fake_sdc_cfg_records[0].type == SDC_CFG_TYPE_CENTRAL_COUNT &&
-		      fake_sdc_cfg_records[0].cfg.central_count.count == 0 &&
-		      fake_sdc_cfg_records[1].type == SDC_CFG_TYPE_PERIPHERAL_COUNT &&
-		      fake_sdc_cfg_records[1].cfg.peripheral_count.count == 1 &&
-		      fake_sdc_cfg_records[2].type == SDC_CFG_TYPE_ADV_COUNT &&
-		      fake_sdc_cfg_records[2].cfg.adv_count.count == 1);
+	CHECK("the controller is configured for one peripheral link",
+	      fake_sdc_cfg_count == 3 &&
+		      fake_sdc_cfg_records[0].type == SDC_CFG_TYPE_PERIPHERAL_COUNT &&
+		      fake_sdc_cfg_records[0].cfg.peripheral_count.count == 1 &&
+		      fake_sdc_cfg_records[1].type == SDC_CFG_TYPE_ADV_COUNT &&
+		      fake_sdc_cfg_records[1].cfg.adv_count.count == 1);
+
+	/*
+	 * The central count is never configured, not even to zero.
+	 *
+	 * This is a regression guard for a defect that only hardware found. The
+	 * image links libsoftdevice_controller_peripheral.a, which rejects the
+	 * config TYPE with -NRF_EOPNOTSUPP rather than accepting a count of zero,
+	 * so the apparently-careful zero write failed startup at STAGE_SDC_CFG
+	 * and the board reboot-looped with nothing to say. The fake accepts every
+	 * configuration it is handed, which is why the suite was quiet; this
+	 * asserts the absence instead of the value.
+	 */
+	for (size_t i = 0; i < fake_sdc_cfg_count; i++) {
+		CHECK("the central count is never configured on a peripheral-only controller",
+		      fake_sdc_cfg_records[i].type != SDC_CFG_TYPE_CENTRAL_COUNT);
+	}
+
 	CHECK("Link Layer buffers carry a full 251-byte data length",
-	      fake_sdc_cfg_records[3].type == SDC_CFG_TYPE_BUFFER_CFG &&
-		      fake_sdc_cfg_records[3].cfg.buffer_cfg.tx_packet_size == 251 &&
-		      fake_sdc_cfg_records[3].cfg.buffer_cfg.rx_packet_size == 251 &&
-		      fake_sdc_cfg_records[3].cfg.buffer_cfg.tx_packet_count == 3 &&
-		      fake_sdc_cfg_records[3].cfg.buffer_cfg.rx_packet_count == 3);
+	      fake_sdc_cfg_records[2].type == SDC_CFG_TYPE_BUFFER_CFG &&
+		      fake_sdc_cfg_records[2].cfg.buffer_cfg.tx_packet_size == 251 &&
+		      fake_sdc_cfg_records[2].cfg.buffer_cfg.rx_packet_size == 251 &&
+		      fake_sdc_cfg_records[2].cfg.buffer_cfg.tx_packet_count == 3 &&
+		      fake_sdc_cfg_records[2].cfg.buffer_cfg.rx_packet_count == 3);
 	CHECK("every configuration write uses the default resource tag",
 	      fake_sdc_cfg_records[0].tag == SDC_DEFAULT_RESOURCE_CFG_TAG &&
-		      fake_sdc_cfg_records[3].tag == SDC_DEFAULT_RESOURCE_CFG_TAG);
+		      fake_sdc_cfg_records[2].tag == SDC_DEFAULT_RESOURCE_CFG_TAG);
 
 	CHECK("the controller runs from the static, eight-byte-aligned pool",
 	      fake_sdc_enable_calls == 1 && fake_sdc_memory != NULL &&

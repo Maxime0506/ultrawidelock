@@ -608,7 +608,7 @@ void test_matter_clusters(void)
 		T_EQ("index stays zero", info.last_user_index, 0u);
 	}
 
-	t_group("the ACL is the only writable attribute");
+	t_group("the ACL is one of two writable attributes");
 	{
 		struct matter_im_path path;
 		uint8_t acl[64];
@@ -671,6 +671,190 @@ void test_matter_clusters(void)
 		path.endpoint = MATTER_ENDPOINT_ROOT;
 		T_EQ("a null device refuses every write", srv.write(NULL, &path, acl, sizeof(acl)),
 		     MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT);
+	}
+
+	t_group("AutoRelockTime is the lock endpoint's writable attribute");
+	{
+		struct matter_im_path path;
+		struct matter_tlv_writer w;
+		uint8_t tlv[16];
+		uint8_t out[64];
+		size_t n;
+
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		memset(&path, 0, sizeof(path));
+		path.endpoint = MATTER_ENDPOINT_LOCK;
+		path.cluster = MATTER_CLUSTER_DOOR_LOCK;
+		path.attribute = MATTER_ATTR_DL_AUTO_RELOCK_TIME;
+
+		T_EQ("readable before any write",
+		     srv.status(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+				MATTER_ATTR_DL_AUTO_RELOCK_TIME),
+		     MATTER_IM_STATUS_SUCCESS);
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 120u);
+		T_EQ("a u32 write is accepted",
+		     srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("the seconds are stored", info.auto_relock_time_s, 120u);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_DL_AUTO_RELOCK_TIME, &w, MATTER_TLV_ANON);
+		n = w.len;
+		T_OK("the read emits a value", n > 0u);
+		{
+			struct matter_tlv_reader r;
+			uint64_t v = 0u;
+
+			matter_tlv_reader_init(&r, out, n);
+			T_OK("read decodes", matter_tlv_next(&r) == 0 &&
+					     matter_tlv_get_u64(&r, &v) == 0);
+			T_EQ("read value matches", (uint32_t)v, 120u);
+		}
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 0x100000000ull);
+		T_EQ("a value wider than u32 is a constraint error",
+		     srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		T_EQ("and the stored value is untouched", info.auto_relock_time_s, 120u);
+
+		T_EQ("an empty write is an invalid command",
+		     srv.write(srv.ctx, &path, tlv, 0u), MATTER_IM_STATUS_INVALID_COMMAND);
+
+		path.attribute = MATTER_ATTR_DL_LOCK_STATE;
+		T_EQ("LockState itself is not writable",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+
+		path.cluster = MATTER_CLUSTER_DESCRIPTOR;
+		T_EQ("the lock's Descriptor is read-only",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+
+		path.cluster = 0x1234u;
+		T_EQ("a cluster the lock endpoint lacks says UNSUPPORTED_CLUSTER",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_CLUSTER);
+	}
+
+	t_group("the lock serves the globals Apple builds its settings UI from");
+	{
+		struct matter_tlv_writer w;
+		struct matter_tlv_reader r;
+		uint8_t out[256];
+		uint64_t v;
+		bool saw_auto_relock = false;
+		bool saw_aliro_config_cmd = false;
+
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_CLUSTER_REVISION, &w, MATTER_TLV_ANON);
+		matter_tlv_reader_init(&r, out, w.len);
+		v = 0u;
+		T_OK("ClusterRevision decodes",
+		     matter_tlv_next(&r) == 0 && matter_tlv_get_u64(&r, &v) == 0);
+		T_EQ("and is 8, the Nordic reference build's value", (unsigned)v,
+		     MATTER_DL_CLUSTER_REVISION);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_ATTRIBUTE_LIST, &w, MATTER_TLV_ANON);
+		matter_tlv_reader_init(&r, out, w.len);
+		T_OK("AttributeList is a container",
+		     matter_tlv_next(&r) == 0 && matter_tlv_is_container(&r));
+		T_OK("and can be entered", matter_tlv_enter(&r) == 0);
+		while (matter_tlv_next(&r) == 0) {
+			if (matter_tlv_get_u64(&r, &v) == 0 &&
+			    v == MATTER_ATTR_DL_AUTO_RELOCK_TIME) {
+				saw_auto_relock = true;
+			}
+		}
+		T_OK("and it names AutoRelockTime, the optional control", saw_auto_relock);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_ACCEPTED_CMD_LIST, &w, MATTER_TLV_ANON);
+		matter_tlv_reader_init(&r, out, w.len);
+		T_OK("AcceptedCommandList decodes",
+		     matter_tlv_next(&r) == 0 && matter_tlv_enter(&r) == 0);
+		while (matter_tlv_next(&r) == 0) {
+			if (matter_tlv_get_u64(&r, &v) == 0 &&
+			    v == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
+				saw_aliro_config_cmd = true;
+			}
+		}
+		T_OK("and it names SetAliroReaderConfig", saw_aliro_config_cmd);
+	}
+
+	t_group("Approach Direction is the lock endpoint's other writable cluster");
+	{
+		struct matter_im_path path;
+		struct matter_tlv_writer w;
+		struct matter_tlv_reader r;
+		uint8_t tlv[16];
+		uint8_t out[64];
+		uint64_t v;
+		const uint32_t *ids = NULL;
+		size_t n;
+		size_t i;
+		bool listed = false;
+
+		reset_doubles();
+		fill_info(&info);
+		info.approach_direction = MATTER_APPROACH_DIRECTION_ALL;
+		matter_clusters_init(&srv, &info);
+
+		/* The cluster has to be discoverable before its attribute
+		 * matters: Home walks ServerList, not vendor documentation. */
+		n = srv.list_clusters(srv.ctx, MATTER_ENDPOINT_LOCK, &ids);
+		for (i = 0u; i < n; i++) {
+			if (ids[i] == MATTER_CLUSTER_APPROACH_DIRECTION) {
+				listed = true;
+			}
+		}
+		T_OK("the lock endpoint lists the cluster", listed);
+		T_EQ("and answers for its attribute",
+		     srv.status(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_APPROACH_DIRECTION,
+				MATTER_ATTR_APPROACH_DIRECTION),
+		     MATTER_IM_STATUS_SUCCESS);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_APPROACH_DIRECTION,
+			  MATTER_ATTR_APPROACH_DIRECTION, &w, MATTER_TLV_ANON);
+		matter_tlv_reader_init(&r, out, w.len);
+		v = 0u;
+		T_OK("the direction decodes",
+		     matter_tlv_next(&r) == 0 && matter_tlv_get_u64(&r, &v) == 0);
+		T_EQ("and defaults to all three directions", (unsigned)v,
+		     MATTER_APPROACH_DIRECTION_ALL);
+
+		memset(&path, 0, sizeof(path));
+		path.endpoint = MATTER_ENDPOINT_LOCK;
+		path.cluster = MATTER_CLUSTER_APPROACH_DIRECTION;
+		path.attribute = MATTER_ATTR_APPROACH_DIRECTION;
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 0x01u);
+		T_EQ("a bitmap8 write is accepted", srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and stored", info.approach_direction, 0x01u);
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 0x100u);
+		T_EQ("a value wider than bitmap8 is a constraint error",
+		     srv.write(srv.ctx, &path, tlv, w.len), MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		T_EQ("and the stored value is untouched", info.approach_direction, 0x01u);
+
+		path.attribute = MATTER_ATTR_CLUSTER_REVISION;
+		T_EQ("the cluster's globals are read-only",
+		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
 	}
 
 	t_group("the lock endpoint answers its own commands");

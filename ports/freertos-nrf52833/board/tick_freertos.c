@@ -62,6 +62,29 @@ _Static_assert(TICK_COUNTS >= 2u, "a tick must be at least two RTC counts");
 #define TICK_CC_CHANNEL 0u
 
 /*
+ * The closest a compare may be armed to the counter, in counts.
+ *
+ * The RTC raises COMPARE only on the exact equality COUNTER == CC, and a CC
+ * write crosses from the CPU into the 32.768 kHz domain, where the product
+ * specification allows it up to two LFCLK cycles to take effect. A value
+ * written fewer than two counts ahead can therefore be passed before it lands,
+ * and then it is never matched again for a full 2^24 counts -- 512 seconds --
+ * which for the kernel tick means never.
+ *
+ * Three rather than two: the specification's figure is the propagation itself,
+ * and this has to cover the instructions between reading the counter and the
+ * store as well.
+ *
+ * NOT hypothetical. The tick died on hardware after exactly nine ticks, at the
+ * first flash erase, and the counter proved it: CC0 was left 32 counts behind a
+ * counter that had run on for 35 seconds. A partial-erase slice spins for 3 ms
+ * inside the MPSL timeslot callback at interrupt priority zero, which holds
+ * this handler -- priority 7 -- off for about 98 counts. Arriving that late,
+ * the handler had a 2-in-32 chance of arming inside the window, and it did.
+ */
+#define TICK_CC_MIN_LEAD 3u
+
+/*
  * EVTEN and INTEN use the same bit positions, so one mask serves both. The
  * pinned HAL has no separate EVTEN mask macro; reaching for one would be a
  * macro that exists only in the host fake.
@@ -83,9 +106,30 @@ static uint32_t counter_get(void)
 	return nrf_rtc_counter_get(TICK_RTC) & (uint32_t)NRF_RTC_COUNTER_MAX;
 }
 
-static void arm_next_compare(void)
+/*
+ * Arm the next tick and report the value actually armed.
+ *
+ * The caller needs the armed value rather than the ideal one, because when the
+ * handler is late the two differ and only the armed value says whether the
+ * compare is still ahead of the counter.
+ */
+static uint32_t arm_next_compare(void)
 {
-	nrf_rtc_cc_set(TICK_RTC, TICK_CC_CHANNEL, (s_tick_anchor + TICK_COUNTS) & NRF_RTC_COUNTER_MAX);
+	uint32_t target = (s_tick_anchor + TICK_COUNTS) & (uint32_t)NRF_RTC_COUNTER_MAX;
+	uint32_t ahead = (target - counter_get()) & (uint32_t)NRF_RTC_COUNTER_MAX;
+
+	/*
+	 * Too close to land, or already behind. Give up on this tick's ideal
+	 * instant and take the nearest one that can be matched; the anchor is
+	 * not moved, so the next handler still derives elapsed ticks from the
+	 * counter and the schedule catches up rather than drifting.
+	 */
+	if (ahead < TICK_CC_MIN_LEAD || ahead > TICK_COUNTS) {
+		target = (counter_get() + TICK_CC_MIN_LEAD) & (uint32_t)NRF_RTC_COUNTER_MAX;
+	}
+
+	nrf_rtc_cc_set(TICK_RTC, TICK_CC_CHANNEL, target);
+	return target;
 }
 
 /*
@@ -118,7 +162,7 @@ void vPortSetupTimerInterrupt(void)
 	nrf_rtc_task_trigger(TICK_RTC, NRF_RTC_TASK_CLEAR);
 
 	s_tick_anchor = 0u;
-	arm_next_compare();
+	(void)arm_next_compare();
 
 	/*
 	 * The RTC raises nothing until EVTEN is set, whatever INTEN says, so
@@ -142,6 +186,7 @@ void RTC1_IRQHandler(void)
 	uint32_t mask;
 	uint32_t elapsed;
 	uint32_t ticks;
+	uint32_t armed;
 
 	nrf_rtc_event_clear(TICK_RTC, NRF_RTC_EVENT_COMPARE_0);
 
@@ -171,14 +216,22 @@ void RTC1_IRQHandler(void)
 		}
 	}
 
-	arm_next_compare();
+	armed = arm_next_compare();
 
 	/*
-	 * Re-check after arming. If those counts went by while the compare was
-	 * being written, the event is already latched and this handler runs
-	 * again; if the write landed early enough, nothing is lost either way.
+	 * Re-check against what was armed, not against the next ideal tick.
+	 *
+	 * The old form asked whether a whole tick had passed since the anchor,
+	 * which is a different question and misses the case that matters: a
+	 * compare armed just ahead of the counter and passed before it landed.
+	 * That leaves no event to latch and no interrupt to run this handler
+	 * again, and the tick simply stops.
+	 *
+	 * Asking whether the counter has reached the armed value covers both:
+	 * if it has, the compare may or may not have fired, so pend the handler
+	 * and let the anchor arithmetic make a duplicate harmless.
 	 */
-	if (((counter_get() - s_tick_anchor) & (uint32_t)NRF_RTC_COUNTER_MAX) >= TICK_COUNTS) {
+	if (((counter_get() - armed) & (uint32_t)NRF_RTC_COUNTER_MAX) < TICK_COUNTS) {
 		NVIC_SetPendingIRQ(TICK_RTC_IRQn);
 	}
 

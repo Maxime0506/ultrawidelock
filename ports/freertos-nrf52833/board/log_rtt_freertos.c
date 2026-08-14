@@ -28,6 +28,22 @@
  * bytes at 64 MHz, so this hook must not be called from the radio's own
  * priority-zero handlers.
  */
+/*
+ * BEFORE EVERY INCLUDE, and that position is the whole point.
+ *
+ * This file DEFINES the sinks, so it must see their plain declarations; the
+ * header otherwise puts same-named macros over them to gate on level at the
+ * call site, and those macros rewrite a function definition into something that
+ * does not compile.
+ *
+ * It cannot sit next to the woz_freertos_platform.h include below, because that
+ * is not the first time this file reaches that header: nrfx.h pulls in the
+ * board's nrfx_glue.h, which includes it. An opt-out placed after nrfx.h is an
+ * opt-out that arrives too late, and the error it produces points at the header
+ * rather than at the include order that caused it.
+ */
+#define WOZ_FREERTOS_LOG_NO_MACRO 1
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -39,7 +55,29 @@
 
 #include <woz_freertos_platform.h>
 
-/* Bytes of RAM the up-buffer holds. One boot's worth of bring-up chatter. */
+/*
+ * Bytes of RAM the up-buffer holds. One boot's worth of bring-up chatter.
+ *
+ * IT IS NOT A RING THAT OVERWRITES. The flags below are RTT_MODE_NO_BLOCK_SKIP,
+ * so once the buffer is full a write that does not fit is DROPPED WHOLE and the
+ * ones already there are kept. With a debugger attached that never happens,
+ * because the host advances the read offset as it reads. With nothing attached
+ * -- which is every board not on a bench, and also a board being read by
+ * savebin rather than by an RTT client -- the buffer fills once and every line
+ * after it is silently lost.
+ *
+ * That is the right trade for a product: dropping log lines is better than
+ * blocking a lock's boot, and better than losing the START of a boot, which is
+ * where the reasons live. It is the wrong trade while debugging something
+ * talkative, and it cost a bench session to recognise: the Matter advertising
+ * decision logs about 1.1 kB into boot, so the line was emitted, dropped, and
+ * its absence read as the code not running. It was running -- a BLE scan saw
+ * the advertisement on air.
+ *
+ * Raise this from the build for anything past bring-up. The whole size is
+ * static RAM on a part with roughly 8 kB spare, so it is a bench value, not a
+ * shipping one, and there is deliberately no default here that spends it.
+ */
 #ifndef WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES
 #define WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES 1024u
 #endif
@@ -49,10 +87,12 @@
 #define WOZ_FREERTOS_LOG_LINE_BYTES 160u
 #endif
 
-/* Levels above this are compiled to nothing at the call site's expense only. */
-#ifndef WOZ_FREERTOS_LOG_MAX_LEVEL
-#define WOZ_FREERTOS_LOG_MAX_LEVEL WOZ_FREERTOS_LOG_INFO
-#endif
+/*
+ * WOZ_FREERTOS_LOG_MAX_LEVEL is defined by woz_freertos_platform.h, which is
+ * where the call-site gate lives. The runtime comparisons kept below are a
+ * backstop for the two calls this file makes with a computed level, and for
+ * anything that reaches the sink through a function pointer.
+ */
 
 /*
  * The RTT control block, laid out as the published format specifies. A J-Link

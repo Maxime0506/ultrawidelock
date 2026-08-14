@@ -30,6 +30,17 @@
 #include "aliro_ble.h"
 #include "aliro_lat.h"
 
+#if defined(WOZ_HAVE_MATTER) && WOZ_HAVE_MATTER
+/*
+ * A Matter build advertises two different things from one advertising set, and
+ * this file is the only place that can choose between them. An ESP-IDF build
+ * does not define WOZ_HAVE_MATTER and compiles none of it, byte for byte as
+ * before.
+ */
+#include "matter_ble_freertos.h"
+#include "matter_commission.h"
+#endif
+
 LOG_MODULE_REGISTER(aliro_ble, CONFIG_WOZ_ALIRO_LOG_LEVEL);
 
 /* L2CAP SPSM published to peers. Dynamic-PSM range is 0x0080..0x00FF; the value
@@ -63,9 +74,27 @@ static uint16_t s_read_payload_len;
 
 static uint8_t s_own_addr_type;
 
-/* start_attached() has brought the advertiser up on the shared host. Guards
- * aliro_ble_readvertise() so a params update before start is a no-op (start_attached
- * advertises with the current params itself). */
+/*
+ * The advertiser is up and its event queue exists. Guards aliro_ble_readvertise()
+ * and aliro_ble_time_updated(), both of which are no-ops before there is
+ * something to re-emit -- the bring-up path advertises with the current params
+ * itself, so a params update that arrives first needs no action.
+ *
+ * SET BY BOTH BRING-UP PATHS, which is the part that was missing. There are two:
+ * start_attached() for a port that shares an already-running host, and
+ * aliro_ble_host_sync() for a port that owns the host and advertises from
+ * NimBLE's sync callback. Only the first set this, so on the FreeRTOS port the
+ * flag stayed false forever and every refresh silently did nothing.
+ *
+ * What that cost: Apple sends SetAliroReaderConfig AFTER commissioning
+ * completes, so the reader is necessarily advertising something else when the
+ * GRK lands -- re-emitting is the whole mechanism by which a commissioned lock
+ * becomes approach-resolvable. With the refresh disabled the board kept
+ * advertising its commissionable payload, and a phone that had just been given
+ * a home key had no reader to approach: no ranging, no Wallet animation, and
+ * nothing in any log saying so, because refusing to re-advertise is what the
+ * flag is FOR.
+ */
 static bool s_attached;
 
 /* Provisioned Aliro advertising params (set via aliro_ble_set_adv_params). With
@@ -687,7 +716,27 @@ static void aliro_advertise(void)
 
 	fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 
-	if (s_adv_aliro && build_aliro_svc_data(svc_data)) {
+#if defined(WOZ_HAVE_MATTER) && WOZ_HAVE_MATTER
+	/*
+	 * A node that holds no fabric has to be findable by a commissioner, and a
+	 * provisioned reader would otherwise never be: build_aliro_svc_data()
+	 * succeeds as soon as there is a GRK, so without this test the Aliro tag
+	 * wins forever and the board is invisible in the Home app while looking
+	 * perfectly healthy on the bench.
+	 *
+	 * An OPEN COMMISSIONING WINDOW counts as not-commissioned even though the
+	 * node does hold a fabric. The Zephyr port records learning that on
+	 * hardware on 2026-08-03: without it, OpenCommissioningWindow kept
+	 * advertising the reader tag, so the second ecosystem the window was
+	 * opened for could never find the node it had just been invited to.
+	 */
+	const bool commissioned =
+		matter_commission_has_fabric() && !matter_commission_window_open();
+#else
+	const bool commissioned = true;
+#endif
+
+	if (commissioned && s_adv_aliro && build_aliro_svc_data(svc_data)) {
 		/* Full Aliro service data — what the iPhone resolves to approach-connect. */
 		fields.svc_data_uuid16 = svc_data;
 		fields.svc_data_uuid16_len = sizeof(svc_data);
@@ -701,6 +750,30 @@ static void aliro_advertise(void)
 		fields.name = (uint8_t *)name;
 		fields.name_len = (uint8_t)strlen(name);
 		fields.name_is_complete = 1;
+
+#if defined(WOZ_HAVE_MATTER) && WOZ_HAVE_MATTER
+		/*
+		 * The commissionable payload, in the same packet as the bare
+		 * Aliro UUID. A legacy advertisement carries 31 bytes and this
+		 * spends flags 3 + UUID 4 + Matter service data 12 = 19, so the
+		 * scanner affordance above is kept rather than traded away --
+		 * but the NAME has to go, because it would not fit and NimBLE
+		 * would fail the whole set rather than drop one element.
+		 *
+		 * One set, not two: CONFIG_BT_EXT_ADV is what a second would
+		 * cost, and this part has no flash to spend on it.
+		 */
+		static uint8_t matter_svc_data[MATTER_BLE_SVC_DATA_LEN];
+
+		if (matter_ble_commissionable_svc_data(matter_svc_data,
+						       sizeof(matter_svc_data)) == 0) {
+			fields.name = NULL;
+			fields.name_len = 0;
+			fields.name_is_complete = 0;
+			fields.svc_data_uuid16 = matter_svc_data;
+			fields.svc_data_uuid16_len = sizeof(matter_svc_data);
+		}
+#endif
 	}
 
 	int rc = ble_gap_adv_set_fields(&fields);
@@ -718,7 +791,13 @@ static void aliro_advertise(void)
 	rc = ble_gap_adv_start(s_own_addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
 	if (rc != 0) {
 		LOG_ERR("adv_start rc=%d", rc);
+		return;
 	}
+	/* Which of the two the board is offering is the first thing to check on a
+	 * bench, and it is not otherwise visible without a sniffer. */
+	LOG_INF("advertising: %s", fields.svc_data_uuid16_len == sizeof(svc_data)
+					   ? "Aliro reader 0xFFF2"
+					   : "unprovisioned or uncommissioned");
 }
 
 // NimBLE host sync callback: ensures a device address exists, infers the own address type,
@@ -742,6 +821,9 @@ void aliro_ble_host_sync(void)
 	}
 	LOG_INF("NimBLE synced; advertising as Aliro reader (SPSM 0x%04x)",
 		 (unsigned)ALIRO_L2CAP_SPSM);
+	/* Before advertising, not after: this is what lets a later
+	 * SetAliroReaderConfig re-emit the payload. See s_attached. */
+	s_attached = true;
 	aliro_advertise();
 }
 

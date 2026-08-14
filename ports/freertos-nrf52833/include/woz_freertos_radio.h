@@ -79,6 +79,24 @@ void woz_freertos_radio_radio_isr(void);
 void woz_freertos_radio_rtc0_isr(void);
 void woz_freertos_radio_timer0_isr(void);
 void woz_freertos_radio_power_clock_isr(void);
+
+/**
+ * Watch the POWER half of the POWER_CLOCK vector, after MPSL has had it.
+ *
+ * MPSL owns this vector and the CLOCK events on it, but the POWER peripheral's
+ * USB supply events -- USBDETECTED, USBREMOVED, USBPWRRDY -- arrive on the same
+ * line and MPSL neither reads nor clears them. The USB stack cannot install its
+ * own handler here, so it registers one and this port calls it.
+ *
+ * A handler runs at MPSL's priority, which is 0. That is ABOVE the FreeRTOS
+ * syscall ceiling, so it may not call any FreeRTOS API, FromISR or otherwise.
+ * It must check its own POWER events and clear them.
+ *
+ * Returns 0, or -1 if @p fn is NULL or the single slot is taken. One slot,
+ * because USB is the only thing on this board with a reason to watch POWER.
+ */
+typedef void (*woz_freertos_power_handler)(void);
+int woz_freertos_radio_set_power_handler(woz_freertos_power_handler fn);
 void woz_freertos_radio_low_priority_isr(void);
 
 #endif /* WOZ_FREERTOS_RADIO_H */

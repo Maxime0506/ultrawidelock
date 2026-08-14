@@ -301,8 +301,8 @@ static void test_osal(void)
 
 	CHECK("OSAL init starts the static dispatcher and runs hooks", woz_osal_init_all() == 0 &&
 							   fake_task_count == 1 && g_init_runs == 1);
-	CHECK("OSAL dispatcher uses the configured 4096-byte stack",
-	      fake_task_stack_depth * sizeof(StackType_t) == 4096);
+	CHECK("OSAL dispatcher uses the configured 2560-byte stack",
+	      fake_task_stack_depth * sizeof(StackType_t) == 2560);
 	dispatch_entry = fake_task_entry;
 	dispatch_arg = fake_task_arg;
 	CHECK("OSAL init is idempotent", woz_osal_init_all() == 0 && fake_task_count == 1 &&
@@ -429,11 +429,14 @@ static void test_mpsl_runtime(void)
 
 	CHECK("MPSL rejects a missing low-priority processor",
 	      woz_freertos_mpsl_start(NULL) == -1);
-	CHECK("MPSL starts one static highest-priority system task",
+	/* One below the top on purpose: the DW3110 worker owns configMAX_PRIORITIES - 1
+	 * alone, so its notify preempts a running pump pass (configUSE_TIME_SLICING is 0,
+	 * so an equal-priority pump would hold the worker off until it blocked). */
+	CHECK("MPSL starts one static system task just below the UWB worker",
 	      woz_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
 		      fake_task_count == 4 &&
-		      fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
-		      fake_task_priority == configMAX_PRIORITIES - 1 &&
+		      fake_task_stack_depth * sizeof(StackType_t) == 1024 &&
+		      fake_task_priority == configMAX_PRIORITIES - 2 &&
 		      woz_freertos_mpsl_ready());
 	CHECK("MPSL start is idempotent for the same processor",
 	      woz_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
@@ -540,7 +543,7 @@ static void test_nimble_sdc_transport(void)
 	      woz_freertos_nimble_sdc_configure(&ops) == 0);
 	ble_transport_ll_init();
 	CHECK("NimBLE/SDC starts one static receive task",
-	      fake_task_count == 5 && fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
+	      fake_task_count == 5 && fake_task_stack_depth * sizeof(StackType_t) == 1024 &&
 		      fake_task_priority == tskIDLE_PRIORITY + 2);
 	entry = fake_task_entry;
 	arg = fake_task_arg;
@@ -630,9 +633,16 @@ static void test_nimble_sdc_transport(void)
 	 * here proves the include order is right in every build that compiles
 	 * the transport, not just on the target.
 	 */
+	/*
+	 * COC_MAX_NUM is 2 because this image registers two L2CAP servers: the
+	 * Aliro reader's SPSM and the update channel on 0x0081. The value sizes
+	 * NimBLE's server pool, so at 1 the second ble_l2cap_create_server()
+	 * fails with BLE_HS_ENOMEM at registration -- and the image still boots,
+	 * still advertises, and simply has no way to be updated.
+	 */
 	CHECK("the port's NimBLE configuration overrides the upstream defaults",
 	      MYNEWT_VAL(BLE_ROLE_CENTRAL) == 0 && MYNEWT_VAL(BLE_ROLE_OBSERVER) == 0 &&
-		      MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM) == 1 && MYNEWT_VAL(BLE_SM_SC) == 1 &&
+		      MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM) == 2 && MYNEWT_VAL(BLE_SM_SC) == 1 &&
 		      MYNEWT_VAL(BLE_SM_LEGACY) == 0);
 
 	notifications = fake_task_notify_calls;

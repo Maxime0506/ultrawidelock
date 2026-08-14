@@ -32,11 +32,120 @@
 #define OPENTHREAD_CONFIG_ENABLE_BUILTIN_MBEDTLS_MANAGEMENT 0
 
 /*
+ * NO TCP. Upstream defaults OPENTHREAD_CONFIG_TCP_ENABLE to ON, and this file
+ * takes upstream defaults for everything it does not name -- so leaving it out
+ * was a choice by omission, which is the kind this port keeps paying for.
+ *
+ * The oracle turns it off (its .config carries
+ * "# CONFIG_OPENTHREAD_TCP_ENABLE is not set"), and it is right to: Matter over
+ * Thread is UDP, the SRP client is UDP, and a lock MTD has no TCP caller
+ * anywhere. What the default was buying is tcplp, OpenThread's TCP-lite stack,
+ * MEASURED at 17,715 bytes of flash in this image's linker map before it was
+ * turned off.
+ *
+ * Found by a review comparing this port's config against the oracle's, not by
+ * anything in this build complaining. Nothing would have: an unreachable TCP
+ * stack links quietly.
+ */
+#define OPENTHREAD_CONFIG_TCP_ENABLE 0
+
+/*
+ * STATELESS ADDRESS AUTOCONFIGURATION, which is what makes this node reachable
+ * rather than merely attached.
+ *
+ * Upstream defaults OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE to 0, and this file
+ * takes upstream defaults for everything it does not name -- the same choice by
+ * omission that left TCP linked above, except this one costs function instead
+ * of flash. Without SLAAC the node holds only link-local and mesh-local
+ * addresses, and neither leaves the Thread mesh.
+ *
+ * WHAT THAT LOOKS LIKE, because every layer reports success: PASE completes,
+ * AddNOC returns status 0, the node attaches as a child, and the SRP client
+ * registers with host state 6. Then the commissioner resolves the name it just
+ * registered, gets the mesh-local EID, routes nowhere from Wi-Fi, and sits on
+ * "connecting" until it gives up. Confirmed from the other side on 2026-08-14:
+ * the border router republished this node as
+ * _matter._tcp / F4CE3633412E4223-F94FD6FF.local, and dns-sd resolved it to a
+ * single FDE0:E83D:... address -- the mesh-local prefix. matter_thread_port.c
+ * warns about it in exactly those words, and the warning was right.
+ *
+ * The oracle carries this as CONFIG_OPENTHREAD_SLAAC=y in overlay-thread.conf
+ * and its comment describes this failure from having measured it. Being ON a
+ * network is not being REACHABLE on it.
+ */
+#define OPENTHREAD_CONFIG_IP6_SLAAC_ENABLE 1
+
+/*
  * The microsecond alarm stays at upstream's default of off, which
  * thread/ot_alarm_freertos.c relies on: it implements the millisecond alarm
  * only, and make freertos-radio-source-check fails if that default ever
  * changes. Stated here as a comment rather than a define because the file it
  * lives in tests it with #if and upstream already answers zero.
  */
+
+/*
+ * The SRP client, which is how a Matter node becomes findable on Thread.
+ *
+ * The oracle turns this on as CONFIG_OPENTHREAD_SRP_CLIENT in
+ * overlay-thread.conf. Without it the shared Matter transport does not link --
+ * otSrpClientAddService, otSrpClientRemoveService and the auto-start entry
+ * points are simply absent -- and if it somehow did, the node would attach to
+ * Thread, hold a fabric, and never publish a service for the controller to
+ * find. That failure looks like an accessory that commissions and then goes
+ * missing, which is the expensive kind.
+ *
+ * ECDSA comes with it and is not optional: the SRP client signs its
+ * registrations, and name ownership on the border router is by KEY. The
+ * host-name suffix logic in the shared transport exists precisely because that
+ * key outlives a name.
+ *
+ * Only defined for a build that has Matter. A reader-only image has nothing to
+ * publish, and this is several kilobytes of flash on a part that has none to
+ * spare.
+ */
+#if defined(WOZ_HAVE_MATTER) && WOZ_HAVE_MATTER
+#define OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE 1
+#define OPENTHREAD_CONFIG_ECDSA_ENABLE 1
+
+/*
+ * ECDSA THROUGH PSA, NOT THROUGH MBED TLS'S PK LAYER.
+ *
+ * This selects the second half of crypto_platform.cpp -- the branch at its
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA guard -- so otPlatCryptoEcdsa* is
+ * implemented with psa_sign_hash and friends rather than mbedtls_pk_parse_key
+ * and mbedtls_ecdsa_sign_det_ext.
+ *
+ * The port still implements none of otPlatCrypto: OpenThread compiles the PSA
+ * branch itself, exactly as it compiled the Mbed TLS one. What changes is which
+ * library it lands on, and that is worth 9,690 bytes of flash -- the PK, ECP,
+ * BIGNUM, ASN1 and OID modules stop being linked, while the P-256 arithmetic
+ * this image already carried for the reader is reused.
+ *
+ * KEY REFERENCES are what make it persistent. Without them OpenThread would
+ * hold the SRP key as bytes and this would be a pure code-size trade; with them
+ * the key lives in PSA storage, which is crypto/psa_its_freertos.c over the
+ * port's key-value store. That matters beyond size: name ownership on a border
+ * router is by KEY, so an SRP key that did not survive a reboot would make the
+ * node ask for a name the server still holds under the old one -- refused for
+ * the length of the key lease, with no symptom but a node that attaches to
+ * Thread and never registers.
+ */
+#define OPENTHREAD_CONFIG_CRYPTO_LIB OPENTHREAD_CONFIG_CRYPTO_LIB_PSA
+#define OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE 1
+
+/*
+ * The KeyManager half of exportable MAC keys. See
+ * thread/ot_compat/woz_freertos_ot_config.h for why the radio needs the literal
+ * bytes at all; this line is what lets it have them. KeyManager reads it as
+ * kExportableMacKeys and imports the MAC keys with PSA_KEY_USAGE_EXPORT, and
+ * without it the export the radio performs is refused by PSA at the policy
+ * check rather than at compile time.
+ *
+ * Both symbols are set together and neither is useful alone. Zephyr expresses
+ * that with a single Kconfig option that feeds both; here it is two defines in
+ * two files, which is the cost of not having Kconfig.
+ */
+#define OPENTHREAD_CONFIG_PLATFORM_MAC_KEYS_EXPORTABLE_ENABLE 1
+#endif
 
 #endif /* WOZ_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */

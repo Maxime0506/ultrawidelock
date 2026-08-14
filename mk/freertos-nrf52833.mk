@@ -78,8 +78,54 @@ FREERTOS_BUILD_DIR ?= $(REPO_ROOT)/build/freertos-nrf52833
 # toolchain rather than a lost setting.
 FREERTOS_TOOLCHAIN_ARG = $(if $(WOZ_ARM_TOOLCHAIN_DIR),-DWOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR))
 
+# Off by default until the DW3110 arm deadline is measured under it. Passed
+# explicitly on every configure rather than left to the cache, for the same
+# reason as the toolchain above: a setting the cache remembers and the command
+# line does not is a setting nobody can see in the build they just ran.
+FREERTOS_LTO ?= OFF
+
+# The USB provisioning console: 18,151 B of flash and 10,249 B of RAM, all of
+# it serving a mode that runs only when SW2 is held through reset. A Matter
+# node self-provisions and does not need it.
+FREERTOS_PROV_CONSOLE ?= ON
+
+# The Matter node. Off until the BLE commissioning transport exists: the
+# protocol and the Thread half link today, but a node a commissioner cannot
+# reach over BLE is not one anybody can add to a home.
+FREERTOS_MATTER ?= OFF
+
+# 1 error, 2 warning, 3 info, 4 debug. The gate is at the call site, so a lower
+# level removes the format strings too rather than only their output.
+FREERTOS_LOG_LEVEL ?= 3
+
+# RTT up-buffer bytes. Empty keeps the port's 1 kB, which reaches the end of
+# bring-up and no further because a full buffer drops writes instead of
+# overwriting. Raise it to watch anything talkative -- a BTP handshake, a
+# commissioning attempt -- and remember it is static RAM on a part with about
+# 8 kB spare.
+FREERTOS_RTT_BUFFER ?=
+
+# GCC -flto-partition. 1to1 keeps code generation on translation-unit
+# boundaries; it was forced by an assembler "offset out of range" when the
+# kernel, device and Thread layers were still inside the LTO set, and it costs
+# most of the cross-unit code motion LTO exists for.
+FREERTOS_LTO_PARTITION ?= 1to1
+
+# Turning the console off removes the USBD vector, and freertos-vector-check.sh
+# is told which OWNER went rather than being left to infer it from a missing
+# handler. Inferring it would make a deliberate exclusion and a dropped handler
+# look identical, which is the failure that check exists to prevent.
+FREERTOS_VECTOR_EXCLUDES = $(if $(filter OFF,$(FREERTOS_PROV_CONSOLE)),--without=usb_provisioning_console)
+
 FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
+	-DWOZ_LTO=$(FREERTOS_LTO) \
+	-DWOZ_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
+	-DWOZ_MATTER=$(FREERTOS_MATTER) \
+	-DWOZ_LOG_LEVEL=$(FREERTOS_LOG_LEVEL) \
+	-DWOZ_LOG_RTT_BUFFER=$(FREERTOS_RTT_BUFFER) \
+	-DWOZ_LTO_PARTITION=$(FREERTOS_LTO_PARTITION) \
+	-DWOZ_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
 	-DWOZ_NCS_WORKSPACE=$(NCS_WORKSPACE) \
@@ -108,3 +154,34 @@ freertos-build:
 	@# than kept as a target someone remembers to run, because this port has
 	@# already had a check rot in exactly that position.
 	@cmake --build $(FREERTOS_BUILD_DIR) --target woz_uwb_reach
+	@# Every vector peripherals.yml gives an owner must reach that owner. The
+	@# vector table is data, so a weak alias no owner overrode links cleanly and
+	@# resolves to default_handler -- an infinite loop the first interrupt falls
+	@# into. RNG and RTC2 both shipped that way and cost a hardware debugging
+	@# session; this makes the next one a build failure.
+	@WOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR) \
+		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
+		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf \
+		$(FREERTOS_VECTOR_EXCLUDES)
+	@# The shared Matter Thread transport is compiled from the Zephyr port
+	@# tree unmodified. A rename on that side compiles fine THERE and lands
+	@# here as an unknown settings path at run time, whose only symptom is an
+	@# SRP host name that changes every boot -- a node that attaches to
+	@# Thread and never registers. Held closed at build time instead.
+	@$(if $(filter ON,$(FREERTOS_MATTER)),$(REPO_ROOT)/scripts/freertos-matter-source-check.sh)
+	@# The pairing code, re-derived rather than quoted. The device stores only
+	@# the SPAKE2+ verifier and never the passcode, so nothing on the board can
+	@# notice that the two stopped agreeing -- and they did, silently, when the
+	@# verifier was carried into this port's header and a comment naming CHIP's
+	@# test passcode came with it. On hardware that reads as a healthy board
+	@# that reaches Pake2 and gets hung up on. The Zephyr build has run this
+	@# check from its .config all along; this is the same check for a build that
+	@# has no .config, and it fails the build rather than printing a code that
+	@# would not work.
+	@$(if $(filter ON,$(FREERTOS_MATTER)),python3 $(REPO_ROOT)/scripts/freertos-pairing-code.py)
+	@# newlib-nano's printf does not implement ll. A format it cannot honour
+	@# consumes the wrong argument width, so the next %s dereferences a data
+	@# value -- a bus fault into default_handler, which spins and takes the
+	@# tick with it. The board then prints a complete boot log and goes
+	@# silent, which is why this is a build failure and not a review item.
+	@$(REPO_ROOT)/scripts/freertos-printf-check.sh

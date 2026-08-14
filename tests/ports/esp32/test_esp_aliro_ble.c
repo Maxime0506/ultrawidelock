@@ -229,6 +229,24 @@ static void t_standalone_start(void)
 	/* Sync callback ensures an address and starts advertising. */
 	okc("sync/reset callbacks installed",
 	    ble_hs_cfg.sync_cb != NULL && ble_hs_cfg.reset_cb != NULL);
+
+	/*
+	 * Refreshes are no-ops until the advertiser is up, and "up" means either
+	 * bring-up path -- this port's is the sync callback below, not
+	 * start_attached(). Checked HERE because that is the last moment the
+	 * unbrought-up state exists; it used to be checked after the callback had
+	 * already run, which passed only because the flag was never set on this
+	 * path at all. That was the bug: every later re-advertise silently did
+	 * nothing, and SetAliroReaderConfig arrives after commissioning, so a
+	 * provisioned reader never became approach-resolvable.
+	 */
+	fake_gap_adv_starts = 0;
+	fake_eventq_count = 0;
+	aliro_ble_readvertise();
+	okc("readvertise before bring-up: no-op", fake_gap_adv_starts == 0);
+	aliro_ble_time_updated();
+	okc("time_updated before bring-up: no event", fake_eventq_count == 0);
+
 	fake_gap_adv_starts = 0;
 	ble_hs_cfg.sync_cb();
 	okc("on_sync advertises", fake_gap_adv_starts == 1);
@@ -265,14 +283,21 @@ static void t_attach_and_advert(void)
 {
 	printf("-- D: attach + advert assembly --\n");
 
-	/* readvertise before attach is a no-op. */
+	/*
+	 * The host has already synced in the previous case, so the advertiser is
+	 * up and a refresh must now REACH the radio. This is the property the
+	 * FreeRTOS and ESP32 ports both depend on: Apple sends
+	 * SetAliroReaderConfig after commissioning completes, and re-emitting is
+	 * the only way a reader that advertised something else becomes
+	 * approach-resolvable. The pre-bring-up no-op is checked in case C.
+	 */
 	fake_gap_adv_starts = 0;
 	aliro_ble_readvertise();
-	okc("readvertise before attach: no-op", fake_gap_adv_starts == 0);
+	okc("readvertise after sync: re-emits", fake_gap_adv_starts == 1);
 
-	/* time_updated before attach is a no-op. */
+	fake_eventq_count = 0;
 	aliro_ble_time_updated();
-	okc("time_updated before attach: no event", fake_eventq_count == 0);
+	okc("time_updated after sync: event queued", fake_eventq_count == 1);
 
 	/* attach failure: infer_auto rejects. */
 	fake_hs_id_infer_rc = 1;

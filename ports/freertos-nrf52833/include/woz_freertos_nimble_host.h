@@ -33,6 +33,9 @@ enum woz_freertos_nimble_host_stage {
  * nimble_port_init() creates, and they must be registered before the host task
  * begins processing events. A product that registered them from its own task
  * would be racing the sync it is registering for.
+ *
+ * Either member may be NULL; a registrant that only adds services does not
+ * have to care about sync.
  */
 struct woz_freertos_nimble_host_hooks {
 	/** Runs after nimble_port_init(), before the host task is created.
@@ -43,10 +46,36 @@ struct woz_freertos_nimble_host_hooks {
 };
 
 /**
- * Install the hooks. Call before woz_freertos_nimble_host_start(); afterwards
- * has no effect on a sequence that already ran. Passing NULL clears them.
+ * More than one, because this image has more than one BLE service.
+ *
+ * The Aliro reader and the update channel each own a GATT service and an L2CAP
+ * CoC server, and neither knows the other exists -- the reader is shared with
+ * the ESP32 port and the update channel is shared with the Zephyr one. Making
+ * one call the other would couple two layers that have no reason to meet.
+ *
+ * Three since the Matter commissioning transport joined them: it owns the
+ * 0xFFF6 service and observes GAP through a listener rather than the connection
+ * callback, for the same reason -- the reader owns the advertising set and
+ * therefore that callback. A build without WOZ_MATTER simply never adds the
+ * third, so the slot costs one pointer pair it does not use.
  */
-void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_hooks *hooks);
+#define WOZ_FREERTOS_NIMBLE_HOST_HOOKS_MAX 3u
+
+/**
+ * Add a registrant to the startup sequence.
+ *
+ * Call before woz_freertos_nimble_host_start(); afterwards has no effect on a
+ * sequence that already ran. Copied by value, so @p hooks may be a stack local.
+ *
+ * Registrants run in the order they were added, which is the order their
+ * services appear in the attribute table -- so a product that cares about
+ * handle numbers controls them by ordering these calls.
+ *
+ * Returns 0, or -1 if @p hooks is NULL or the table is full. Passing NULL is
+ * not how the table is cleared; nothing clears it, because a BLE service is
+ * registered once per boot.
+ */
+int woz_freertos_nimble_host_add_hooks(const struct woz_freertos_nimble_host_hooks *hooks);
 
 /**
  * Bring up the controller and then the NimBLE host, and schedule host/

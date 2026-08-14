@@ -76,4 +76,44 @@ void woz_freertos_log_va(enum woz_freertos_log_level level, const char *tag, con
 void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag,
 			      const void *data, size_t len, const char *message);
 
+/*
+ * THE LEVEL GATE HAS TO BE AT THE CALL SITE, not inside the sink.
+ *
+ * It used to be inside: woz_freertos_log() compared the level and returned
+ * early. That suppresses the OUTPUT and keeps every format string, every
+ * argument evaluation and every call in the image, so lowering the level cost a
+ * rebuild and saved nothing. Measured before this changed -- an image built at
+ * WARNING was the same size as one built at INFO, to the byte.
+ *
+ * As a macro over the same name the comparison happens on a constant, the
+ * branch folds away, and the string it referenced becomes unreachable for
+ * --gc-sections to drop. Every existing call site keeps working unchanged: C
+ * forbids a function-like macro from expanding inside its own expansion, so the
+ * inner name is the real function.
+ *
+ * The two calls that pass a computed level both live in the sink's own
+ * implementation, which defines WOZ_FREERTOS_LOG_NO_MACRO before including this
+ * header -- it has to, or the macro would rewrite the function's own
+ * definition.
+ */
+#ifndef WOZ_FREERTOS_LOG_MAX_LEVEL
+#define WOZ_FREERTOS_LOG_MAX_LEVEL WOZ_FREERTOS_LOG_INFO
+#endif
+
+#ifndef WOZ_FREERTOS_LOG_NO_MACRO
+#define woz_freertos_log(level, ...)                                                               \
+	do {                                                                                       \
+		if ((level) <= (WOZ_FREERTOS_LOG_MAX_LEVEL)) {                                     \
+			woz_freertos_log((level), __VA_ARGS__);                                    \
+		}                                                                                  \
+	} while (0)
+
+#define woz_freertos_log_hexdump(level, tag, data, len, message)                                   \
+	do {                                                                                       \
+		if ((level) <= (WOZ_FREERTOS_LOG_MAX_LEVEL)) {                                     \
+			woz_freertos_log_hexdump((level), (tag), (data), (len), (message));        \
+		}                                                                                  \
+	} while (0)
+#endif
+
 #endif /* WOZ_FREERTOS_PLATFORM_H */

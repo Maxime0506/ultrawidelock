@@ -16,12 +16,26 @@
 #error "The MPSL worker requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
+/*
+ * Measured on hardware 2026-08-14: 300 B peak with BLE and 802.15.4 both
+ * live (commissioned node, active ranging). The worker only pumps
+ * mpsl_low_priority_process(); 1024 is 3.4x that peak.
+ */
 #ifndef WOZ_FREERTOS_MPSL_STACK_BYTES
-#define WOZ_FREERTOS_MPSL_STACK_BYTES 2048u
+#define WOZ_FREERTOS_MPSL_STACK_BYTES 1024u
 #endif
 
+/*
+ * One below the DW3110 worker, above every other task. The worker owns the top
+ * level alone: configUSE_TIME_SLICING is 0, so at EQUAL priority a pump pass
+ * already running when the DW3110's notification lands would keep the CPU
+ * until it blocked, delaying the IRQ-to-task hop inside the ~1,836 us arm
+ * window. One level down, the notify preempts the pump immediately, and MPSL's
+ * time-critical work is unaffected either way -- it runs in its priority-0
+ * interrupts, not here.
+ */
 #ifndef WOZ_FREERTOS_MPSL_TASK_PRIORITY
-#define WOZ_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 1u)
+#define WOZ_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 2u)
 #endif
 
 #define MPSL_STACK_WORDS                                                                \

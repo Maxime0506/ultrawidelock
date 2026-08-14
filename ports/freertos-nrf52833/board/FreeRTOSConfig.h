@@ -25,7 +25,17 @@
 #define configIDLE_SHOULD_YIELD 1
 #define configUSE_16_BIT_TICKS 0
 #define configMAX_TASK_NAME_LEN 12
-#define configMAX_PRIORITIES 7
+/*
+ * Eight rather than seven, so the top level can belong to the DW3110 worker
+ * ALONE. configUSE_TIME_SLICING is 0, so a task made ready at the priority of
+ * the RUNNING task does not preempt it -- and when the worker shared its level
+ * with the MPSL pump, a pump pass that happened to be running when the DW3110
+ * raised its line held the worker off until it blocked, spending an unbounded
+ * bite of the ~1,836 us window the chip gives to arm a response. The pump sits
+ * one below (radio/mpsl_freertos.c) and still outranks everything else. The
+ * extra level costs one ready list.
+ */
+#define configMAX_PRIORITIES 8
 #define configENABLE_BACKWARD_COMPATIBILITY 0
 
 /*
@@ -66,12 +76,15 @@
  * Mbed TLS allocates bignums per operation. Everything else in this port is
  * static.
  *
- * The size is a first-link measurement, not a derivation, and it is expected to
- * move once the image links and the heap high-water mark can be read.
+ * The high-water mark has now been read: xMinimumEverFreeBytesRemaining was
+ * 6,640 on hardware on 2026-08-14 (5,648 B peak use) on a commissioned node
+ * after a full UWB walk-up. That boot did not run PASE, whose Mbed TLS
+ * transients are the one heavy path not in the measurement, so this keeps
+ * 4.5 KB over the observed floor instead of trimming to it.
  */
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
 #ifndef configTOTAL_HEAP_SIZE
-#define configTOTAL_HEAP_SIZE ((size_t)12 * 1024)
+#define configTOTAL_HEAP_SIZE ((size_t)10 * 1024)
 #endif
 
 /* NimBLE callouts are FreeRTOS software timers; ble/nimble_host_freertos.c

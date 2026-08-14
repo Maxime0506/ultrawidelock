@@ -19,7 +19,7 @@ SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c"
 mkdir -p "$OUT"
 
 build() { # <source> <binary>
-	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS \
+	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS -DWOZ_FREERTOS_LOG_NO_MACRO \
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -32,6 +32,7 @@ build() { # <source> <binary>
 		"$HERE/fake/fake_gpiote.c" \
 		"$HERE/fake/fake_spim.c" \
 		"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+		"$ROOT/ports/freertos-nrf52833/board/gpiote_freertos.c" \
 		"$1" \
 		-o "$2"
 }
@@ -39,6 +40,11 @@ build() { # <source> <binary>
 MUTATIONS=(
 	"the GPIOTE channel is enabled but never bound to the pin ::: 	nrf_gpiote_event_configure(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
 				   NRF_GPIOTE_POLARITY_LOTOHI);
+ ::: "
+	"the line is never registered on the shared GPIOTE vector ::: 	if (woz_freertos_gpiote_add_handler(woz_freertos_dw3000_irq_handler) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, \"no GPIOTE handler slot\");
+		return -1;
+	}
  ::: "
 	"the channel watches the wrong edge ::: NRF_GPIOTE_POLARITY_LOTOHI ::: NRF_GPIOTE_POLARITY_HITOLO"
 	"the channel is configured but left disabled ::: nrf_gpiote_event_enable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
@@ -73,14 +79,22 @@ MUTATIONS=(
 	/* Long enough"
 	"reset comes up driven instead of released ::: 	nrf_gpio_cfg_input(WOZ_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
-	/* Wake line ::: 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_RST);
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_RST);
 
-	/* Wake line"
+	/*
+	 * Wake line"
 	"waking does not wait for the chip to reach IDLE_RC ::: 	woz_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
 	s_asleep = false; ::: 	s_asleep = false;"
 	"reset does not let the chip climb to IDLE_RC before returning ::: 	/* Long enough for the chip to climb from INIT_RC to IDLE_RC. */
 	woz_freertos_busy_wait_us(2000); ::: "
-	"the wake line comes up deasserted ::: nrf_gpio_pin_set(WOZ_DW3000_PIN_WAKEUP); ::: nrf_gpio_pin_clear(WOZ_DW3000_PIN_WAKEUP);"
+	"bring-up drives a pin the part does not have ::: 	nrf_gpio_cfg_input(WOZ_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_input(51u, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line"
 	"waking an already awake chip strobes it anyway ::: 	if (!s_asleep) {
 		return;
 	}

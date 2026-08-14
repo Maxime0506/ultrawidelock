@@ -32,8 +32,27 @@
 #error "NimBLE callouts are FreeRTOS software timers; set configUSE_TIMERS=1"
 #endif
 
+/*
+ * 6144, NOT 4096, and the reason is the Aliro access protocol, not NimBLE.
+ *
+ * The L2CAP CoC receive path calls the reader's message processing inline on
+ * this task, so AUTH1 verification -- ECDSA verify, ECDH and the session key
+ * derivation, all software P-256 with deep bignum frames -- runs on the stack
+ * sized here. At 4096 the port faulted with a FreeRTOS stack overflow on
+ * 2026-08-14, on the FIRST full-auth walk-up this port ever executed:
+ * processing msg #3 in phase SENT_AUTH1, on a commissioned node with Matter
+ * alongside. Nothing shorter of a real phone with a real home key reaches that
+ * code, which is why every earlier bench pass survived at 4096.
+ *
+ * The oracle made the same mistake first and measured the answer:
+ * overlay-thread.conf raised its equivalent thread from 4096 after faulting
+ * twice in the same phase, and records a painted peak of 3,872 B of 6,144
+ * after a full-auth unlock -- 4096 was 224 B short, and the peak moves with
+ * whatever overlaps the unlock. Matching its figure rather than re-deriving
+ * one: this is the stack that has already faulted on two ports.
+ */
 #ifndef WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES
-#define WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES 4096u
+#define WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES 6144u
 #endif
 
 /*
@@ -57,16 +76,19 @@ static StackType_t s_stack[HOST_STACK_WORDS];
 static bool s_ready;
 static volatile bool s_synced;
 static volatile uint32_t s_resets;
-static struct woz_freertos_nimble_host_hooks s_hooks;
+static struct woz_freertos_nimble_host_hooks s_hooks[WOZ_FREERTOS_NIMBLE_HOST_HOOKS_MAX];
+static size_t s_hook_count;
 
-void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_hooks *hooks)
+int woz_freertos_nimble_host_add_hooks(const struct woz_freertos_nimble_host_hooks *hooks)
 {
-	if (hooks == NULL) {
-		s_hooks.register_services = NULL;
-		s_hooks.on_sync = NULL;
-		return;
+	if (hooks == NULL || s_hook_count >= WOZ_FREERTOS_NIMBLE_HOST_HOOKS_MAX) {
+		return -1;
 	}
-	s_hooks = *hooks;
+	/* By value: the callers pass file-scope statics today, and one that
+	 * passed a stack local would otherwise leave a pointer into a frame
+	 * that is gone by the time the sequence runs. */
+	s_hooks[s_hook_count++] = *hooks;
+	return 0;
 }
 
 bool woz_freertos_nimble_host_ready(void)
@@ -91,8 +113,10 @@ static void on_sync(void)
 	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, WOZ_FREERTOS_NIMBLE_HOST_TAG,
 			 "host synced with the controller");
 	/* After the flag, so a hook that advertises sees a synced host. */
-	if (s_hooks.on_sync != NULL) {
-		s_hooks.on_sync();
+	for (size_t i = 0; i < s_hook_count; i++) {
+		if (s_hooks[i].on_sync != NULL) {
+			s_hooks[i].on_sync();
+		}
 	}
 }
 
@@ -146,11 +170,18 @@ int woz_freertos_nimble_host_start(void)
 	 * Between the pools existing and the host task consuming events: service
 	 * tables need the former and must be registered before the latter.
 	 */
-	if (s_hooks.register_services != NULL) {
-		rc = s_hooks.register_services();
+	for (size_t i = 0; i < s_hook_count; i++) {
+		if (s_hooks[i].register_services == NULL) {
+			continue;
+		}
+		rc = s_hooks[i].register_services();
 		if (rc != 0) {
+			/* Fatal rather than skipped. A registrant that could not
+			 * add its service leaves an image advertising a profile
+			 * it does not implement, and the peer only finds out
+			 * after connecting. */
 			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_NIMBLE_HOST_TAG,
-					 "service registration failed rc=%d", rc);
+					 "service registration %u failed rc=%d", (unsigned)i, rc);
 			return -WOZ_FREERTOS_NIMBLE_HOST_STAGE_SERVICES;
 		}
 	}

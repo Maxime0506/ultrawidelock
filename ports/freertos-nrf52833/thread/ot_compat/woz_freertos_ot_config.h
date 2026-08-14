@@ -46,6 +46,69 @@
 #define CONFIG_OPENTHREAD_PLATFORM_LOG_LEVEL 3
 
 /*
+ * Nordic's PSA crypto platform, compiled only into a build that has Matter.
+ *
+ * crypto_psa.c selects its behaviour with these the same way radio_nrf5.c
+ * selects its own. It supplies the whole otPlatCrypto surface, which
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_PSA makes the platform's responsibility.
+ */
+#if defined(WOZ_HAVE_MATTER) && WOZ_HAVE_MATTER
+#define CONFIG_OPENTHREAD_CRYPTO_PSA 1
+/* The SRP client signs with ECDSA; this is what compiles that half in. */
+#define CONFIG_OPENTHREAD_ECDSA 1
+/*
+ * Keys persist through PSA's Internal Trusted Storage, which is
+ * crypto/psa_its_freertos.c over the port's key-value store. The KMU backend is
+ * the alternative and belongs to parts that have a Key Management Unit; this
+ * one does not.
+ */
+#define CONFIG_OPENTHREAD_PSA_NVM_BACKEND_ITS 1
+/*
+ * Where OpenThread's PSA key ids start. Matches the oracle, which the shared
+ * Matter transport records as OPENTHREAD_CONFIG_PSA_ITS_NVM_OFFSET (0x20000)
+ * plus 1..7. The value only has to avoid colliding with another PSA user's
+ * ids, and nothing else in this image allocates persistent PSA keys.
+ */
+#define CONFIG_OPENTHREAD_PSA_ITS_NVM_OFFSET 0x20000
+/*
+ * EXPORTABLE MAC KEYS, which key references make mandatory rather than optional.
+ *
+ * Once OpenThread holds its keys as PSA references, otPlatRadioSetMacKeys is
+ * handed OT_KEY_TYPE_KEY_REF instead of key bytes. The nRF 802.15.4 driver
+ * cannot use a reference: it encrypts frames in hardware and needs the sixteen
+ * literal bytes in its own key store. radio_nrf5.c bridges that by exporting
+ * each key through otPlatCryptoExportKey -- but only inside
+ * #if defined(CONFIG_OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE). Without this
+ * symbol it compiles the other branch, which asserts the type is a literal key,
+ * and that assertion is unreachable-by-design code that this port reached.
+ *
+ * Zephyr coupled the two: modules/openthread/Kconfig has
+ * "imply OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE" on OPENTHREAD_CRYPTO_PSA,
+ * so no Kconfig build can choose PSA crypto and forget this. A hand-written
+ * config has no imply, and the omission is invisible until a radio key is set.
+ *
+ * It also has to be told to OpenThread itself, as
+ * OPENTHREAD_CONFIG_PLATFORM_MAC_KEYS_EXPORTABLE_ENABLE in
+ * thread/openthread_project_config.h: this symbol only decides what radio_nrf5.c
+ * compiles, while that one decides whether KeyManager imports the MAC keys with
+ * PSA_KEY_USAGE_EXPORT set. Enabling one without the other trades the assert for
+ * an export that PSA refuses.
+ */
+#define CONFIG_OPENTHREAD_PLATFORM_KEYS_EXPORTABLE_ENABLE 1
+#endif
+
+/*
+ * Deliberately left undefined for crypto_psa.c:
+ *
+ *   CONFIG_BUILD_WITH_TFM              no TrustZone on this part, so no secure
+ *                                      partition to call across
+ *   CONFIG_OPENTHREAD_PSA_NVM_BACKEND_KMU  no Key Management Unit either; that
+ *                                      backend is for nRF54L and pulls in
+ *                                      cracen_psa_kmu.h, which does not exist
+ *                                      in this workspace
+ */
+
+/*
  * Deliberately left undefined, each for a reason:
  *
  *   CONFIG_NRF_802154_SER_HOST            the driver is in this image, not

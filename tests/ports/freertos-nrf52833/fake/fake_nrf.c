@@ -101,6 +101,10 @@ static uint32_t s_ipsr;
 static uint32_t s_primask;
 static unsigned s_primask_disable_calls;
 
+/* The DWT cycle counter and its CoreDebug enable; nrfx.h says what is modeled. */
+fake_dwt_type fake_dwt;
+fake_coredebug_type fake_coredebug;
+
 uint32_t fake_ipsr_get(void)
 {
 	return s_ipsr;

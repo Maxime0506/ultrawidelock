@@ -150,9 +150,17 @@ static void scenario_success(void)
 	CHECK("starting the host adds only the worker and the host task",
 	      fake_task_count == tasks_before + 2);
 
+	/*
+	 * 6144, matching the port. The size is load-bearing and worth pinning:
+	 * the CoC receive path runs the Aliro access protocol's P-256 crypto on
+	 * this stack, and 4096 overflowed on hardware on 2026-08-14 during the
+	 * first full-auth walk-up -- the same fault the oracle hit twice before
+	 * raising its equivalent thread to 6144 with a painted peak of 3,872 B.
+	 * A future shrink should have to argue with this line.
+	 */
 	CHECK("the host task runs below the controller receive pump",
 	      fake_task_priority == (UBaseType_t)(tskIDLE_PRIORITY + 1) &&
-		      fake_task_stack_depth == 4096u / sizeof(StackType_t));
+		      fake_task_stack_depth == 6144u / sizeof(StackType_t));
 
 	CHECK("startup is scheduled onto the host event queue, not run inline",
 	      fake_ble_hs_sched_start_calls == 1 && fake_nimble_port_run_calls == 0);
