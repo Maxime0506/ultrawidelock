@@ -238,4 +238,9 @@ def main():
     print(f"# {len(blob)} bytes: w0 (32) then L (65, uncompressed)")
 
 
-main()
+# Guarded so the derivation helpers can be imported. freertos-pairing-code.py
+# reuses derive() and manual_code() rather than carrying a second copy of the
+# curve arithmetic -- a second copy being exactly the kind of drift that caller
+# exists to catch. Running this file directly is unchanged.
+if __name__ == "__main__":
+    main()

@@ -98,6 +98,13 @@ FREERTOS_MATTER ?= OFF
 # level removes the format strings too rather than only their output.
 FREERTOS_LOG_LEVEL ?= 3
 
+# RTT up-buffer bytes. Empty keeps the port's 1 kB, which reaches the end of
+# bring-up and no further because a full buffer drops writes instead of
+# overwriting. Raise it to watch anything talkative -- a BTP handshake, a
+# commissioning attempt -- and remember it is static RAM on a part with about
+# 8 kB spare.
+FREERTOS_RTT_BUFFER ?=
+
 # GCC -flto-partition. 1to1 keeps code generation on translation-unit
 # boundaries; it was forced by an assembler "offset out of range" when the
 # kernel, device and Thread layers were still inside the LTO set, and it costs
@@ -116,6 +123,7 @@ FREERTOS_CMAKE_ARGS = \
 	-DULTRAWIDELOCK_PROV_CONSOLE=$(FREERTOS_PROV_CONSOLE) \
 	-DULTRAWIDELOCK_MATTER=$(FREERTOS_MATTER) \
 	-DULTRAWIDELOCK_LOG_LEVEL=$(FREERTOS_LOG_LEVEL) \
+	-DULTRAWIDELOCK_LOG_RTT_BUFFER=$(FREERTOS_RTT_BUFFER) \
 	-DULTRAWIDELOCK_LTO_PARTITION=$(FREERTOS_LTO_PARTITION) \
 	-DULTRAWIDELOCK_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
@@ -161,6 +169,16 @@ freertos-build:
 	@# SRP host name that changes every boot -- a node that attaches to
 	@# Thread and never registers. Held closed at build time instead.
 	@$(if $(filter ON,$(FREERTOS_MATTER)),$(REPO_ROOT)/scripts/freertos-matter-source-check.sh)
+	@# The pairing code, re-derived rather than quoted. The device stores only
+	@# the SPAKE2+ verifier and never the passcode, so nothing on the board can
+	@# notice that the two stopped agreeing -- and they did, silently, when the
+	@# verifier was carried into this port's header and a comment naming CHIP's
+	@# test passcode came with it. On hardware that reads as a healthy board
+	@# that reaches Pake2 and gets hung up on. The Zephyr build has run this
+	@# check from its .config all along; this is the same check for a build that
+	@# has no .config, and it fails the build rather than printing a code that
+	@# would not work.
+	@$(if $(filter ON,$(FREERTOS_MATTER)),python3 $(REPO_ROOT)/scripts/freertos-pairing-code.py)
 	@# newlib-nano's printf does not implement ll. A format it cannot honour
 	@# consumes the wrong argument width, so the next %s dereferences a data
 	@# value -- a bus fault into default_handler, which spins and takes the

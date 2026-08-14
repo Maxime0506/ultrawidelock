@@ -17,6 +17,7 @@
  * from the same pinned hal_nordic MDK the radio stack is built against, so
  * there is exactly one register map in the image.
  */
+#include <stddef.h>
 #include <stdint.h>
 
 #include <nrf.h>
@@ -302,6 +303,45 @@ void Reset_Handler(void)
 	SCB->CPACR |= (3uL << 20) | (3uL << 22);
 	__DSB();
 	__ISB();
+
+	/*
+	 * STATIC CONSTRUCTORS, which nothing ran until they were needed.
+	 *
+	 * The linker script already collects .preinit_array and .init_array --
+	 * see the KEEP() lines around __init_array_start -- so the pointers were
+	 * being placed in the image and simply never called. On a hosted target
+	 * the C runtime does this before main; on bare metal it is the startup
+	 * code's job, and this one did not have it.
+	 *
+	 * WHAT IT COST, and it is worth reading because the symptom named
+	 * nothing: matter_settings_freertos.h registers the Matter fabric
+	 * settings handler with __attribute__((constructor)). Without this loop
+	 * the handler was never registered, so settings_load_subtree() found no
+	 * handler and returned success having loaded NOTHING. Saving used the
+	 * path table directly and worked, so an operational identity was written
+	 * to flash, verified present with a debugger, and then ignored at every
+	 * boot -- the node came up commissionable with a perfectly good fabric
+	 * sitting in its store, and Apple Home showed an accessory that had been
+	 * added and did not respond.
+	 *
+	 * .preinit_array runs first and separately, as the ABI requires: it is
+	 * for things later constructors may depend on, and merging the two loops
+	 * would silently reorder them.
+	 */
+	{
+		extern void (*__preinit_array_start[])(void);
+		extern void (*__preinit_array_end[])(void);
+		extern void (*__init_array_start[])(void);
+		extern void (*__init_array_end[])(void);
+		size_t i;
+
+		for (i = 0; i < (size_t)(__preinit_array_end - __preinit_array_start); i++) {
+			__preinit_array_start[i]();
+		}
+		for (i = 0; i < (size_t)(__init_array_end - __init_array_start); i++) {
+			__init_array_start[i]();
+		}
+	}
 
 	(void)main();
 

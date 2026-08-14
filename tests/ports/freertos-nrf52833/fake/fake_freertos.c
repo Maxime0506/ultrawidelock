@@ -314,3 +314,46 @@ void fake_task_advance_tick_count(TickType_t ticks)
 {
 	s_tick_count += ticks;
 }
+
+/*
+ * Defaults to RUNNING. The code under test takes its locks only when the
+ * scheduler is up, so a model that started NOT_STARTED would silently exercise
+ * the unlocked path in every test that did not think about it -- which is the
+ * path that matters least and hides the most.
+ */
+static BaseType_t s_scheduler_state = taskSCHEDULER_RUNNING;
+static unsigned s_critical_depth;
+static unsigned s_critical_entries;
+
+BaseType_t xTaskGetSchedulerState(void)
+{
+	return s_scheduler_state;
+}
+
+void fake_task_set_scheduler_state(BaseType_t state)
+{
+	s_scheduler_state = state;
+}
+
+void vTaskEnterCritical(void)
+{
+	s_critical_depth++;
+	s_critical_entries++;
+}
+
+void vTaskExitCritical(void)
+{
+	if (s_critical_depth > 0u) {
+		s_critical_depth--;
+	}
+}
+
+unsigned fake_task_critical_depth(void)
+{
+	return s_critical_depth;
+}
+
+unsigned fake_task_critical_entries(void)
+{
+	return s_critical_entries;
+}

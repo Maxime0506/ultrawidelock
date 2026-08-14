@@ -32,8 +32,27 @@
 #error "NimBLE callouts are FreeRTOS software timers; set configUSE_TIMERS=1"
 #endif
 
+/*
+ * 6144, NOT 4096, and the reason is the credential access protocol, not NimBLE.
+ *
+ * The L2CAP CoC receive path calls the reader's message processing inline on
+ * this task, so AUTH1 verification -- ECDSA verify, ECDH and the session key
+ * derivation, all software P-256 with deep bignum frames -- runs on the stack
+ * sized here. At 4096 the port faulted with a FreeRTOS stack overflow on
+ * 2026-08-14, on the FIRST full-auth walk-up this port ever executed:
+ * processing msg #3 in phase SENT_AUTH1, on a commissioned node with Matter
+ * alongside. Nothing shorter of a real phone with a real home key reaches that
+ * code, which is why every earlier bench pass survived at 4096.
+ *
+ * The oracle made the same mistake first and measured the answer:
+ * overlay-thread.conf raised its equivalent thread from 4096 after faulting
+ * twice in the same phase, and records a painted peak of 3,872 B of 6,144
+ * after a full-auth unlock -- 4096 was 224 B short, and the peak moves with
+ * whatever overlaps the unlock. Matching its figure rather than re-deriving
+ * one: this is the stack that has already faulted on two ports.
+ */
 #ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES
-#define ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES 4096u
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES 6144u
 #endif
 
 /*

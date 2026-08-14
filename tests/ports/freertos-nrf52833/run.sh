@@ -210,6 +210,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_kv_flash.c" \
 	"$HERE/fake/fake_flash.c" \
+	"$HERE/fake/fake_freertos.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	-o "$KV_BIN"
 "$KV_BIN"
@@ -225,6 +226,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-I"$ROOT/modules/ultrawidelock_cred/include" \
 	"$HERE/test_prov_kv.c" \
 	"$HERE/fake/fake_flash.c" \
+	"$HERE/fake/fake_freertos.c" \
 	"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prov.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/ultrawidelock_prov_kv.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
@@ -389,6 +391,7 @@ OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_settings.c" \
 	"$HERE/fake/fake_flash.c" \
+	"$HERE/fake/fake_freertos.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	"$ROOT/ports/freertos-nrf52833/thread/ot_settings_freertos.c" \
 	-o "$OT_SETTINGS_BIN"
