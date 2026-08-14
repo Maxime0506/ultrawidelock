@@ -66,12 +66,15 @@
  * Mbed TLS allocates bignums per operation. Everything else in this port is
  * static.
  *
- * The size is a first-link measurement, not a derivation, and it is expected to
- * move once the image links and the heap high-water mark can be read.
+ * The high-water mark has now been read: xMinimumEverFreeBytesRemaining was
+ * 6,640 on hardware on 2026-08-14 (5,648 B peak use) on a commissioned node
+ * after a full UWB walk-up. That boot did not run PASE, whose Mbed TLS
+ * transients are the one heavy path not in the measurement, so this keeps
+ * 4.5 KB over the observed floor instead of trimming to it.
  */
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
 #ifndef configTOTAL_HEAP_SIZE
-#define configTOTAL_HEAP_SIZE ((size_t)12 * 1024)
+#define configTOTAL_HEAP_SIZE ((size_t)10 * 1024)
 #endif
 
 /* NimBLE callouts are FreeRTOS software timers; ble/nimble_host_freertos.c

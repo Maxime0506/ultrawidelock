@@ -55,11 +55,13 @@ _Static_assert(WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
 /*
  * One peripheral link at the full 251-byte Link Layer packet size, one legacy
  * advertising set, and the default Filter Accept List need 3078 bytes with the
- * pinned SDC_MEM_* macros. The pool keeps headroom for a controller update and
- * the start fails loudly if the controller ever asks for more.
+ * pinned SDC_MEM_* macros; the controller itself asked for 2,864
+ * (s_sdc_memory_used, read off the hardware 2026-08-14). The pool keeps
+ * headroom for a controller update and the start fails loudly if the
+ * controller ever asks for more.
  */
 #ifndef WOZ_FREERTOS_SDC_MEM_BYTES
-#define WOZ_FREERTOS_SDC_MEM_BYTES 4096u
+#define WOZ_FREERTOS_SDC_MEM_BYTES 3328u
 #endif
 
 #ifndef WOZ_FREERTOS_SDC_TX_PACKET_SIZE

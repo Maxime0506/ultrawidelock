@@ -301,8 +301,8 @@ static void test_osal(void)
 
 	CHECK("OSAL init starts the static dispatcher and runs hooks", woz_osal_init_all() == 0 &&
 							   fake_task_count == 1 && g_init_runs == 1);
-	CHECK("OSAL dispatcher uses the configured 4096-byte stack",
-	      fake_task_stack_depth * sizeof(StackType_t) == 4096);
+	CHECK("OSAL dispatcher uses the configured 2560-byte stack",
+	      fake_task_stack_depth * sizeof(StackType_t) == 2560);
 	dispatch_entry = fake_task_entry;
 	dispatch_arg = fake_task_arg;
 	CHECK("OSAL init is idempotent", woz_osal_init_all() == 0 && fake_task_count == 1 &&
@@ -432,7 +432,7 @@ static void test_mpsl_runtime(void)
 	CHECK("MPSL starts one static highest-priority system task",
 	      woz_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
 		      fake_task_count == 4 &&
-		      fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
+		      fake_task_stack_depth * sizeof(StackType_t) == 1024 &&
 		      fake_task_priority == configMAX_PRIORITIES - 1 &&
 		      woz_freertos_mpsl_ready());
 	CHECK("MPSL start is idempotent for the same processor",
@@ -540,7 +540,7 @@ static void test_nimble_sdc_transport(void)
 	      woz_freertos_nimble_sdc_configure(&ops) == 0);
 	ble_transport_ll_init();
 	CHECK("NimBLE/SDC starts one static receive task",
-	      fake_task_count == 5 && fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
+	      fake_task_count == 5 && fake_task_stack_depth * sizeof(StackType_t) == 1024 &&
 		      fake_task_priority == tskIDLE_PRIORITY + 2);
 	entry = fake_task_entry;
 	arg = fake_task_arg;
