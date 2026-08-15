@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_logfmt.c — PRETTY-gated high-res timestamp + compact colored log line. */
 
 #include <stdint.h>

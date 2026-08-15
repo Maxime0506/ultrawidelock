@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* PN532-specific ISO 7816 APDU adaptation.
  *
  * The credential stack (including the prebuilt library) negotiates sizes with the

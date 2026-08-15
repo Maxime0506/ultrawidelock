@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The port's persistent key-value store.
  *

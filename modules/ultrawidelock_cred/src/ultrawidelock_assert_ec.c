@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Binds the ultrawidelock_assert P-256 seam to ultrawidelock_prim's ECDSA (see
 // ultrawidelock_assert_ec.h). The only file in the presence path with a crypto-backend dependency,
 // which is exactly why it is separate: ultrawidelock_assert.c stays backend-free.

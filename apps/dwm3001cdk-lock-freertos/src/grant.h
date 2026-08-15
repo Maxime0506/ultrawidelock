@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The grant decision, separated from the loop that feeds it.
  *

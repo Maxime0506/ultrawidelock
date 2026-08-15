@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_clusters.h — what this device answers, as opposed to how.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_fusion.c — two-anchor side-of-door fusion (implementation).
  */

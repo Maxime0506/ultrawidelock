@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // NimBLE-backed BLE transport for the credential reader: GAP advertising, the credential GATT
 // service, and an L2CAP connection-oriented channel (CoC) used to carry credential protocol
 // messages. Supports two bring-up modes: a standalone NimBLE host (ultrawidelock_ble_start) and

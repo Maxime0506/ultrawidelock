@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_msg_builder.h — big-endian TLV message builder. */
 
 #pragma once

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Internal flash on NVMC, arbitrated against the radio with MPSL timeslots.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_port.h
  * Portable platform shim: allocates memory, measures uptime and cycle counts, provides sleep stubs

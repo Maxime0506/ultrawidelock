@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * matter_fab_settings — the operational identity, across a reboot.
  *

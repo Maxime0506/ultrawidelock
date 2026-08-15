@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_isr.h — DW3000 interrupt-callback registration (public surface). */
 
 #ifndef ULTRAWIDELOCK_UWB_ISR_H_

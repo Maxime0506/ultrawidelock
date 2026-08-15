@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The CDC ACM serial port: one instance, one task, and a line reader.
  *

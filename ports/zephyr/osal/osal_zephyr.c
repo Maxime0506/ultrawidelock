@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * osal_zephyr.c - the Zephyr backend of ultrawidelock_osal.h: 1:1 onto k_work,
  * k_work_delayable, k_sem and k_thread on the system workqueue, plus the

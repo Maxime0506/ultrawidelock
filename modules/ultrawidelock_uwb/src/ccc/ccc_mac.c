@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_mac.c — UWB MAC: hopping sequence, SP0 frame codec, ranging schedule. */
 
 #include <errno.h>

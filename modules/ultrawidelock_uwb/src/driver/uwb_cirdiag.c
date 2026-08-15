@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1).
  *
  * Split the work across the two contexts the ALAB contract demands: the RX callback only

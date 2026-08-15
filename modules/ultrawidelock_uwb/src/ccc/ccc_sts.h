@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_sts.h — load a CCC ranging PPDU's STS key + IV into the DW3000 STS engine. */
 
 #ifndef CCC_STS_H

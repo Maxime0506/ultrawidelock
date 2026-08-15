@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* credential 1.0 Bluetooth LE message framing (section 11.7). */
 #pragma once
 

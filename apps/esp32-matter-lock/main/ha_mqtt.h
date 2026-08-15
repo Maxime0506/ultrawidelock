@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ha_mqtt — native Home Assistant MQTT publishing for the ESP32 Matter lock.
  *

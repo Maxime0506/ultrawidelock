@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file
  * @brief Applies a staged delta patch onto the primary slot, from inside

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_report.c — range report line codec (implementation).
  *

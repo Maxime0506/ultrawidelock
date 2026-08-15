@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The board's log sink, as a SEGGER RTT up-buffer.
  *

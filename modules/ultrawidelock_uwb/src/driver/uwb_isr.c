@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_isr.c — DW3000 interrupt-callback registration (implementation). */
 
 #include "uwb_isr.h"

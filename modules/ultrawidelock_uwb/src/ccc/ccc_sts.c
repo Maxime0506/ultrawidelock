@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_sts.c — DW3000 STS register load for the CCC ranging path. */
 
 #include "ccc_sts.h"

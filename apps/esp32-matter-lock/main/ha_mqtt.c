@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Native Home Assistant MQTT publisher for the ESP32 Matter lock — see ha_mqtt.h
 // for the wire contract it holds with the broker.
 #include <sdkconfig.h> // CONFIG_ENABLE_HA_MQTT — nothing else here pulls it in

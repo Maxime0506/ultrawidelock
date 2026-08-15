@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file cirdiag_capture.c — unattended CIR capture cycle for the DWM3001CDK.
  *

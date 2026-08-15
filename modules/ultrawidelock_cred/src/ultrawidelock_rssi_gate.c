@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // BLE-RSSI ranging power gate implementation: EWMA smoothing in Q4 fixed point,
 // open/close hysteresis with a sustained-below close hold, and an optional
 // rise-rate fast open so a fast approach is not penalized by the smoothing lag.

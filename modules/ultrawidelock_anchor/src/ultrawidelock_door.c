@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_door.c — door swing angle and state machine (implementation).
  */

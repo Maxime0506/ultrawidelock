@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Standalone FreeRTOS backend for ultrawidelock_osal.h.
  *

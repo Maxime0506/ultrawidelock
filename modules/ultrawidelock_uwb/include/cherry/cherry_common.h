@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file cherry_common.h — diagnostics config struct and report forward decl. */
 
 #pragma once

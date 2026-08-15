@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* FreeRTOS serialization and low-priority worker for Nordic MPSL. */
 #ifndef ULTRAWIDELOCK_FREERTOS_MPSL_H
 #define ULTRAWIDELOCK_FREERTOS_MPSL_H

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_approach.c
  * Kalman-filtered approach controller for predictive unlock. Tracks distance (cm), velocity (cm/s),

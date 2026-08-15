@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // ESP32-IDF console shell for the standalone credential UWB responder bench app: registers status, range, ultrawidelock-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
  * app_shell — see app_shell.h. Interactive console + demo responder lifecycle.

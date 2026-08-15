@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // UWB ranging bring-up and lifecycle for the credential reader: initializes the reader's UWB
 // adapter and Cherry CCC context once, then arms, feeds, and tears down per-connection ranging
 // sessions driven by the M1-M4 setup exchanged over the peer's L2CAP channel.

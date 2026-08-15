@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file
  * @brief Application half of the delta update: receive, verify, stage, reboot.

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device (User-Device) side of the credential Access-Protocol wire codec: the inverse
 // of ultrawidelock_apdu.c. Where ultrawidelock_apdu builds reader commands and parses device
 // responses, this parses the reader's AUTH0/AUTH1/EXCHANGE commands and builds

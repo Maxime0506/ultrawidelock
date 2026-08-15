@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_door.h — door swing angle from a frame-to-leaf distance, and the
  *       closed/ajar/open state machine over it.

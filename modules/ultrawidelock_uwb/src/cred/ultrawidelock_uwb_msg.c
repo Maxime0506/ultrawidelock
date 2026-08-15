@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_msg.c — setup/notification message codec. */
 
 #include "ultrawidelock_uwb_msg.h"

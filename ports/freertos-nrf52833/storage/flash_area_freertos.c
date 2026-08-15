@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The ultrawidelock_flash contract on this port: the two partitions ultrawidelock_dfu touches.
  *

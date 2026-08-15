@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_adapter.c — reader-context lifecycle. */
 
 #include "ultrawidelock_uwb_internal.h"

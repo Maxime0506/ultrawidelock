@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* credential 1.0 Bluetooth LE responseTimeout rules (section 11.9). */
 #pragma once
 

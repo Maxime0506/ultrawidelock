@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * OpenThread's settings platform over the port's key-value store.
  *

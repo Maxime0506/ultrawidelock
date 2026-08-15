@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_thread.h — the seam between a commissioner's dataset and a radio.
  *

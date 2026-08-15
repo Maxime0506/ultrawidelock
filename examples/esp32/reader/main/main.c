@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * UltraWideLock UWB ranging engine on ESP32 (ESP-IDF) — minimal bring-up app.
  *

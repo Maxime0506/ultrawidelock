@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_session.h — credential/CCC ranging seam: map a credential session's URSK + M1-M4
  * setup to ccc_ran_params. */
 

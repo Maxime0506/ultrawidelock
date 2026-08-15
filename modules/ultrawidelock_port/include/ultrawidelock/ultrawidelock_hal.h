@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * UltraWideLock hardware adaptation contract.
  *

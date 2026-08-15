@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_ml_log2.h — base-2 logarithm of an integer, without libm.
  *

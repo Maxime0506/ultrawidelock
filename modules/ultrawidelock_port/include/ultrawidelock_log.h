@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_log.h - logging contract for the UWB engine.
  *

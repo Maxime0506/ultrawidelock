@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ml_feed.h — the channel-classifier glue between the CIA latch and the
  * approach controller.

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Walk-up latency trace: first-hit phase timestamps + the consolidated budget line.
 /*
  * ultrawidelock_lat — see ultrawidelock_lat.h. Marks come from three tasks (BLE host, UWB RX,

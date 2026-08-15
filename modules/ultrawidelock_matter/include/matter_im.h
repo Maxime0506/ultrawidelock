@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_im.h — the Interaction Model, as far as a commissioner needs it.
  *

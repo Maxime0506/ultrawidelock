@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_btp.h — BTP, the Matter commissioning transport over BLE GATT.
  *

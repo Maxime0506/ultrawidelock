@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Where nrfx driver logging goes on this port: nowhere.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file
  * @brief The over-the-air update channel: a second L2CAP CoC, and the button

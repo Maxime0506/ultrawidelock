@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The Zephyr kernel objects the pinned OpenThread radio platform uses, on
  * FreeRTOS.

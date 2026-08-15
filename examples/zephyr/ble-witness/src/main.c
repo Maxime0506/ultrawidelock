@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file main.c — nRF52840 BLE RSSI witness for inside/outside/threshold roles.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file cherry_session.h — generic base-session interface. */
 
 #pragma once

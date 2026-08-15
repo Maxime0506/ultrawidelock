@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The nRF5 SDK header the pinned FreeRTOS Cortex-M4F port includes, reduced to
  * what that port actually uses.

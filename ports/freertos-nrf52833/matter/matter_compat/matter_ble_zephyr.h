@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The commissioning layer includes "matter_ble_zephyr.h" and calls
  * matter_ble_set_msg_handler(), matter_ble_send(), matter_ble_discriminator()

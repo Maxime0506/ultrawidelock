@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr-shaped macros, not Zephyr code.
  *

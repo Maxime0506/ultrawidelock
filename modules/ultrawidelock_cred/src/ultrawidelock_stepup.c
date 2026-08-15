@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential step-up phase crypto + verifier: derives the StepUpSK SessionData keys, seals/opens
 // SessionData over the ultrawidelock_secchan AES-256-GCM channel (envelope codec factored onto the
 // raw wrap/unwrap in ultrawidelock_stepup_wire.c), builds the simple ENVELOPE/GET RESPONSE APDUs,

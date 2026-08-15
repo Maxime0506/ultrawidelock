@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_flash.h - the two flash partitions ultrawidelock_dfu touches, and reboot.
  *

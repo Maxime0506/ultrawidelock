@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's OpenThread integration header. The pinned radio platform includes
  * it unconditionally but names nothing from it: its instance handling comes

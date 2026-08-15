@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device-side UWB ranging-service setup codec: parses the reader's M1 and M3
 // setup messages, picks the device's answer to M1 (select_m2), and builds the M2
 // and M4 replies. The inverse of the reader path in ultrawidelock_uwb_msg.c, written over

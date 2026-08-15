@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
  *

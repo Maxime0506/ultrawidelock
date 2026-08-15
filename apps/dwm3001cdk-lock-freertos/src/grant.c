@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The grant decision. See grant.h for why it is not inline in the loop.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Presence-assertion wire codec + verifier (see ultrawidelock_assert.h). Serialises a
 // dongle's "credential present within N cm for this nonce" statement and verifies
 // an ECDSA-P256 frame against a challenge nonce, enrolled credential and distance

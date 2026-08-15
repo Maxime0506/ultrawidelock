@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file pn532_apdu.c
  * PN532 APDU command planner: parse ISO 7816-4 APDU structure (Case 1-4, short/extended), emit

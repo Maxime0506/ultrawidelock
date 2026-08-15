@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The USB CDC ACM serial port, and the console on top of it.
  *

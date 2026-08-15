@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_pase_sm.c — PASE responder state machine. See matter_pase_sm.h.
  */

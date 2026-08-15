@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Presence dongle commands (see presence_link.h). `prove` ends every old credential
 // link, waits for a new trusted credential authentication and a later trusted
 // UWB range, then signs that post-challenge result under a persistent P-256 key.

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ccc_kdf.h
  * @brief UWB ranging key schedule + SP0 frame crypto (CONFIG_ULTRAWIDELOCK_CRED).

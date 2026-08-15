@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Mbed TLS build configuration for the standalone nRF52833 port.
  *

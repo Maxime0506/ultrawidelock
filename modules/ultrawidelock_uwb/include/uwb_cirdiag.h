@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_cirdiag.h — Per-reception CIA first-path/STS diagnostics stream (channel-impulse
  * Stage 0). The RX callback latches the DW3000's CIA diagnostic bank (Ipatov/STS first-path
  * index, F1..F3, power, peak, STS quality, xtal offset); task context emits it as one

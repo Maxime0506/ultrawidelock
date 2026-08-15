@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file side_feed.h — lab ingest of BLE witness summaries into ultrawidelock_side.
  *

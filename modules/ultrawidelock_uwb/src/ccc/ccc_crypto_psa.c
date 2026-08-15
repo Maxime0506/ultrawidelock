@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_crypto_psa.c — On-target AES-ECB block (PSA/CC312) backing the CCC key schedule. */
 
 #include <errno.h>

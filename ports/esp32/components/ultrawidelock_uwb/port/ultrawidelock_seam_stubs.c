@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* This port's half of modules/ultrawidelock_uwb/include/uwb_seam.h.
  *
  * The Nordic build routes DW3000 RX events through uwb_rxdiag.c's

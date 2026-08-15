@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_ml.h — on-device classifiers, and the seam that keeps them replaceable.
  *

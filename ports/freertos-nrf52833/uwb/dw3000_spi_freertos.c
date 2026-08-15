@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The DW3110 SPI link on SPIM3, for the standalone FreeRTOS port.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential M1-M4 ranging-setup interface: negotiates UWB ranging parameters with the device and
 // produces the BLE ranging-control secure channel used to carry the M1-M4 exchange.
 /*

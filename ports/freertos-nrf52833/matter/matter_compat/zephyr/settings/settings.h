@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's settings header, forwarding to the port's own.
  *

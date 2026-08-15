@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Lock-state indicator LED: maps lock state (and credential activity) to an RGB colour for the
 // single status pixel. Locked always extinguishes the indicator; unlocked shows blue during active
 // UWB/credential engagement and a different colour otherwise, per lock_led_color.

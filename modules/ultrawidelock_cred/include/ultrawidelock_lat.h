@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_lat.h
  * Latency tracking for credential protocol phases during a walk-up: record BLE_CONNECT as epoch

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's OpenThread integration header, over this port's runtime.
  *

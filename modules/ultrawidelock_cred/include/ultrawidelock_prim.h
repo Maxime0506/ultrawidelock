@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_prim — the AEAD + elliptic-curve + RNG primitive interface used by the
  * credential-auth composition (ultrawidelock_crypto.c). Two backends implement it:

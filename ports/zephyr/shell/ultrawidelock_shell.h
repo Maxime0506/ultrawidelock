@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_shell.h — the one seam the `ultrawidelock` console needs from the application. */
 
 #ifndef ULTRAWIDELOCK_SHELL_H_

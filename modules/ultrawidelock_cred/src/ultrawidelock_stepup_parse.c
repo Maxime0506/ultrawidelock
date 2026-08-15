@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // DeviceResponse structural decoder for the credential step-up phase: a minimal, bounds-checked,
 // depth-limited CBOR reader (definite-length core-deterministic only) plus the Table 8-22/7-1/7-2
 // field walk. No crypto and no allocation; every parsed field is a slice of the caller's buffer.

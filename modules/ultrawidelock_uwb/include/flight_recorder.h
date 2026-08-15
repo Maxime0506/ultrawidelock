@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file flight_recorder.h
  * Capture and replay UWB frames and session configuration from a walk-up to a host for analysis and

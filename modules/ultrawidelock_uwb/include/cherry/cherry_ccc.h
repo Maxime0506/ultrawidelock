@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file cherry_ccc.h — CCC/credential-session interface (seam the adapter drives). */
 
 #pragma once

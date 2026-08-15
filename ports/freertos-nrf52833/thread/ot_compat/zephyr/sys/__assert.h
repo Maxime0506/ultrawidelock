@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's assertions, routed to the port's fatal handler. They are kept live
  * rather than compiled out: every one of them in the radio platform guards a

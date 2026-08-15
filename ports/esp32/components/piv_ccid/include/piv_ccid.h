@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #ifndef ULTRAWIDELOCK_PIV_CCID_H
 #define ULTRAWIDELOCK_PIV_CCID_H
 

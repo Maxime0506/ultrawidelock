@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_crypto.c — AES-128-CCM, the Matter nonce, and the key schedule.
  */

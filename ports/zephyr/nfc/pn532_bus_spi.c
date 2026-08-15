@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* Zephyr SPI glue for the PN532 host protocol.
  *
  * PN532 SPI framing (UM0701-02 §6.2.5): every transaction opens with a

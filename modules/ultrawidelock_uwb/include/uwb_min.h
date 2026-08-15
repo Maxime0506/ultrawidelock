@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_min.h — Minimal DW3110 (DWM3000EVB) hardware bring-up driver. */
 
 #ifndef ULTRAWIDELOCK_UWB_MIN_H_

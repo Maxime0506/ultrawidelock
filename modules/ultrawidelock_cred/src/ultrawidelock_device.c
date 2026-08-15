@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential initiator (User-Device) session machine: the implementation behind
 // ultrawidelock_device.h. Feeds one reader command at a time through
 // ultrawidelock_device_on_command, which parses AUTH0/AUTH1/EXCHANGE with the inverse

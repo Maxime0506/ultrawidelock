@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file cherry_ccc_shim.c — cherry_ccc_* seam (credential responder) implemented over the
  * lock-native FiRa MAC; maps each call onto ultrawidelock_uwb_facade. */
 

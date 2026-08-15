@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The callbacks the kernel requires from the application, gathered in one file.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_slam_lis2dh12.c — LIS2DH12 impact interrupt, raw registers (Zephyr).
  *

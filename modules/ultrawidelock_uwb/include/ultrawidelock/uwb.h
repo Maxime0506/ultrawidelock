@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Public header for UWB facade: exposes credential DS-TWR responder lifecycle and range query; the
 // CCC engine is bound and unbound via internal ursk and stop calls.
 /*

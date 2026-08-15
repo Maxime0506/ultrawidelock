@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The Zephyr-shaped macros the pinned opcode dispatcher needs. They are shared
  * with the OpenThread radio platform's compat layer, so the definitions live

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device/initiator side of the UWB ranging-service setup codec: the interface for
 // parsing the reader's M1 and M3 and building the device's M2 and M4. Declares the
 // decoded views of M1 and M3, the parameter structs the two builders take, and

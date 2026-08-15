@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Hooks supplied by the selected nRF52833 BSP.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The DW3110's reset, interrupt and wake lines, for the standalone FreeRTOS
  * port. This implements modules/ultrawidelock_dw3000's dw3000_hw.h; modules/ does not

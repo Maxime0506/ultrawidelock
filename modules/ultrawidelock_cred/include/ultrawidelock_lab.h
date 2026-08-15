@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
 // parsed into a scored walk-up report. Ships in every credential
 // build (CONFIG_ULTRAWIDELOCK_CRED_LAB defaults y, like the sibling uwbdiag trace) but is

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * This port's half of modules/ultrawidelock_uwb/include/uwb_seam.h.
  *

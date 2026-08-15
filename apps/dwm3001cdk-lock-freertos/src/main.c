@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Entry point for the DWM3001CDK lock.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
  * wiring table. Change to match how the UWB module is wired to your board. */
 #ifndef ULTRAWIDELOCK_ESP_BOARD_PINS_H

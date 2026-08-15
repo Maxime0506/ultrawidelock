@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential crypto public API: key derivation, AES-GCM secure channels, and wire message
 // seal/open framing shared by the reader and device sides of a credential session.
 /*

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_pase.h — PASE message codec (the five commissioning messages).
  *

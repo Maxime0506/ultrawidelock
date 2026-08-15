@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* UltraWideLockNfc backend forwarding to the add-on's ST25R/RFAL transport unchanged. */
 
 #include <ultrawidelock_nfc/transport.h>

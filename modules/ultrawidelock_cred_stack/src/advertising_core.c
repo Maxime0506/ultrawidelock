@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file advertising_core.c
  * Compute dynamic advertisement tag inputs and extract tags from AES ciphertext. The plaintext

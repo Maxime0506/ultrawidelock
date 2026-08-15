@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Lock status LED color mapping: derives the RGB color for the lock indicator from the
 // current locked and credential-ranging state.
 /*

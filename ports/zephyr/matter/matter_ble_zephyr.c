@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
  *

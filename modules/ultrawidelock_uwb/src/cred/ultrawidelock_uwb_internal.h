@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_internal.h — private context types and shared helpers. */
 
 #pragma once

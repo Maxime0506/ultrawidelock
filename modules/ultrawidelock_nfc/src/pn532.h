@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* NXP PN532 host-protocol driver: frame codec and the command subset needed by
  * the credential reader transport. Bus-agnostic and OS-free — all I/O goes through
  * injected bus operations, so the whole layer compiles and runs in the host

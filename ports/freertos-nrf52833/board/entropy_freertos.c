@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Hardware entropy on the RNG peripheral.
  *

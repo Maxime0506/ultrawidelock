@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #include "piv_ccid.h"
 
 #include "piv_apdu.h"

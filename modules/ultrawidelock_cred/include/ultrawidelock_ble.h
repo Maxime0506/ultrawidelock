@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential BLE-UWB reader transport: GATT service definition, advertised feature flags, and
 // transport callbacks connecting the BLE peripheral role to the credential protocol handler in
 // ultrawidelock_reader. Callers configure the transport via ultrawidelock_ble_prepare (which builds

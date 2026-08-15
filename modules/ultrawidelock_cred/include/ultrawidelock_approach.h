@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_approach.h
  * Configuration and state for approach detection and predictive unlock: unlock/relock thresholds in

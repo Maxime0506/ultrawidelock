@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The four board LEDs as one state display, and the only way to drive them.
  *

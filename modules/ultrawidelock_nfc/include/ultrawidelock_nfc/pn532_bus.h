@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* Bus binding for the PN532 driver. One implementation is compiled in per
  * build (currently SPI: pn532_bus_spi.c). The transport uses only these
  * neutral names, so swapping the physical bus never touches pn532.c or

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Startup order for the shared nRF52833 radio: MPSL first, then the
  * SoftDevice Controller, then the NimBLE HCI transport contract.

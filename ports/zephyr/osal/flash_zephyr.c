@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * flash_zephyr.c - the Zephyr backend of ultrawidelock_flash.h: flash_map areas named
  * by the partition-manager ids from pm_config.h, so the mapping is decided

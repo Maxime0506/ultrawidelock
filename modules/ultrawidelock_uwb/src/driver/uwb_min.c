@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_min.c — DW3110 bring-up driver (implementation). */
 
 #include "uwb_min.h"

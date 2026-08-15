@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* ESP-IDF GPIO/IRQ backend for the DW3000 decadriver — implements dw3000_hw.h.
  * Replaces the Zephyr ports/zephyr/dw3000/dw3000_hw.c (not compiled here).
  *

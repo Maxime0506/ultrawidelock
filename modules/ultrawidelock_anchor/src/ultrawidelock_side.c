@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_side.c — differential-RSSI baseline, temporal filter, unlock gate.
  */

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's logging macros over the port's log sink, for the shared Matter
  * transport. Same shape as thread/ot_compat's, with this file's own level

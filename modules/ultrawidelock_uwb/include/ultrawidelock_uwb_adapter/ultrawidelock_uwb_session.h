@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_session.h — per-session public interface. */
 
 #pragma once

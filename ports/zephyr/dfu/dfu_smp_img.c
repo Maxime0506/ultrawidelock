@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file
  * @brief SMP image-management group, so a stock mcumgr client can push a delta.

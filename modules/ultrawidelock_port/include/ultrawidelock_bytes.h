@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_bytes.h
  * Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or big-endian order.

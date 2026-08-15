@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The clock the USB stack asks for, answered by MPSL.
  *

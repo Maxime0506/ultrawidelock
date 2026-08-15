@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr-shaped entry point for the kernel objects the pinned OpenThread radio
  * platform uses. The implementations are the port's own; see

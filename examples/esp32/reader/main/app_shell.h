@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * app_shell — interactive console for the ESP32 bring-up app.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file psa_its_freertos.c — PSA Internal Trusted Storage over the port's store.
  *

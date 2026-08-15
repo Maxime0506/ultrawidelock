@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * osal_esp.c - the ESP-IDF backend of ultrawidelock_osal.h: one dispatch task draining
  * a FreeRTOS queue of ultrawidelock_work pointers, with delayable work held in a

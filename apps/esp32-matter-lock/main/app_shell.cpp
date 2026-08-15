@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // ESP32-IDF console shell for the credential Matter door lock app: registers status, range,
 // ultrawidelock, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*

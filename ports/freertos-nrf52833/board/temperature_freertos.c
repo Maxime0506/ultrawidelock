@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Die temperature, from MPSL rather than from the TEMP peripheral.
  *

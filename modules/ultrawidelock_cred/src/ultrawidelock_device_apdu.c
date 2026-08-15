@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Implementation of the device-side Access-Protocol wire codec declared in
 // ultrawidelock_device_apdu.h: ISO7816 case-4 unwrapping, status-word appending, parsers
 // for the reader's AUTH0, AUTH1 and EXCHANGE command TLVs, and builders for the

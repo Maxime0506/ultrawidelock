@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_prov (FreeRTOS key-value backend) — the standalone twin of the Zephyr
  * port's ultrawidelock_prov_settings.c and the ESP32 port's ultrawidelock_prov_nvs.c. The

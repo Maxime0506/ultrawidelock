@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_msg_spec.h — UWB ranging-service framing constants. */
 
 #pragma once

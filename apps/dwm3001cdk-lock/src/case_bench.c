@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Stack/heap bench for a Matter CASE responder on this part: runs the Sigma1..3
  * crypto (five P-256 operations -- ECDH, sign, three verifies -- plus HKDF and

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_reader: credential reader session/transaction layer. Owns the per-connection
  * credential transaction on top of the ultrawidelock_ble transport: session lifecycle, the

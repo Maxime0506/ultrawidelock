@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * DWM3001CDK standalone credential reader.
  *

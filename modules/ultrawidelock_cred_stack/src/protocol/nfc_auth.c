@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file nfc_auth.c
  * NFC credential protocol command builders: AUTH0 and AUTH1 APDU encoding, authentication data

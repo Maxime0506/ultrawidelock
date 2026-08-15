@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* PN532 host-protocol driver. See pn532.h. OS-free: no Zephyr headers, no
  * allocation, no sleeping — waiting is delegated to the bus wait_ready op. */
 

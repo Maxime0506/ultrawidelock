@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Build configuration for the shared Matter Thread transport.
  *

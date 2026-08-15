@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file session.cpp
  * credential reader BLE session state machine and cryptographic session context. Manages NFC APDU

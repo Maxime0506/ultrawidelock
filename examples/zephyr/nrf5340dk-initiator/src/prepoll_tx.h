@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device-side CCC Pre-POLL transmitter: turns the URSK this board just agreed
 // over BLE into the SP0 data frame that opens a ranging block, and puts it on
 // the air on the session's channel.

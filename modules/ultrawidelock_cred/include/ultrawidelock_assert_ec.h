@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_assert_ec — binds the ultrawidelock_assert P-256 seam to ultrawidelock_prim.
  *

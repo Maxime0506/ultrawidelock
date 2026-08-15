@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_shim_rx.c — responder-RX CCC STS substitution: ultrawidelock_uwb_arm_rx() programs the
  * CCC STS on each RX-arm; target only. */
 

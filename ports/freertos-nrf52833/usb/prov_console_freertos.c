@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The provisioning console, over USB CDC ACM.
  *

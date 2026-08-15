@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Where an nRF5 SDK error check ends up.
  *

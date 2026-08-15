@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_msg.h — Matter message header and protocol (exchange) header.
  *

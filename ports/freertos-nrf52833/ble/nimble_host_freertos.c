@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #include "ultrawidelock_freertos_nimble_host.h"
 
 #include <stddef.h>

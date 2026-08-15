@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Tiny definite-length CBOR writer shared by the step-up translation units
 // (ultrawidelock_stepup.c Sig_structure/seal, ultrawidelock_stepup_wire.c request/SessionData
 // codecs). Error-latching: any overflow sets err and later calls no-op.

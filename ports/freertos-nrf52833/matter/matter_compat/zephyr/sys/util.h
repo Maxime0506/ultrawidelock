@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The handful of Zephyr utility macros the shared Matter sources reach for.
  *

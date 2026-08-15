@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* UltraWideLockNfc backend for boards with no NFC frontend: polling never starts and no
  * NFC session is ever created, so Send()/Terminate() are unreachable in a
  * correct run; Send() reports invalid state defensively. */

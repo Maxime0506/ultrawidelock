@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Board interrupt entry points that are not the radio's.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_fusion.h — two-anchor fusion: which side of the door, and whether
  *       the two distances are geometrically possible at all.

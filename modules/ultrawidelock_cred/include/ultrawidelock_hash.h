@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Streaming SHA-256 (FIPS 180-4) implementation used by the credential crypto layer.
 // Declares struct ultrawidelock_sha256, the incremental hash context used across init/update/finish
 // calls.

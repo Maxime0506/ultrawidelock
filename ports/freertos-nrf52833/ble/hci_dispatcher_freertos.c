@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Adapts Nordic's pinned HCI opcode dispatcher to this port's radio contract.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_ml_range.c — free-space spreading at a measured range, without libm.
  *

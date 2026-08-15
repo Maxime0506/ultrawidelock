@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The nRF5 SDK configuration this image's USB stack is built with.
  *

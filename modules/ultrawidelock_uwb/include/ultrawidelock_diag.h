@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_diag.h — DIAGK(): gate for verbose UWB bring-up diagnostics. */
 
 #ifndef ULTRAWIDELOCK_DIAG_H

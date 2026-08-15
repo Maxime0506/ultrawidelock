@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_assert — the presence-assertion protocol for the non-door primitive.
  *

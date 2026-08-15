@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Standalone-FreeRTOS bring-up for the credential reader's NimBLE transport.
 //
 // The portable half -- the GATT service, advertising, and the L2CAP CoC server -- is

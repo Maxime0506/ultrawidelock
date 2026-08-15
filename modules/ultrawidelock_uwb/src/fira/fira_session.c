@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file fira_session.c — Range + URSK store for the CCC Pre-POLL responder. */
 
 #include <stdbool.h>

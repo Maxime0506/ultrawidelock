@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // BLE-RSSI ranging power gate: decides when the phone is close enough that arming
 // UWB ranging is worth the radio's RX power. Pure sample-in/state-out logic (EWMA
 // smoothing, open/close hysteresis with a close hold-off, optional rise-rate fast

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* Public application API for UltraWideLock C consumers. */
 #pragma once
 

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * FreeRTOS ownership and serialization for one upstream OpenThread instance.
  *

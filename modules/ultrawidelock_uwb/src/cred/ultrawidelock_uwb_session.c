@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_session.c — per-session lifecycle and state machine. */
 
 #include "ultrawidelock_uwb_internal.h"

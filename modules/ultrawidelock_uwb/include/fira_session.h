@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file fira_session.h — Range + URSK store for the CCC Pre-POLL responder. */
 
 #ifndef ULTRAWIDELOCK_UWB_FIRA_SESSION_H_

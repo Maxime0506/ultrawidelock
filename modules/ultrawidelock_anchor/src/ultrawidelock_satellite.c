@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_satellite.c — freshness gate around a second anchor's report.
  */

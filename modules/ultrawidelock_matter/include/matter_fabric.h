@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_fabric.h — the operational identity a commissioner installs.
  *

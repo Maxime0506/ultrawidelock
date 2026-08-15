@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* credential 1.0 expedited authentication APDU codecs. */
 #pragma once
 

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_osal.h - deferred work, semaphores and threads for the shared modules.
  *

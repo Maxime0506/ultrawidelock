@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_pase_sm.h — PASE responder: the device side of the five messages.
  *

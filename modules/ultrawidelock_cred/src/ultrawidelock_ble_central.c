@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Platform-free half of the device-side BLE transport declared in
 // ultrawidelock_ble_central.h: decodes the reader's 0xFFF2 service-data advert, decodes
 // the reader-SPSM GATT READ payload (SPSM, supported protocol versions, feature

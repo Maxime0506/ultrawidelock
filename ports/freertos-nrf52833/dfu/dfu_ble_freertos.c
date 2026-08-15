@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The over-the-air update channel on NimBLE: a second L2CAP CoC, the same
  * frames over GATT, and the button that opens the window.

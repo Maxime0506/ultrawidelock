@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * What the USB stack asks the board for: the supply events, and the crystal.
  *

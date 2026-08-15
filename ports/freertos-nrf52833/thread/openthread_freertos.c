@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #include "ultrawidelock_freertos_openthread.h"
 
 #include <stddef.h>

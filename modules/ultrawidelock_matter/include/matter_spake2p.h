@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_spake2p.h — SPAKE2+ glue: PBKDF2, transcript, confirmations.
  *

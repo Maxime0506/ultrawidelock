@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_prov (Zephyr settings backend) — the DWM3001CDK twin of the ESP32
  * port's ultrawidelock_prov_nvs.c. The portable serialisation, dev fallback and trust

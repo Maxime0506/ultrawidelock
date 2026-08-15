@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Thread/ranging contention gate: measures whether DS-TWR's FINAL->arm margin
  * survives sharing the M4 and 2.4 GHz radio with OpenThread. Deliberately harsh:

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The entry point of the UWB layer's link proof. It does nothing, on purpose.
  *

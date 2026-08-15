@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ml_feed.c — the channel-classifier glue between the CIA latch and the
  * approach controller. Split out of main.c so the grant loop reads as policy

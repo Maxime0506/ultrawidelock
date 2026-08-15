@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential crypto primitive backend implemented on Arm PSA Crypto: random generation, AES-256-GCM
 // encrypt/decrypt, and NIST P-256 key generation, ECDH, and ECDSA sign/verify.
 // Provides the ultrawidelock_prim_* / ultrawidelock_* primitive functions consumed by the

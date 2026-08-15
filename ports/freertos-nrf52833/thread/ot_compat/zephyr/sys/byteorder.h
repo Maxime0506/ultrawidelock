@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The byte-order helpers the pinned radio platform uses. nRF52833 is
  * little-endian, so the little-endian forms are plain copies and only the

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_shim.c — CCC STS substitution core (implementation). */
 
 #include "ccc_shim.h"

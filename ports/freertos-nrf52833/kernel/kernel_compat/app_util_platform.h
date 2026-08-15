@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The second nRF5 SDK header portable/CMSIS/nrf52/port_cmsis.c includes.
  *

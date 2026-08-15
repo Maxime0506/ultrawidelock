@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Zephyr's logging macros over the port's log sink. The module name is kept as
  * the tag so the radio platform's lines stay distinguishable, and the level

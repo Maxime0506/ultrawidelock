@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_adapter.h — reader-device public interface. */
 
 #pragma once

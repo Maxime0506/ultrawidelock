@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file cherry.h — Cherry core (context + device-capabilities) interface. */
 
 #pragma once

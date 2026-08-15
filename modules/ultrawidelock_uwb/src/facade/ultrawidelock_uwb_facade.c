@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // UWB facade: binds the CCC credential-based STS engine to the DW3000 radio, exposes credential
 // DS-TWR responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI
 // init, callbacks).

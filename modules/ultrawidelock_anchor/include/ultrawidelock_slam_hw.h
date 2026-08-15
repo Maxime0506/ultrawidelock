@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_slam_hw.h — LIS2DH12 transport for the impact latch (Zephyr only).
  *

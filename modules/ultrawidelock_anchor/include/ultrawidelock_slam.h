@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_slam.h — impact and tamper classification from a latched high-g pin.
  *

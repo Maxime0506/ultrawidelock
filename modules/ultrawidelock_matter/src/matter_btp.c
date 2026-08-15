@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_btp.c — BTP handshake codec, fragmenter and reassembler.
  */

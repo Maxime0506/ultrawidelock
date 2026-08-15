@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #include <platform/nrf_802154_irq.h>
 
 #include "FreeRTOS.h"

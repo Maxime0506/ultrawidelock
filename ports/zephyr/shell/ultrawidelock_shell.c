@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_shell.c — `ultrawidelock` UART shell command: colored console over the UWB
  * engine.
  */

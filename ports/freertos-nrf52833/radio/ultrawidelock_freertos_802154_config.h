@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The nRF 802.15.4 driver's configuration for this port.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * FreeRTOS ownership for the Apache NimBLE host to Nordic SoftDevice
  * Controller HCI boundary.

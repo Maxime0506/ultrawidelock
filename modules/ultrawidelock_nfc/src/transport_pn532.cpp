@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* UltraWideLockNfc backend driving an NXP PN532 reader.
  *
  * A dedicated thread owns the chip: it runs the discovery loop (RF field on,

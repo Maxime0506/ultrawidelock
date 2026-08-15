@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Persistent reader provisioning storage: identity and credential trust anchors saved to and
 // loaded from NVS.
 // Declares ultrawidelock_prov_store for committing an identity/trust pair to NVS, and struct

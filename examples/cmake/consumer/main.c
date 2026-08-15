@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 #include <ultrawidelock/ultrawidelock.h>
 
 #include <stdint.h>

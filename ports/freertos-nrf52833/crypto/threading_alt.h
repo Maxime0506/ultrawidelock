@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The mutex type Mbed TLS uses when MBEDTLS_THREADING_ALT is set.
  *

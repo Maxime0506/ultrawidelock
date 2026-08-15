@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * DWM3001CDK pin map for the DW3110, taken from the pinned Qorvo SDK.
  *

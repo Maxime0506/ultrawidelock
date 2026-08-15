@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_settings_freertos.c — Zephyr's settings API over the port's store.
  *

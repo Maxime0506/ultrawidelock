@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat. */
 
 #include <stdint.h>

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential APDU TLV codec: builds command payloads (AUTH0, AUTH1, AuthData, EXCHANGE) and parses
 // response APDUs, plus BLE envelope framing/unframing and ISO7816 APDU wrap/status-word stripping.
 // Provides a minimal BER-TLV writer (ultrawidelock_tlv_w_init/put/finish) used to assemble command

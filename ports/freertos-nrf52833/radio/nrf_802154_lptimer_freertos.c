@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * nRF 802.15.4 low-power timer platform on RTC2.
  *

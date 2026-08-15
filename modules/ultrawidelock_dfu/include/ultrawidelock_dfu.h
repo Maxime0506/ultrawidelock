@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file
  * @brief The on-flash contract between the application and the bootloader for

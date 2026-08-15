@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_seam.h — the DW3000 entry points the CCC engine owns.
  *
  * Four decadriver calls carry engine behaviour that no caller may skip: arming

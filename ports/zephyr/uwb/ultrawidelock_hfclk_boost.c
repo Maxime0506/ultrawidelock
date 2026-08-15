@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /* nRF5340 app-core HFCLK boost, split out of ultrawidelock_uwb_facade.c so the facade
  * carries no Zephyr include. The facade's ultrawidelock_hfclk_ensure_128mhz() stays a
  * portable no-op seam; this file is the platform half behind it. */

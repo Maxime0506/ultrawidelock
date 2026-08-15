@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap the platform heap;
 // qrtc_get_us returns monotonic microseconds since boot.
 /*

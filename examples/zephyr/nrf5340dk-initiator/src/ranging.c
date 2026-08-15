@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device-side UWB ranging-setup driver: opens the reader's BleSK-sealed SDUs and
 // answers them, walking AP-Completed -> Initiate-Ranging-Session -> M1 -> M2 ->
 // M3 -> M4 until the reader starts its responder.

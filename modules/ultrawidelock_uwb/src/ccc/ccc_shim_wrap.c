@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_shim_wrap.c — per-frame STS interception: ultrawidelock_uwb_set_sts_iv() substitutes
  * the CCC STS for the FiRa MAC; target only. */
 

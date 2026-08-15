@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // nRF5340 DK application entry for the credential initiator, the User-Device role that
 // stands in for an iPhone on the bench. Starts the Zephyr BLE central, which
 // scans for the reader's 0xFFF2 advert, connects, reads the reader's SPSM,

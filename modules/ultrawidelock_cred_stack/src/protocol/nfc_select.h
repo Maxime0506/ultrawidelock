@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file nfc_select.h
  * Parsed result of an NFC SELECT command for the credential applet: negotiated protocol version,

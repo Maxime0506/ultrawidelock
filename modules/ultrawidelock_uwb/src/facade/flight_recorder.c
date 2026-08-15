@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file flight_recorder.c
  * Binary flight-recorder format: framed records (magic, metadata, configuration, events, end) with

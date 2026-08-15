@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_ml_log2.c — log2 of an integer from its leading bit and a small table.
  *

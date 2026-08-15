@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_logquiet.c — PRETTY-gated runtime muting of benign upstream error spam.
  *
  * The stock Matter/BLE stack logs several non-fatal conditions at LOG_ERR/LOG_WRN

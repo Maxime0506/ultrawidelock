@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential BLE advertisement Dynamic Tag derivation (credential 1.0 section 11.3.1).
 /*
  * plaintextData = Pad_Bytes(6 x 00) || AdvA || Dynamic Tag Expiry Timestamp,

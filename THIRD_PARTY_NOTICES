@@ -8,10 +8,18 @@ applies only to project-original code not covered by one of these notices.
 DW3000 integration
 ------------------
 
-The DW3000 integration is distributed under the component ISC license in
-modules/ultrawidelock_dw3000/LICENSE.txt. This includes the module root, integration code,
-and Zephyr glue, except for files carrying an Apache-2.0 notice and the Qorvo
-scope listed below.
+Scope:
+
+  modules/ultrawidelock_dw3000/**
+  ports/zephyr/dw3000/**
+
+Distributed under the component ISC license in
+modules/ultrawidelock_dw3000/LICENSE.txt, except for files carrying an
+Apache-2.0 notice and the Qorvo scope listed below. ports/zephyr/dw3000/ holds
+the upstream platform/ backend and moved out of the module tree; it keeps the
+component license. The ESP-IDF backends under
+ports/esp32/components/ultrawidelock_uwb/port/ share those filenames but are
+project-original implementations of the same seam headers.
 
 Upstream: derived from Bruno Randolf's Zephyr integration at
 https://github.com/br101/zephyr-dw3000-decadriver, reduced to the source sets

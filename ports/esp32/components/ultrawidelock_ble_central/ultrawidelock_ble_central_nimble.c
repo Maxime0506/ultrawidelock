@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // NimBLE central/client backend for the credential initiator: the mirror of
 // components/ultrawidelock_ble/ultrawidelock_ble.c. That file advertises 0xFFF2, serves the
 // characteristics and runs a CoC server; this one scans for 0xFFF2, connects,

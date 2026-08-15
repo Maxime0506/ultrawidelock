@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Starting and servicing Nordic's OpenThread radio platform.
  *

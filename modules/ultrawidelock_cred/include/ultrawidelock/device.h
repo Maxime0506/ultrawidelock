@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // credential initiator (User-Device) session layer: the device-side counterpart of
 // ultrawidelock_reader.c. Drives the credential-auth handshake from the phone/fob role:
 // parses the reader's AUTH0/AUTH1/EXCHANGE commands, runs the mirror-image key

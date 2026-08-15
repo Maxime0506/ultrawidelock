@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_status.h — return codes shared by every ultrawidelock_matter layer.
  */

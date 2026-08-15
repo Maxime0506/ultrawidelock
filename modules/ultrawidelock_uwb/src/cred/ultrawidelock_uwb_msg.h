@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_msg.h — message framing accessors, dispatch and builders. */
 
 #pragma once

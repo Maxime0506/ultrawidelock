@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ultrawidelock_uwb_msg_parser.h — TLV attribute iteration and big-endian reads. */
 
 #pragma once

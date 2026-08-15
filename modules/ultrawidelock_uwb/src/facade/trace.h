@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file trace.h — Structured [ULTRAWIDELOCK_TRACE] emit helpers, gated on
  * CONFIG_ULTRAWIDELOCK_E2E_TRACE. */
 

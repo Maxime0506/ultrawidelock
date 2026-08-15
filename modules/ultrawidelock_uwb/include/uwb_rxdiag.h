@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_rxdiag.h — Read-side accessors for the RX event tallies + log stream. */
 
 #ifndef ULTRAWIDELOCK_UWB_RXDIAG_H_

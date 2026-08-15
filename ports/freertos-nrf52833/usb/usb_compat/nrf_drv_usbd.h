@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The nRF5 SDK 17.1 USB stack, on the nrfx this port actually links.
  *

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 // Device-side (User-Device) BLE transport interface: the central/client mirror of
 // ultrawidelock_ble.h. Where the reader advertises 0xFFF2, serves the GATT characteristics
 // and runs an L2CAP CoC server, the initiator scans, connects, reads the reader's

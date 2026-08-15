@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The GPIOTE vector, and the only thing that owns it.
  *

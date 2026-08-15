@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ble_timeout.c
  * credential BLE timeout supervisor (state machine + reply validator). Core: classify_attribute

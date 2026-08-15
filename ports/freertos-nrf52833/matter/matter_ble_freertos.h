@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_ble_freertos.h — the 0xFFF6 commissioning transport.
  *

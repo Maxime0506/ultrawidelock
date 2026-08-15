@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_kdf.c — UWB key schedule + SP0 Pre-POLL frame codec. */
 
 #include "ccc_kdf.h"

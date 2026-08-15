@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone). */
 
 #include <ultrawidelock/uwb.h>

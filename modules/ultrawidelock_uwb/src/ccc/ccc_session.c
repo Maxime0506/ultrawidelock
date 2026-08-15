@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /** @file ccc_session.c — credential/CCC ranging seam implementation. See ccc_session.h. */
 
 #include "ccc_session.h"

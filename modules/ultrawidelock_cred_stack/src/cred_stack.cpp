@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Independent implementation of the Nordic credential public API used by this app.
  * Protocol constants and wire formats come from Aliro Specification 1.0.

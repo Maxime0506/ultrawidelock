@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * ultrawidelock_ble — Zephyr/NCS backend for the credential BLE transport seam
  * (modules/ultrawidelock_cred/include/ultrawidelock_ble.h), for the DWM3001CDK standalone

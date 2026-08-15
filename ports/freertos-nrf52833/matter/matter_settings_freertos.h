@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file matter_settings_freertos.h — the settings API the shared Matter sources use.
  *

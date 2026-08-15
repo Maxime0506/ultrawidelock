@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /**
  * @file ultrawidelock_side.h — safety-oriented INSIDE/OUTSIDE/THRESHOLD/UNKNOWN gate
  *       for passive approach unlock.

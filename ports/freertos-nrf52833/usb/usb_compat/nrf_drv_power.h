@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * The three USB supply events, read off a vector MPSL owns.
  *

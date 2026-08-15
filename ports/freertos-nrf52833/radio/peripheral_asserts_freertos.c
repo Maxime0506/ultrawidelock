@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * Peripheral collision assertions, in the one place that can see every claim.
  *

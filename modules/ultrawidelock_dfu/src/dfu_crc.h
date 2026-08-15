@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: ISC */
+
 /*
  * dfu_crc.h - CRC-32 (IEEE 802.3, reflected) for the delta-update halves.
  *
