@@ -221,7 +221,13 @@ cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
 	"$OUT/test_harness_c_cov.o" -o "$OUT/cov_ecp"
 run_suite ecp "$OUT/cov_ecp"
 
-cov_cc -I"$SDKFAKE" -I"$CRED/include" -I"$CRED/src" \
+# -DESP_PLATFORM and the ultrawidelock_port include are what tests/ports/esp32/run.sh
+# compiles this pair with, and they are not optional: ultrawidelock_ble_nimble.c
+# includes <ultrawidelock_log.h>, which lives there, and the ESP_PLATFORM branch of it is
+# the one that resolves to sdkfake's esp_log.h -- the path the target takes.
+cov_cc -DESP_PLATFORM \
+	-I"$SDKFAKE" -I"$CRED/include" -I"$CRED/src" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$ET/test_esp_ultrawidelock_ble.c" "$ECOMP/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
 	"$CRED/src/ultrawidelock_ble_nimble.c" \
 	"$CRED/src/ultrawidelock_advtag.c" "$CRED/src/ultrawidelock_hash.c" \
