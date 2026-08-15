@@ -134,6 +134,100 @@ void test_matter_fab_settings(void)
 
 	memset(&loaded, 0, sizeof(loaded));
 	T_EQ("load after erase reports an empty store", matter_fab_load(&loaded), 1);
+
+	/*
+	 * The two attributes a controller WRITES, which lived only in RAM until
+	 * now: every reset silently undid whatever auto-lock timing and approach
+	 * direction the home app had configured, and the app has no way to tell
+	 * that apart from a lock that ignored the setting.
+	 */
+	t_group("matter_dl_attr: a write survives a reboot");
+	settingsfake_reset();
+	memset(&stored, 0, sizeof(stored));
+	stored.auto_relock_time_s = 120u;
+	stored.approach_direction = 0x05u;
+	T_EQ("both changed values are stored", matter_dl_attr_store(&stored, 0u, 0x07u), 0);
+	T_EQ("and each got its own key", settingsfake_key_count(), 2);
+	T_OK("under a tree of their own, not the identity's",
+	     settingsfake_has("mdl/art") && settingsfake_has("mdl/apd"));
+
+	memset(&loaded, 0, sizeof(loaded));
+	loaded.auto_relock_time_s = 999u;
+	loaded.approach_direction = 0x07u;
+	T_EQ("the load succeeds", matter_dl_attr_load(&loaded), 0);
+	T_EQ("AutoRelockTime comes back", loaded.auto_relock_time_s, 120u);
+	T_EQ("the approach direction comes back", loaded.approach_direction, 0x05u);
+
+	t_group("matter_dl_attr: only what changed is written");
+	settingsfake_reset();
+	memset(&stored, 0, sizeof(stored));
+	stored.auto_relock_time_s = 60u;
+	stored.approach_direction = 0x07u;
+	T_EQ("a store of two changes", matter_dl_attr_store(&stored, 0u, 0x00u), 0);
+	T_EQ("costs two saves", settingsfake_save_count(), 2);
+	T_EQ("re-writing the same values succeeds",
+	     matter_dl_attr_store(&stored, 60u, 0x07u), 0);
+	T_EQ("and costs no flash at all", settingsfake_save_count(), 2);
+
+	stored.auto_relock_time_s = 0u;
+	T_EQ("zero is a value, not an absence", matter_dl_attr_store(&stored, 60u, 0x07u), 0);
+	T_EQ("so it is written", settingsfake_save_count(), 3);
+	memset(&loaded, 0, sizeof(loaded));
+	loaded.auto_relock_time_s = 999u;
+	(void)matter_dl_attr_load(&loaded);
+	T_EQ("and read back as zero", loaded.auto_relock_time_s, 0u);
+
+	t_group("matter_dl_attr: nothing stored leaves the boot defaults alone");
+	settingsfake_reset();
+	memset(&loaded, 0, sizeof(loaded));
+	loaded.auto_relock_time_s = 42u;
+	loaded.approach_direction = 0x07u;
+	T_EQ("an empty store still succeeds", matter_dl_attr_load(&loaded), 0);
+	T_EQ("AutoRelockTime keeps the port's default", loaded.auto_relock_time_s, 42u);
+	T_EQ("so does the approach direction", loaded.approach_direction, 0x07u);
+
+	/*
+	 * A store that refuses the write. The RAM value stands for this boot --
+	 * the controller's write took effect and only its durability was lost --
+	 * so the failure is reported and nothing is rolled back.
+	 */
+	t_group("matter_dl_attr: a full store is reported, not hidden");
+	settingsfake_reset();
+	memset(&stored, 0, sizeof(stored));
+	stored.auto_relock_time_s = 30u;
+	settingsfake_fail_saves_after(0);
+	T_OK("a failed save is reported", matter_dl_attr_store(&stored, 0u, 0u) != 0);
+	settingsfake_fail_saves_after(-1);
+	T_EQ("and nothing was stored", settingsfake_key_count(), 0);
+
+	t_group("matter_dl_attr: erase");
+	settingsfake_reset();
+	memset(&stored, 0, sizeof(stored));
+	stored.auto_relock_time_s = 90u;
+	stored.approach_direction = 0x01u;
+	T_EQ("store for erase", matter_dl_attr_store(&stored, 0u, 0u), 0);
+	T_EQ("erase succeeds", matter_dl_attr_erase(), 0);
+	T_EQ("both keys are gone", settingsfake_key_count(), 0);
+
+	/*
+	 * And the two trees stay separate. A factory reset un-commissions the
+	 * node; forgetting the owner's auto-lock timing is not part of that.
+	 */
+	t_group("matter_dl_attr: the identity erase leaves them alone");
+	settingsfake_reset();
+	fill_identity(&stored);
+	stored.auto_relock_time_s = 75u;
+	stored.approach_direction = 0x02u;
+	T_EQ("identity stored", matter_fab_store(&stored), 0);
+	T_EQ("attributes stored", matter_dl_attr_store(&stored, 0u, 0u), 0);
+	T_EQ("erasing the identity succeeds", matter_fab_erase(), 0);
+	T_OK("and the attributes are still there",
+	     settingsfake_has("mdl/art") && settingsfake_has("mdl/apd"));
+
+	memset(&loaded, 0, sizeof(loaded));
+	(void)matter_dl_attr_load(&loaded);
+	T_EQ("they still read back", loaded.auto_relock_time_s, 75u);
+	T_EQ("both of them", loaded.approach_direction, 0x02u);
 }
 
 int main(void)

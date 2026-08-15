@@ -9,6 +9,7 @@
 #define ULTRAWIDELOCK_FREERTOS_PLATFORM_H
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -60,6 +61,18 @@ int ultrawidelock_freertos_flash_write(uint32_t offset, const void *data, size_t
 
 /** Erase whole pages. offset and length must be page-aligned. Zero on success. */
 int ultrawidelock_freertos_flash_erase(uint32_t offset, size_t length);
+
+/**
+ * May this range be written or erased at all?
+ *
+ * The driver confines writes to a window that excludes the application image,
+ * so a store with an offset bug can lose its own data but cannot erase the
+ * firmware it is running. Exposed because the window is a BUILD-TIME decision
+ * and the partitions it has to cover are a LINKER decision: whoever owns a
+ * partition can ask, at start-up, whether it is actually writable, rather than
+ * finding out when a user tries to use it.
+ */
+bool ultrawidelock_freertos_flash_writable(uint32_t offset, size_t length);
 
 /** Platform log sink. It must be safe from every task that uses shared code. */
 void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag, const char *fmt, ...);

@@ -340,6 +340,74 @@ struct matter_user {
  */
 #define MATTER_DL_SUPPORTED_OPERATING_MODES 0xFFF6u
 
+/*
+ * The LockOperation event (door-lock-cluster.xml:723-733).
+ *
+ * Emitted whenever the bolt's reported state is CHANGED by something -- a
+ * controller command or a credential walk-up. It is the only event this node
+ * has, and it exists because the CHIP-based lock builds serve it and this one
+ * served no events at all: Apple Home's "Manage Access" pane is the working
+ * hypothesis for what that absence gates.
+ *
+ * Priority is CRITICAL, not Info. That is what the cluster XML says
+ * (priority="critical" on the event element), and it is the field a subscriber
+ * uses to decide what it may drop.
+ */
+#define MATTER_EVENT_DL_LOCK_OPERATION 0x0002u
+
+/** PriorityLevel (EventLoggingTypes.h:51-56). */
+#define MATTER_EVENT_PRIORITY_DEBUG    0u
+#define MATTER_EVENT_PRIORITY_INFO     1u
+#define MATTER_EVENT_PRIORITY_CRITICAL 2u
+
+/** LockOperationTypeEnum (door-lock-cluster.xml:854-861). */
+#define MATTER_DL_LOCK_OP_LOCK   0u
+#define MATTER_DL_LOCK_OP_UNLOCK 1u
+
+/*
+ * OperationSourceEnum (door-lock-cluster.xml:882-895). Only the three this node
+ * can honestly report: a controller command is Remote, a credential walk-up is
+ * the credential source at value 10, and Unspecified is what a state change
+ * with no known cause gets. The enum item's own spelling is the CSA's, which is
+ * why the identifier below keeps it.
+ */
+#define MATTER_DL_OP_SOURCE_UNSPECIFIED 0u
+#define MATTER_DL_OP_SOURCE_REMOTE      7u
+#define MATTER_DL_OP_SOURCE_ALIRO       10u
+
+/** LockOperation event fields (door-lock-cluster.xml:725-731). */
+#define MATTER_DL_LOCK_OP_FIELD_TYPE         0u
+#define MATTER_DL_LOCK_OP_FIELD_SOURCE       1u
+#define MATTER_DL_LOCK_OP_FIELD_USER_INDEX   2u
+#define MATTER_DL_LOCK_OP_FIELD_FABRIC_INDEX 3u
+#define MATTER_DL_LOCK_OP_FIELD_SOURCE_NODE  4u
+
+/**
+ * Events held for a subscriber that has not collected them yet.
+ *
+ * Four is a walk-up's worth, not an audit log. A subscriber is told about each
+ * one as it happens, so the ring only has to survive the gap between an event
+ * and the report carrying it; anything that needs durability forwards them
+ * upstream and keeps them there.
+ */
+#define MATTER_EVENTS_MAX 4u
+
+/**
+ * One recorded LockOperation, as a report needs it.
+ *
+ * The credential list (field 5) is deliberately absent: it is optional, it
+ * would carry a credential index this node does not track per operation, and a
+ * list invented to fill a field is worse than an absent optional.
+ */
+struct matter_lock_event {
+	uint64_t number;
+	uint64_t timestamp_ms;
+	uint8_t operation;    /**< MATTER_DL_LOCK_OP_*. */
+	uint8_t source;       /**< MATTER_DL_OP_SOURCE_*. */
+	uint8_t fabric_index; /**< 0 when no fabric owns it; reported as null. */
+	uint64_t source_node; /**< Meaningful only with a fabric index. */
+};
+
 /**
  * CredentialRulesSupport (0x001B): mandatory with the User feature. Bit 0 is
  * Single -- one credential authorises an operation on its own -- and it is
@@ -648,6 +716,29 @@ struct matter_device_info {
 	 */
 	uint8_t approach_direction;
 	/**
+	 * The LockOperation events waiting to be reported, oldest first.
+	 *
+	 * A ring rather than a single slot: two walk-ups inside one report
+	 * interval are ordinary, and a slot would report the second twice and
+	 * the first never. @ref event_count says how many are live.
+	 */
+	struct matter_lock_event events[MATTER_EVENTS_MAX];
+	uint8_t event_count;
+	/**
+	 * The next EventNumber to hand out; the first event is 1.
+	 *
+	 * Zero is never a valid event number, which is what lets an
+	 * EventFilter of 0 mean "everything you have" without also meaning
+	 * "including one I already saw".
+	 */
+	uint64_t next_event_number;
+	/**
+	 * Milliseconds since boot, for an event's SystemTimestamp. The port
+	 * owns the clock; NULL makes every event report a timestamp of zero,
+	 * which is legal and useless rather than wrong.
+	 */
+	uint64_t (*uptime_ms_cb)(void);
+	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *
 	 * Small and real rather than stubbed: Apple writes a user with SetUser
@@ -934,6 +1025,28 @@ struct matter_admin_hooks {
 void matter_clusters_set_admin_hooks(const struct matter_admin_hooks *hooks);
 
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info);
+
+/**
+ * Record a LockOperation event, to be carried by the next report.
+ *
+ * Call after the state has changed, not before: the event says what happened.
+ * LockDoor and UnlockDoor record their own, so the caller only needs this for
+ * the changes that do not arrive as commands -- a credential walk-up, or an
+ * automatic relock.
+ *
+ * @param operation MATTER_DL_LOCK_OP_LOCK or _UNLOCK.
+ * @param source MATTER_DL_OP_SOURCE_*.
+ * @param fabric_index the fabric that asked, or 0 when none did -- reported as
+ *        null, together with @p source_node, because a walk-up has no fabric
+ *        and claiming one would name the wrong controller.
+ * @param source_node the node that asked; ignored when @p fabric_index is 0.
+ */
+void matter_clusters_record_lock_operation(struct matter_device_info *info, uint8_t operation,
+					   uint8_t source, uint8_t fabric_index,
+					   uint64_t source_node);
+
+/** How many events are waiting. Zero after @ref matter_clusters_init. */
+size_t matter_clusters_event_count(const struct matter_device_info *info);
 
 /**
  * Undo a commissioning that never finished.

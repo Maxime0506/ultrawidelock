@@ -200,6 +200,45 @@ int settings_load_subtree(const char *subtree)
 	return 0;
 }
 
+/*
+ * Zephyr calls the callback once per record AT OR BELOW the subtree, and a
+ * subtree that names a leaf outright is the normal way a caller asks for one
+ * value. That case hands the callback an empty key, which is what the port's
+ * loaders match on -- so it is reproduced rather than approximated.
+ */
+int settings_load_subtree_direct(const char *subtree, settings_load_direct_cb cb, void *param)
+{
+	size_t tlen;
+
+	if (subtree == NULL || cb == NULL) {
+		return -EINVAL;
+	}
+	tlen = strlen(subtree);
+
+	for (int i = 0; i < FAKE_MAX_KEYS; i++) {
+		struct read_ctx ctx;
+		const char *leaf;
+		int rc;
+
+		if (!s_store[i].used || strncmp(s_store[i].name, subtree, tlen) != 0) {
+			continue;
+		}
+		if (s_store[i].name[tlen] == '\0') {
+			leaf = "";
+		} else if (s_store[i].name[tlen] == '/') {
+			leaf = s_store[i].name + tlen + 1;
+		} else {
+			continue;
+		}
+		ctx.e = &s_store[i];
+		rc = cb(leaf, s_store[i].len, fake_read, &ctx, param);
+		if (rc != 0) {
+			return rc;
+		}
+	}
+	return 0;
+}
+
 int settings_name_steq(const char *name, const char *key, const char **next)
 {
 	size_t klen = strlen(key);

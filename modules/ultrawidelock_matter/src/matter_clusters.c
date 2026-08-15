@@ -2335,6 +2335,20 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 			info->lock_state = (inv->command == MATTER_CMD_DL_UNLOCK_DOOR)
 						   ? MATTER_DL_LOCK_STATE_UNLOCKED
 						   : MATTER_DL_LOCK_STATE_LOCKED;
+			/*
+			 * Recorded here rather than by the caller, because this is
+			 * the only place that knows the command ran AND which
+			 * fabric asked. SourceNode is left unknown: the peer's node
+			 * id belongs to the CASE session, which this layer never
+			 * sees, and the fabric's own node id is THIS node's -- it
+			 * would name the lock as the thing that unlocked the lock.
+			 */
+			matter_clusters_record_lock_operation(
+				info,
+				(inv->command == MATTER_CMD_DL_UNLOCK_DOOR)
+					? MATTER_DL_LOCK_OP_UNLOCK
+					: MATTER_DL_LOCK_OP_LOCK,
+				MATTER_DL_OP_SOURCE_REMOTE, info->accessing_fabric_index, 0u);
 			return MATTER_IM_STATUS_SUCCESS;
 		}
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
@@ -2800,6 +2814,111 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
+/* ---- events ---------------------------------------------------------------- */
+
+void matter_clusters_record_lock_operation(struct matter_device_info *info, uint8_t operation,
+					   uint8_t source, uint8_t fabric_index,
+					   uint64_t source_node)
+{
+	struct matter_lock_event *ev;
+
+	if (info == NULL) {
+		return;
+	}
+	/*
+	 * A full ring drops its OLDEST, not the new one. The newest event is the
+	 * one describing the state a controller can still see on the tile, so
+	 * refusing it to keep history would leave the report agreeing with the
+	 * past and disagreeing with the bolt.
+	 */
+	if (info->event_count == MATTER_EVENTS_MAX) {
+		memmove(&info->events[0], &info->events[1],
+			sizeof(info->events[0]) * (MATTER_EVENTS_MAX - 1u));
+		info->event_count--;
+	}
+	ev = &info->events[info->event_count];
+	memset(ev, 0, sizeof(*ev));
+	/* Pre-increment: the first event is number 1, so a filter of 0 can mean
+	 * "everything" without also meaning "one I have already seen". */
+	ev->number = ++info->next_event_number;
+	ev->timestamp_ms = info->uptime_ms_cb != NULL ? info->uptime_ms_cb() : 0u;
+	ev->operation = operation;
+	ev->source = source;
+	ev->fabric_index = fabric_index;
+	/* Zero is not a legal operational node id, so it doubles as "unknown"
+	 * and is reported as null. A walk-up has no node behind it at all. */
+	ev->source_node = fabric_index != 0u ? source_node : 0u;
+	info->event_count++;
+}
+
+size_t matter_clusters_event_count(const struct matter_device_info *info)
+{
+	return info != NULL ? info->event_count : 0u;
+}
+
+static size_t event_count(void *ctx)
+{
+	return matter_clusters_event_count((const struct matter_device_info *)ctx);
+}
+
+static bool event_at(void *ctx, size_t index, struct matter_im_event *out)
+{
+	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
+
+	if (info == NULL || out == NULL || index >= info->event_count) {
+		return false;
+	}
+	out->endpoint = MATTER_ENDPOINT_LOCK;
+	out->cluster = MATTER_CLUSTER_DOOR_LOCK;
+	out->event = MATTER_EVENT_DL_LOCK_OPERATION;
+	out->number = info->events[index].number;
+	out->timestamp_ms = info->events[index].timestamp_ms;
+	out->priority = MATTER_EVENT_PRIORITY_CRITICAL;
+	return true;
+}
+
+/**
+ * The LockOperation fields.
+ *
+ * UserIndex is always null: this node's users are a table a controller writes,
+ * and nothing correlates an unlock back to one of them. A null nullable says
+ * "not known", which is true; a zero would name user slot 0, which is not.
+ */
+static void event_data(void *ctx, size_t index, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
+	const struct matter_lock_event *ev;
+
+	if (info == NULL || index >= info->event_count) {
+		(void)matter_tlv_put_null(w, tag);
+		return;
+	}
+	ev = &info->events[index];
+
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_TYPE), ev->operation);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_SOURCE), ev->source);
+	(void)matter_tlv_put_null(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_USER_INDEX));
+	/*
+	 * Each nullable stands on its own. A controller command has a fabric and
+	 * an unknown node; a walk-up has neither. Naming a node that did not ask
+	 * would tell a controller that IT unlocked the door.
+	 */
+	if (ev->fabric_index != 0u) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_FABRIC_INDEX),
+					 ev->fabric_index);
+	} else {
+		(void)matter_tlv_put_null(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_FABRIC_INDEX));
+	}
+	if (ev->source_node != 0u) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_SOURCE_NODE),
+					 ev->source_node);
+	} else {
+		(void)matter_tlv_put_null(w, MATTER_TLV_CTX(MATTER_DL_LOCK_OP_FIELD_SOURCE_NODE));
+	}
+	(void)matter_tlv_end_container(w);
+}
+
 /**
  * Register this device's attribute, cluster, and command handlers with a Matter IM server.
  */
@@ -2817,5 +2936,8 @@ void matter_clusters_init(struct matter_im_server *srv, struct matter_device_inf
 	srv->command = command;
 	srv->command_fields = command_fields;
 	srv->write = attr_write;
+	srv->event_count = event_count;
+	srv->event_at = event_at;
+	srv->event_data = event_data;
 	srv->ctx = info;
 }

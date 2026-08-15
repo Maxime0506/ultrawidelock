@@ -94,6 +94,7 @@ void test_matter_exchange(void);
 void test_matter_im(void);
 void test_matter_im_invoke(void);
 void test_matter_im_write(void);
+void test_matter_im_events(void);
 void test_matter_attest(void);
 void test_matter_fabric(void);
 void test_matter_addnoc(void);

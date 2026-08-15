@@ -52,6 +52,21 @@
 /*
  * What may be written or erased. The default is the two pages the key-value
  * store owns; a board that adds a DFU slot widens it deliberately.
+ *
+ * AND ONE DID, WITHOUT WIDENING IT. The image links a DFU receiver, advertises
+ * an update channel, opens a window on SW2 and accepts the connection -- and
+ * then could not write one byte, because patch_staging begins at 0x74000 and
+ * every write to it was refused here. The only symptom a user gets is the push
+ * tool printing "a flash write or erase failed", which reads as a bad part
+ * rather than as a window that was never opened for the partition. MEASURED on
+ * hardware 2026-08-15: BEGIN accepted, staging erase refused, error 6.
+ *
+ * The target build now passes the staging base in, from the same linker script
+ * that places the partition (board/nrf52833_lock.ld), so the two cannot drift.
+ * The default below is what a build with no DFU slot wants, and it is also what
+ * the host suite compiles against. ultrawidelock_flash_area_open() checks the
+ * partition against this window at start-up so a future mismatch is a boot-time
+ * line rather than a failed update months later.
  */
 #ifndef ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE
 #define ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE 0x0007e000u
@@ -324,6 +339,11 @@ static bool in_writable_window(uint32_t offset, size_t length)
 		return false;
 	}
 	return length <= ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_LIMIT - offset;
+}
+
+bool ultrawidelock_freertos_flash_writable(uint32_t offset, size_t length)
+{
+	return in_writable_window(offset, length);
 }
 
 /* Spin until the controller has finished. NVMC stalls the CPU regardless. */

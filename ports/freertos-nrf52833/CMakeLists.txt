@@ -547,6 +547,20 @@ target_include_directories(ultrawidelock_storage PUBLIC
 )
 target_link_libraries(ultrawidelock_storage PUBLIC ultrawidelock_radio)
 
+# The flash driver refuses writes below this address, so the window has to cover
+# every partition anything is expected to write -- and the DFU staging partition
+# is BELOW the key-value store, which is the driver's default lower bound. Left
+# at the default, the receiver could not erase its own staging area and every
+# update died with "a flash write or erase failed" (measured on hardware
+# 2026-08-15).
+#
+# 0x74000 is __ultrawidelock_patch_staging_start in board/nrf52833_lock.ld, which
+# is the one place the map is decided. Restated here because the value has to
+# reach the preprocessor, and checked against the linker's own symbol at
+# start-up by ultrawidelock_flash_area_open() so the two cannot drift in silence.
+target_compile_definitions(ultrawidelock_storage
+  PRIVATE ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE=0x00074000u)
+
 # ----------------------------------------------------------------------------
 # UWB layer: the ranging engine, the vendored decadriver, and the DW3110
 # platform backends. Its own file, because its source set comes from the shared

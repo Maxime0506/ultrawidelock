@@ -127,10 +127,25 @@ async def run(args):
         "0000fff6-0000-1000-8000-00805f9b34fb",
     }
 
+    # SERVICE DATA AS WELL AS THE UUID LIST, and this is not belt-and-braces.
+    # A Matter commissionable advertisement carries 0xFFF6 as service DATA --
+    # the opcode, discriminator, vendor and product, which is the whole point of
+    # it -- and puts something else in the 16-bit UUID list. Matching only the
+    # list therefore misses a board that is advertising perfectly well, and says
+    # "is it powered?" about a lock that is sitting there commissionable.
+    # MEASURED 2026-08-15: an uncommissioned DWM3001CDK at -54 dBm advertising
+    # service data 0000fff6=00000ff1ff018000 (discriminator 0x0F00, VID 0xFFF1,
+    # PID 0x8001) with service_uuids = ['0000676e-...'] and no name at all.
+    def advertises_ours(d, ad):
+        if (d.name or "") == args.name:
+            return True
+        seen = {u.lower() for u in (ad.service_uuids or [])}
+        seen |= {u.lower() for u in (ad.service_data or {})}
+        return bool(wanted & seen)
+
     print("  scanning ...")
     device = await BleakScanner.find_device_by_filter(
-        lambda d, ad: (d.name or "") == args.name
-        or bool(wanted & {u.lower() for u in (ad.service_uuids or [])}),
+        advertises_ours,
         timeout=args.scan_timeout,
     )
     if device is None:

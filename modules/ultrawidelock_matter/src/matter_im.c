@@ -10,7 +10,36 @@
 
 /* ReadRequestMessage.h:41-47 */
 #define TAG_READ_ATTRIBUTE_PATHS 0u
+#define TAG_READ_EVENT_PATHS     1u
+#define TAG_READ_EVENT_FILTERS   2u
 #define TAG_READ_FABRIC_FILTERED 3u
+
+/*
+ * EventPathIB.h:38-44. A LIST, like AttributePathIB -- but the tag numbers are
+ * NOT the same as that one's, and reusing them encodes an endpoint as a cluster
+ * with no error anywhere.
+ */
+#define TAG_EPATH_NODE      0u
+#define TAG_EPATH_ENDPOINT  1u
+#define TAG_EPATH_CLUSTER   2u
+#define TAG_EPATH_EVENT     3u
+#define TAG_EPATH_IS_URGENT 4u
+
+/* EventFilterIB.h:38-41 */
+#define TAG_EFILTER_NODE      0u
+#define TAG_EFILTER_EVENT_MIN 1u
+
+/* EventReportIB.h:37-38 */
+#define TAG_EREPORT_STATUS 0u
+#define TAG_EREPORT_DATA   1u
+
+/* EventDataIB.h:38-45 */
+#define TAG_EDATA_PATH             0u
+#define TAG_EDATA_EVENT_NUMBER     1u
+#define TAG_EDATA_PRIORITY         2u
+#define TAG_EDATA_EPOCH_TIMESTAMP  3u
+#define TAG_EDATA_SYSTEM_TIMESTAMP 4u
+#define TAG_EDATA_DATA             7u
 
 /* AttributePathIB.h:40-45. The IB itself is a LIST, not a structure. */
 #define TAG_PATH_ENDPOINT  2u
@@ -20,6 +49,7 @@
 /* ReportDataMessage.h:43-47 */
 #define TAG_REPORT_SUBSCRIPTION_ID   0u
 #define TAG_REPORT_ATTRIBUTE_REPORTS 1u
+#define TAG_REPORT_EVENT_REPORTS     2u
 #define TAG_REPORT_MORE_CHUNKS       3u
 #define TAG_REPORT_SUPPRESS_RESPONSE 4u
 
@@ -136,6 +166,163 @@ static int decode_path(struct matter_tlv_reader *r, struct matter_im_path *p)
 	return matter_tlv_exit(r);
 }
 
+/** Decode one EventPathIB. The reader is positioned ON the list element. */
+static int decode_event_path(struct matter_tlv_reader *r, struct matter_im_event_path *p)
+{
+	int rc;
+
+	memset(p, 0, sizeof(*p));
+
+	rc = matter_tlv_enter(r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	for (;;) {
+		uint64_t v;
+
+		rc = matter_tlv_next(r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+
+		/* Node and IsUrgent are skipped for the reason unknown tags are:
+		 * see decode_path(). IsUrgent asks for a report sooner than the
+		 * minimum interval, and this node reports on the change itself,
+		 * so honouring it would change nothing. */
+		if (matter_tlv_tag(r) == MATTER_TLV_CTX(TAG_EPATH_ENDPOINT)) {
+			rc = matter_tlv_get_u64(r, &v);
+			if (rc != MATTER_OK || v > UINT16_MAX) {
+				return MATTER_E_INVAL;
+			}
+			p->endpoint = (uint16_t)v;
+			p->have_endpoint = true;
+		} else if (matter_tlv_tag(r) == MATTER_TLV_CTX(TAG_EPATH_CLUSTER)) {
+			rc = matter_tlv_get_u64(r, &v);
+			if (rc != MATTER_OK || v > UINT32_MAX) {
+				return MATTER_E_INVAL;
+			}
+			p->cluster = (uint32_t)v;
+			p->have_cluster = true;
+		} else if (matter_tlv_tag(r) == MATTER_TLV_CTX(TAG_EPATH_EVENT)) {
+			rc = matter_tlv_get_u64(r, &v);
+			if (rc != MATTER_OK || v > UINT32_MAX) {
+				return MATTER_E_INVAL;
+			}
+			p->event = (uint32_t)v;
+			p->have_event = true;
+		}
+	}
+
+	return matter_tlv_exit(r);
+}
+
+/**
+ * Decode an EventRequests array into @p out.
+ *
+ * Paths past MATTER_IM_MAX_EVENT_PATHS are REFUSED rather than dropped, which is
+ * what the attribute side does and for the same reason: answering some of what
+ * was asked, silently, reads as a node that has nothing more to say.
+ */
+static int decode_event_paths(struct matter_tlv_reader *r, struct matter_im_read *out)
+{
+	int rc;
+
+	if (matter_tlv_element_type(r) != MATTER_TLV_ARRAY) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_element_type(r) != MATTER_TLV_LIST) {
+			return MATTER_E_TYPE;
+		}
+		if (out->n_event_paths >= MATTER_IM_MAX_EVENT_PATHS) {
+			return MATTER_E_NOSPACE;
+		}
+		rc = decode_event_path(r, &out->event_paths[out->n_event_paths]);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		out->n_event_paths++;
+	}
+	return matter_tlv_exit(r);
+}
+
+/**
+ * Decode an EventFilters array, keeping the LARGEST EventMin it carries.
+ *
+ * One filter per node id, and this node answers one peer per exchange, so the
+ * highest watermark is the honest reading of "what this subscriber has already
+ * seen". Taking the lowest would re-report events the peer acknowledged.
+ */
+static int decode_event_filters(struct matter_tlv_reader *r, struct matter_im_read *out)
+{
+	int rc;
+
+	if (matter_tlv_element_type(r) != MATTER_TLV_ARRAY) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_element_type(r) != MATTER_TLV_STRUCTURE) {
+			return MATTER_E_TYPE;
+		}
+		rc = matter_tlv_enter(r);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		for (;;) {
+			uint64_t v;
+
+			rc = matter_tlv_next(r);
+			if (rc == MATTER_END) {
+				break;
+			}
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+			if (matter_tlv_tag(r) != MATTER_TLV_CTX(TAG_EFILTER_EVENT_MIN)) {
+				continue;
+			}
+			rc = matter_tlv_get_u64(r, &v);
+			if (rc != MATTER_OK) {
+				return MATTER_E_INVAL;
+			}
+			if (v > out->event_min) {
+				out->event_min = v;
+			}
+		}
+		rc = matter_tlv_exit(r);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+	}
+	return matter_tlv_exit(r);
+}
+
 /**
  * Decode a Matter read request message from TLV to extract attribute paths and filter settings.
  * Parses ReadRequestMessage structure to collect attribute paths and fabric_filtered flag.
@@ -208,15 +395,25 @@ int matter_im_read_request_decode(const uint8_t *tlv, size_t len, struct matter_
 			if (rc != MATTER_OK) {
 				return rc;
 			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_READ_EVENT_PATHS)) {
+			rc = decode_event_paths(&r, out);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_READ_EVENT_FILTERS)) {
+			rc = decode_event_filters(&r, out);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
 		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_READ_FABRIC_FILTERED)) {
 			rc = matter_tlv_get_bool(&r, &out->fabric_filtered);
 			if (rc != MATTER_OK) {
 				return rc;
 			}
 		}
-		/* Event paths, filters and the revision are read past deliberately:
-		 * this node has no events, and the revision is the peer's claim
-		 * about itself, not a demand on the answer. */
+		/* Data-version filters and the revision are read past deliberately:
+		 * this node reports every value every time, and the revision is the
+		 * peer's claim about itself, not a demand on the answer. */
 	}
 
 	return matter_tlv_exit(&r);
@@ -411,6 +608,128 @@ static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_
 	}
 }
 
+/** Does @p ev fall under any of the request's event paths? */
+static bool event_wanted(const struct matter_im_read *req, const struct matter_im_event *ev)
+{
+	uint8_t i;
+
+	for (i = 0; i < req->n_event_paths; i++) {
+		const struct matter_im_event_path *p = &req->event_paths[i];
+
+		/* An absent component is a wildcard, exactly as it is for an
+		 * attribute path -- a controller subscribing to "all events"
+		 * sends one path with nothing in it. */
+		if (p->have_endpoint && p->endpoint != ev->endpoint) {
+			continue;
+		}
+		if (p->have_cluster && p->cluster != ev->cluster) {
+			continue;
+		}
+		if (p->have_event && p->event != ev->event) {
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Append one EventReportIB carrying an EventDataIB.
+ *
+ * SYSTEM timestamp, not epoch: this node has no trusted wall clock, and an
+ * epoch timestamp it invented would be a claim about when an unlock happened
+ * that a controller is entitled to believe. Milliseconds since boot is true and
+ * says so (EventDataIB.h:42, and the spec allows exactly one of the two).
+ */
+static void put_event_report(struct matter_tlv_writer *w, const struct matter_im_server *srv,
+			     const struct matter_im_event *ev, size_t index)
+{
+	(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_start_container(w, MATTER_TLV_CTX(TAG_EREPORT_DATA), MATTER_TLV_STRUCTURE);
+
+	(void)matter_tlv_start_container(w, MATTER_TLV_CTX(TAG_EDATA_PATH), MATTER_TLV_LIST);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EPATH_ENDPOINT), ev->endpoint);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EPATH_CLUSTER), ev->cluster);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EPATH_EVENT), ev->event);
+	(void)matter_tlv_end_container(w);
+
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EDATA_EVENT_NUMBER), ev->number);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EDATA_PRIORITY), ev->priority);
+	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_EDATA_SYSTEM_TIMESTAMP), ev->timestamp_ms);
+	srv->event_data(srv->ctx, index, w, MATTER_TLV_CTX(TAG_EDATA_DATA));
+
+	(void)matter_tlv_end_container(w);
+	(void)matter_tlv_end_container(w);
+}
+
+/**
+ * Write the EventReports array, oldest event first.
+ *
+ * Written only when the request ASKED for events. The field is optional, and an
+ * absent array says the same thing as an empty one -- so a read that named no
+ * event path produces exactly the bytes it did before this existed, which is
+ * what keeps every commissioning report unchanged.
+ *
+ * Chunking walks the same cursor the attribute reports use, so events resume
+ * where a previous chunk stopped. What that cannot survive is the ring EVICTING
+ * between two chunks of one report: indices shift, and an event can be missed.
+ * It stays missed rather than being reported twice, and the next report carries
+ * whatever the ring still holds.
+ */
+static void put_event_reports(struct matter_tlv_writer *w, const struct matter_im_server *srv,
+			      const struct matter_im_read *req, struct chunk_ctx *cc)
+{
+	size_t n;
+	size_t i;
+
+	if (req->n_event_paths == 0u || srv->event_count == NULL || srv->event_at == NULL ||
+	    srv->event_data == NULL) {
+		return;
+	}
+
+	(void)matter_tlv_start_container(w, MATTER_TLV_CTX(TAG_REPORT_EVENT_REPORTS),
+					 MATTER_TLV_ARRAY);
+	n = srv->event_count(srv->ctx);
+	for (i = 0; i < n; i++) {
+		struct matter_im_event ev;
+		size_t save_len;
+		int save_rc;
+		uint8_t save_depth;
+
+		if (!srv->event_at(srv->ctx, i, &ev)) {
+			break;
+		}
+		if (ev.number < req->event_min || !event_wanted(req, &ev)) {
+			continue;
+		}
+		if (cc == NULL) {
+			put_event_report(w, srv, &ev, i);
+			continue;
+		}
+		if (cc->full) {
+			break;
+		}
+		if (cc->seen++ < cc->skip) {
+			continue;
+		}
+		/* Attempted and rolled back, never predicted -- the same
+		 * discipline emit() uses, and for the same reason. */
+		save_len = w->len;
+		save_rc = w->rc;
+		save_depth = w->depth;
+		put_event_report(w, srv, &ev, i);
+		if (w->rc != MATTER_TLV_OK || w->len + cc->reserve > w->cap) {
+			w->len = save_len;
+			w->rc = save_rc;
+			w->depth = save_depth;
+			cc->full = true;
+			break;
+		}
+		cc->emitted++;
+	}
+	(void)matter_tlv_end_container(w);
+}
+
 int matter_im_report_data_chunk(const struct matter_im_server *srv,
 				const struct matter_im_read *req, uint16_t sent, uint8_t *out,
 				size_t cap, size_t *out_len, bool *more, uint16_t *emitted,
@@ -540,6 +859,7 @@ static int report_encode(const struct matter_im_server *srv, const struct matter
 	}
 
 	(void)matter_tlv_end_container(&w);
+	put_event_reports(&w, srv, req, cc);
 	/*
 	 * More follows. The peer answers a chunk with a StatusResponse and waits
 	 * for the rest; omitting this on a report that WAS cut short is how a
@@ -1167,6 +1487,8 @@ int matter_im_write_response_encode(const struct matter_im_server *srv,
 #define TAG_SUB_MIN_INTERVAL       1u
 #define TAG_SUB_MAX_INTERVAL       2u
 #define TAG_SUB_ATTRIBUTE_REQUESTS 3u
+#define TAG_SUB_EVENT_REQUESTS     4u
+#define TAG_SUB_EVENT_FILTERS      5u
 #define TAG_SUB_FABRIC_FILTERED    7u
 
 /* SubscribeResponseMessage.h:39-42 */
@@ -1245,6 +1567,16 @@ int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
 			if (rc != MATTER_OK) {
 				return rc;
 			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_EVENT_REQUESTS)) {
+			rc = decode_event_paths(&r, &out->read);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_EVENT_FILTERS)) {
+			rc = decode_event_filters(&r, &out->read);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
 		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_MIN_INTERVAL)) {
 			if (matter_tlv_get_u64(&r, &v) == MATTER_OK && v <= UINT16_MAX) {
 				out->min_interval_s = (uint16_t)v;
@@ -1258,8 +1590,8 @@ int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
 		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_FABRIC_FILTERED)) {
 			(void)matter_tlv_get_bool(&r, &out->read.fabric_filtered);
 		}
-		/* Event requests, filters and data-version filters are read past:
-		 * this node has no events and reports every value every time. */
+		/* Data-version filters are read past: this node reports every
+		 * value every time. */
 	}
 
 	return matter_tlv_exit(&r);

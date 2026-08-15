@@ -41,6 +41,7 @@
 /* ultrawidelock_reader_provision_identity, for SetAliroReaderConfig */
 #include <ultrawidelock/reader.h>
 #include "ultrawidelock_prim.h" /* ultrawidelock_random, the CSPRNG the reader already uses */
+#include "ultrawidelock_port.h" /* ultrawidelock_uptime_ms, an event's SystemTimestamp */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"
 #include "matter_case.h"
@@ -1279,6 +1280,8 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 static void on_write_request(const struct matter_exchange_in *in)
 {
 	static struct matter_im_write wr;
+	uint32_t prev_relock_s;
+	uint8_t prev_approach;
 	size_t resp_len = 0u;
 	int rc;
 
@@ -1291,11 +1294,21 @@ static void on_write_request(const struct matter_exchange_in *in)
 		(unsigned int)wr.path.cluster, (unsigned int)wr.path.attribute,
 		(unsigned int)wr.data_len);
 
+	/*
+	 * Persisted by VALUE CHANGE rather than by write status: the encoder
+	 * only mutates s_info on a write it accepted, so a changed field is
+	 * exactly a write that ran. Re-writing an unchanged value costs no
+	 * flash, which matters because the store shares its pages with the
+	 * fabric table.
+	 */
+	prev_relock_s = s_info.auto_relock_time_s;
+	prev_approach = s_info.approach_direction;
 	rc = matter_im_write_response_encode(&s_im, &wr, s_report, sizeof(s_report), &resp_len);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build WriteResponse (%d)", rc);
 		return;
 	}
+	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach);
 	if (resp_len == 0u) {
 		/* The write ran; the peer asked not to be told. */
 		LOG_INF("  write done, response suppressed");
@@ -1329,6 +1342,15 @@ struct sub_state {
 	uint16_t session_id;
 	/** Reports already delivered by earlier chunks of the priming report. */
 	uint16_t sent;
+	/**
+	 * The lowest EventNumber this subscriber has NOT been sent.
+	 *
+	 * Held per subscription rather than per node: two controllers advance
+	 * independently, and a shared watermark would have the second one never
+	 * hear about an unlock the first already collected. Zero until the
+	 * subscription asks for events.
+	 */
+	uint64_t event_min;
 	/** More chunks remain; the next StatusResponse asks for one. */
 	bool more;
 	/* Between the priming report and the StatusResponse that confirms it. */
@@ -1542,7 +1564,19 @@ static void sub_resume_for(uint8_t case_slot, uint64_t peer_node, uint8_t fabric
  * kilobyte-and-a-half a wildcard priming report needs, and this node has under
  * 5 KB of RAM left.
  */
-static uint8_t s_notify_tlv[128];
+/*
+ * 256, not 128: the report now carries the LockState attribute AND any
+ * LockOperation events the subscriber has not collected. A FULL ring of
+ * MATTER_EVENTS_MAX events, each with a fabric index and an 8-byte source node,
+ * measured 247 B beside the attribute -- measured in the host suite, not
+ * estimated, and asserted there against this size so the next event field to be
+ * added fails a test rather than a walk-up.
+ *
+ * The cost is 128 B here and 128 B in s_notify_out below. A report that did not
+ * fit would not truncate -- it would fail to build, and every event in the ring
+ * would go unreported until something else moved the lock.
+ */
+static uint8_t s_notify_tlv[256];
 static uint8_t s_notify_out[MATTER_EXCHANGE_HEADER_MAX + sizeof(s_notify_tlv) + MATTER_TAG_LEN];
 /** Exchange ids this node originates. Any non-zero value the peer is not using. */
 static uint16_t s_next_init_exchange = 0xE000u;
@@ -1588,6 +1622,19 @@ static void notify_lock_state(struct sub_state *s)
 	 * answer to a read the peer never sent. */
 	one.subscription_id = s->id;
 
+	/*
+	 * The events this subscriber has not been sent, carried by the same
+	 * report as the attribute. A subscriber that asked for no events gets
+	 * none: n_event_paths stays zero and the encoder writes no array at all,
+	 * so a controller that never mentioned events sees exactly the report it
+	 * always did.
+	 */
+	if (s->read.n_event_paths > 0u) {
+		one.n_event_paths = s->read.n_event_paths;
+		memcpy(one.event_paths, s->read.event_paths, sizeof(one.event_paths));
+		one.event_min = s->event_min;
+	}
+
 	rc = matter_im_report_data_encode(&s_im, &one, s_notify_tlv, sizeof(s_notify_tlv), &tlv_len,
 					  NULL);
 	if (rc != MATTER_OK) {
@@ -1606,6 +1653,14 @@ static void notify_lock_state(struct sub_state *s)
 	rc = matter_thread_send_to(&s->peer, s_notify_out, framed);
 	LOG_INF("  LockState report to subscription 0x%08x, %u B, rc=%d", (unsigned int)s->id,
 		(unsigned int)framed, rc);
+	/*
+	 * Advance the watermark only on a report that went out. Moving it before
+	 * the send would drop an unlock on a failed transmit, and the subscriber
+	 * has no way to ask for an event it was never told existed.
+	 */
+	if (rc == MATTER_OK && s->read.n_event_paths > 0u) {
+		s->event_min = s_info.next_event_number + 1u;
+	}
 }
 
 /**
@@ -1770,6 +1825,14 @@ static void subscription_heartbeat_arm(void)
  * Runs on the BLE-host task, so it does the cheapest possible thing: set a byte
  * and submit. The report itself is built on the system work queue.
  */
+/** The clock an event's SystemTimestamp is taken from. */
+static uint64_t matter_event_uptime_ms(void)
+{
+	int64_t ms = ultrawidelock_uptime_ms();
+
+	return ms > 0 ? (uint64_t)ms : 0u;
+}
+
 static void on_ultrawidelock_lock_state(bool unlocked)
 {
 	uint8_t want = unlocked ? MATTER_DL_LOCK_STATE_UNLOCKED : MATTER_DL_LOCK_STATE_LOCKED;
@@ -1778,6 +1841,15 @@ static void on_ultrawidelock_lock_state(bool unlocked)
 		return;
 	}
 	s_info.lock_state = want;
+	/*
+	 * A walk-up belongs to no fabric and to no node: the credential exchange
+	 * is the reader's own and no controller asked for it. The credential
+	 * source is exactly what the spec's enum has that value for.
+	 */
+	matter_clusters_record_lock_operation(&s_info,
+					      unlocked ? MATTER_DL_LOCK_OP_UNLOCK
+						       : MATTER_DL_LOCK_OP_LOCK,
+					      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
 	LOG_INF("Credential %s the lock; telling Matter", unlocked ? "opened" : "relocked");
 	notify_lock_state_changed();
 }
@@ -3377,6 +3449,15 @@ int matter_commission_init(void)
 	 * point, a node that hides it can never be shared with a second
 	 * ecosystem -- but every command answers FAILURE. */
 	matter_clusters_set_admin_hooks(&k_admin_hooks);
+	/* An event's SystemTimestamp. Milliseconds since boot, which is what the
+	 * node can honestly claim -- it has no trusted wall clock. */
+	s_info.uptime_ms_cb = matter_event_uptime_ms;
+	/*
+	 * Unconditional, unlike the subscriptions below: these are attribute
+	 * values, and a stored value is right even on a node whose fabric did
+	 * not survive -- the next commissioner reads what the last one set.
+	 */
+	(void)matter_dl_attr_load(&s_info);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
 	ultrawidelock_reader_set_lock_state_listener(on_ultrawidelock_lock_state);

@@ -1571,3 +1571,390 @@ void test_matter_im_write(void)
 		T_EQ("all of them", (long)sub.read.n_paths, (long)MATTER_IM_MAX_PATHS);
 	}
 }
+
+/* ---- events ------------------------------------------------------------- */
+
+/*
+ * A LockOperation event, from the command that causes it to the report that
+ * carries it.
+ *
+ * This exists because the node served NO events at all, which is the working
+ * hypothesis for why Apple Home shows the lock none of its access controls: the
+ * CHIP builds serve LockOperation and the Nordic reference needed a zap patch to
+ * add exactly that one.
+ */
+
+/** Run one argument-less Door Lock command straight through the server. */
+static uint8_t run_lock_command(struct matter_im_server *srv, uint32_t command)
+{
+	struct matter_im_invoke inv;
+	uint32_t response = MATTER_IM_NO_RESPONSE;
+
+	memset(&inv, 0, sizeof(inv));
+	inv.endpoint = MATTER_ENDPOINT_LOCK;
+	inv.cluster = MATTER_CLUSTER_DOOR_LOCK;
+	inv.command = command;
+	return srv->command(srv->ctx, &inv, &response);
+}
+
+/** Write an EventPathIB, with each component present only if asked for. */
+static void put_event_path(struct matter_tlv_writer *w, bool have_ep, uint16_t ep, bool have_cl,
+			   uint32_t cl, bool have_ev, uint32_t ev)
+{
+	(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_LIST);
+	if (have_ep) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(1), ep); /* EventPathIB.h:40 */
+	}
+	if (have_cl) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(2), cl);
+	}
+	if (have_ev) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(3), ev);
+	}
+	(void)matter_tlv_end_container(w);
+}
+
+/** A SubscribeRequest carrying event requests, and optionally an event filter. */
+static size_t build_event_subscribe(uint8_t *buf, size_t cap, unsigned int n_event_paths,
+				    bool with_filter, uint64_t event_min)
+{
+	struct matter_tlv_writer w;
+	unsigned int i;
+	size_t len = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(1), 1u);   /* min interval */
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(2), 60u);  /* max interval */
+	/* EventRequests, tag 4 in a subscribe (SubscribeRequestMessage.h:44). */
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(4), MATTER_TLV_ARRAY);
+	for (i = 0u; i < n_event_paths; i++) {
+		put_event_path(&w, true, MATTER_ENDPOINT_LOCK, true, MATTER_CLUSTER_DOOR_LOCK, true,
+			       MATTER_EVENT_DL_LOCK_OPERATION);
+	}
+	(void)matter_tlv_end_container(&w);
+	if (with_filter) {
+		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(5), MATTER_TLV_ARRAY);
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(1), event_min); /* EventMin */
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_end_container(&w);
+	}
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_writer_finish(&w, &len);
+	return len;
+}
+
+/** A read whose ONE event path names everything. */
+static void one_event_path(struct matter_im_read *req)
+{
+	memset(req, 0, sizeof(*req));
+	req->n_event_paths = 1u;
+	req->event_paths[0].endpoint = MATTER_ENDPOINT_LOCK;
+	req->event_paths[0].have_endpoint = true;
+	req->event_paths[0].cluster = MATTER_CLUSTER_DOOR_LOCK;
+	req->event_paths[0].have_cluster = true;
+	req->event_paths[0].event = MATTER_EVENT_DL_LOCK_OPERATION;
+	req->event_paths[0].have_event = true;
+}
+
+/**
+ * Walk a ReportData and count the EventReportIBs in it, returning the first
+ * event's number and the operation type it carries.
+ */
+static int count_event_reports(const uint8_t *tlv, size_t len, uint64_t *first_number,
+			       uint64_t *first_op)
+{
+	struct matter_tlv_reader r;
+	int n = 0;
+
+	if (first_number != NULL) {
+		*first_number = 0u;
+	}
+	if (first_op != NULL) {
+		*first_op = 0xFFu;
+	}
+
+	matter_tlv_reader_init(&r, tlv, len);
+	if (matter_tlv_next(&r) != 0 || matter_tlv_enter(&r) != 0) {
+		return -1;
+	}
+	while (matter_tlv_next(&r) == 0) {
+		if (matter_tlv_tag(&r) != MATTER_TLV_CTX(2)) { /* EventReports */
+			continue;
+		}
+		if (matter_tlv_enter(&r) != 0) {
+			return -1;
+		}
+		while (matter_tlv_next(&r) == 0) { /* one EventReportIB */
+			if (matter_tlv_enter(&r) != 0) {
+				return -1;
+			}
+			while (matter_tlv_next(&r) == 0) { /* EventData at tag 1 */
+				if (matter_tlv_tag(&r) != MATTER_TLV_CTX(1)) {
+					continue;
+				}
+				if (matter_tlv_enter(&r) != 0) {
+					return -1;
+				}
+				while (matter_tlv_next(&r) == 0) {
+					uint64_t v = 0u;
+
+					if (matter_tlv_tag(&r) == MATTER_TLV_CTX(1) && n == 0 &&
+					    first_number != NULL &&
+					    matter_tlv_get_u64(&r, &v) == 0) {
+						*first_number = v;
+					} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(7) &&
+						   n == 0 && first_op != NULL) {
+						/* The fields structure: its
+						 * first member is the type. */
+						if (matter_tlv_enter(&r) == 0) {
+							if (matter_tlv_next(&r) == 0) {
+								(void)matter_tlv_get_u64(&r,
+											 first_op);
+							}
+							(void)matter_tlv_exit(&r);
+						}
+					}
+				}
+				(void)matter_tlv_exit(&r);
+			}
+			(void)matter_tlv_exit(&r);
+			n++;
+		}
+		(void)matter_tlv_exit(&r);
+	}
+	return n;
+}
+
+void test_matter_im_events(void)
+{
+	struct matter_device_info info;
+	struct matter_im_server srv;
+	struct matter_im_read req;
+	uint8_t buf[1024];
+	uint8_t out[512];
+	size_t blen;
+	size_t len = 0u;
+	uint64_t number = 0u;
+	uint64_t op = 0u;
+
+	t_group("a LockOperation event is recorded when the tile unlocks");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		T_EQ("a fresh node holds no events", (long)matter_clusters_event_count(&info), 0L);
+
+		info.accessing_fabric_index = 1u;
+		T_EQ("UnlockDoor accepted", run_lock_command(&srv, MATTER_CMD_DL_UNLOCK_DOOR),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and it left an event", (long)matter_clusters_event_count(&info), 1L);
+		T_EQ("numbered from one", (long)info.events[0].number, 1L);
+		T_EQ("the operation is Unlock", (long)info.events[0].operation,
+		     (long)MATTER_DL_LOCK_OP_UNLOCK);
+		T_EQ("the source is Remote -- a controller asked", (long)info.events[0].source,
+		     (long)MATTER_DL_OP_SOURCE_REMOTE);
+		T_EQ("on the fabric that asked", (long)info.events[0].fabric_index, 1L);
+
+		T_EQ("LockDoor accepted", run_lock_command(&srv, MATTER_CMD_DL_LOCK_DOOR),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("two events now", (long)matter_clusters_event_count(&info), 2L);
+		T_OK("and the numbers never repeat", info.events[1].number > info.events[0].number);
+	}
+
+	t_group("a walk-up is credential-sourced and belongs to no fabric");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+		T_EQ("recorded", (long)matter_clusters_event_count(&info), 1L);
+		T_EQ("the credential source", (long)info.events[0].source,
+		     (long)MATTER_DL_OP_SOURCE_ALIRO);
+		T_EQ("no fabric", (long)info.events[0].fabric_index, 0L);
+
+		/* A node id offered without a fabric is dropped rather than
+		 * reported: it would name a controller that did not ask. */
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_LOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u,
+						      0x1122334455667788ULL);
+		T_EQ("a node id without a fabric is not kept", (long)info.events[1].source_node,
+		     0L);
+	}
+
+	t_group("the ring keeps the newest, not the oldest");
+	{
+		unsigned int i;
+
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		for (i = 0u; i < MATTER_EVENTS_MAX + 2u; i++) {
+			matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+							      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+		}
+		T_EQ("it never grows past its bound", (long)matter_clusters_event_count(&info),
+		     (long)MATTER_EVENTS_MAX);
+		T_EQ("the oldest held is the third recorded", (long)info.events[0].number, 3L);
+		T_EQ("and the newest is the last", (long)info.events[MATTER_EVENTS_MAX - 1u].number,
+		     (long)(MATTER_EVENTS_MAX + 2u));
+	}
+
+	t_group("a report carries the events a request asked for");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+
+		/* A request naming NO event path gets no EventReports array at
+		 * all -- which is what keeps every commissioning read byte-for-
+		 * byte what it was before events existed. */
+		memset(&req, 0, sizeof(req));
+		req.n_paths = 1u;
+		req.paths[0].endpoint = MATTER_ENDPOINT_LOCK;
+		req.paths[0].have_endpoint = true;
+		req.paths[0].cluster = MATTER_CLUSTER_DOOR_LOCK;
+		req.paths[0].have_cluster = true;
+		req.paths[0].attribute = MATTER_ATTR_DL_LOCK_STATE;
+		req.paths[0].have_attribute = true;
+		T_EQ("an attribute-only read encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries no event reports", count_event_reports(out, len, NULL, NULL), 0);
+
+		one_event_path(&req);
+		T_EQ("an event read encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries the one event", count_event_reports(out, len, &number, &op), 1);
+		T_EQ("with its event number", (long)number, 1L);
+		T_EQ("and the operation it recorded", (long)op, (long)MATTER_DL_LOCK_OP_UNLOCK);
+	}
+
+	t_group("an event filter is what stops a subscriber seeing an unlock twice");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_LOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+
+		one_event_path(&req);
+		T_EQ("unfiltered encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries both", count_event_reports(out, len, NULL, NULL), 2);
+
+		req.event_min = 2u;
+		T_EQ("filtered encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries only what the peer has not seen",
+		     count_event_reports(out, len, &number, NULL), 1);
+		T_EQ("which is the second one", (long)number, 2L);
+
+		req.event_min = 99u;
+		T_EQ("a filter past everything encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries nothing", count_event_reports(out, len, NULL, NULL), 0);
+	}
+
+	t_group("an event path that names something else matches nothing");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+
+		one_event_path(&req);
+		req.event_paths[0].event = 0x00FFu;
+		T_EQ("a read for another event encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and reports none of ours", count_event_reports(out, len, NULL, NULL), 0);
+
+		/* Wildcards work the same way they do for attributes: a
+		 * controller subscribing to "all events" names nothing at all. */
+		memset(&req, 0, sizeof(req));
+		req.n_event_paths = 1u;
+		T_EQ("a wildcard event path encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and matches the event", count_event_reports(out, len, NULL, NULL), 1);
+	}
+
+	t_group("SubscribeRequest carries event paths and filters");
+	{
+		struct matter_im_subscribe sub;
+
+		blen = build_event_subscribe(buf, sizeof(buf), 1u, false, 0u);
+		T_OK("request builds", blen > 0u);
+		T_EQ("decodes", matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_OK);
+		T_EQ("one event path", (long)sub.read.n_event_paths, 1L);
+		T_EQ("on the lock endpoint", (long)sub.read.event_paths[0].endpoint,
+		     (long)MATTER_ENDPOINT_LOCK);
+		T_EQ("the Door Lock cluster", (long)sub.read.event_paths[0].cluster,
+		     (long)MATTER_CLUSTER_DOOR_LOCK);
+		T_EQ("and the LockOperation event", (long)sub.read.event_paths[0].event,
+		     (long)MATTER_EVENT_DL_LOCK_OPERATION);
+		T_EQ("no filter means everything held", (long)sub.read.event_min, 0L);
+
+		blen = build_event_subscribe(buf, sizeof(buf), 1u, true, 7u);
+		T_EQ("with a filter it decodes",
+		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_OK);
+		T_EQ("and the EventMin is carried", (long)sub.read.event_min, 7L);
+
+		blen = build_event_subscribe(buf, sizeof(buf), MATTER_IM_MAX_EVENT_PATHS + 1u, false,
+					     0u);
+		T_EQ("more event paths than the node holds is refused",
+		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_E_NOSPACE);
+	}
+
+	/*
+	 * The buffer matter_commission.c reports from. A full ring plus the
+	 * LockState attribute has to fit, or a walk-up during a busy minute
+	 * silently reports nothing at all.
+	 */
+	t_group("a full ring still fits the notify buffer");
+	{
+		/* The size of s_notify_tlv in matter_commission.c. Stated here
+		 * rather than shared, because the app header is not on this
+		 * suite's include path -- and a mismatch shows up as this test
+		 * passing while the board's buffer is smaller, so the number is
+		 * named in both comments. */
+		uint8_t notify[256];
+		unsigned int i;
+
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		for (i = 0u; i < MATTER_EVENTS_MAX; i++) {
+			matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
+							      MATTER_DL_OP_SOURCE_REMOTE, 1u,
+							      0x1122334455667788ULL);
+		}
+		one_event_path(&req);
+		req.n_paths = 1u;
+		req.paths[0].endpoint = MATTER_ENDPOINT_LOCK;
+		req.paths[0].have_endpoint = true;
+		req.paths[0].cluster = MATTER_CLUSTER_DOOR_LOCK;
+		req.paths[0].have_cluster = true;
+		req.paths[0].attribute = MATTER_ATTR_DL_LOCK_STATE;
+		req.paths[0].have_attribute = true;
+		req.subscription_id = 0x11223344u;
+
+		T_EQ("the report fits the notify buffer",
+		     matter_im_report_data_encode(&srv, &req, notify, sizeof(notify), &len, NULL),
+		     MATTER_OK);
+		/* 247 B when this was written. The check is that it fits, not
+		 * that it is exactly that -- a field added to the event should
+		 * fail on the bound, not on a number nobody can update. */
+		T_OK("with room to spare", len <= sizeof(notify));
+		T_EQ("and carries every event", count_event_reports(notify, len, NULL, NULL),
+		     (int)MATTER_EVENTS_MAX);
+	}
+}
