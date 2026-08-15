@@ -39,14 +39,20 @@ TREES = {
     WEB / "twin": "twin",
 }
 
-# Files inside those trees that are build-time or test-time only.
-NOT_PUBLISHED = {".py", ".cjs", ".c", ".sh"}
+# Files inside those trees that are build-time or test-time only. .pyc matters
+# as much as .py: importing markdown.py leaves a __pycache__ beside it, and
+# that is bytecode of a build script, published next to the pages it rendered.
+NOT_PUBLISHED = {".py", ".pyc", ".cjs", ".c", ".sh"}
 
 
 def clean() -> None:
     if DIST.exists():
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
+    # GitHub Pages runs Jekyll unless told not to, and Jekyll drops every path
+    # starting with an underscore. Nothing here needs Jekyll, so opt out rather
+    # than depend on no future asset ever being named that way.
+    (DIST / ".nojekyll").touch()
 
 
 def build_twin_wasm() -> bool:
