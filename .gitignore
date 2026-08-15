@@ -94,6 +94,8 @@ captures/
 
 # graphify knowledge graph: generated, machine-local
 graphify-out/
+# where `make docs` installs graphify when it is not already on PATH
+.venv-graphify/
 
 # vendored renderers, fetched not committed
 web/vendor/
