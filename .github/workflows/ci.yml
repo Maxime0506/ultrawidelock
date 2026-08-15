@@ -1,0 +1,118 @@
+# Pull request gates: the checks worth having a machine repeat.
+#
+# Two jobs on stock ubuntu-latest runners, no toolchain: python3, cmake and a C
+# compiler are all this needs, which is what makes it cheap enough to run on
+# every pull request. Nothing here builds firmware -- the Zephyr and ESP32
+# images need NCS, ESP-IDF and esp-matter and take hours, and `make fw-check`
+# and `make esp-release` cover them on a bench where the hardware also is. A
+# green run does not mean the firmware builds; it means nothing broke that a
+# host can see.
+#
+# `gates` is a serial list of steps rather than parallel jobs: each job pays a
+# checkout to save less time than it spends, and one list reads better in a pull
+# request's status panel. They are ordered cheapest first, so a broken constant
+# fails in seconds instead of after two minutes of C suites.
+#
+# `secrets` is the exception that earns its own job, because it needs a
+# different checkout: scanning history means fetch-depth 0, and making the gates
+# clone 1230 commits they never read would be a cost with no return.
+#
+# What each gate is actually for:
+#
+#   drift    constants and the integration patch-state identity stay exact. This
+#            is the one that catches a value edited in one place and not the
+#            other, which is invisible to a compiler and to every test below.
+#   site     every internal href/src in the rendered site resolves. Catches a
+#            guide renamed without its links updated, which is otherwise found
+#            by a reader hitting a 404.
+#   check    every host-side suite: the C tests for firmware logic and the shared
+#            core, the CMake SDK package, the UWB seam and engine scope, port
+#            purity, progress display.
+#   secrets  gitleaks over the whole history, not just the diff. A pull request
+#            can add a commit that introduces a key and a later commit that
+#            removes it; the diff is clean and the object is still there
+#            forever. This repository's history was swept clean by hand before
+#            it was ever pushed, so a full scan is affordable and stays green.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  # So a run can be repeated without pushing an empty commit to the branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Supersede the previous run when a pull request is updated: only the newest
+# commit's result is worth waiting for. This is the opposite of pages.yml, where
+# cancelling mid-deployment would leave a half-published site.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: gates (host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here talks to git after the checkout, and no gate below
+          # reads history, so the default shallow fetch is enough.
+          persist-credentials: false
+
+      # One target, not a list of steps: `make ci` IS this gate, so a
+      # contributor running it locally runs what their pull request will be
+      # judged by, and neither side can quietly drift from the other. It runs
+      # drift, then the site's link pass, then the host suites, cheapest first.
+      #
+      # It also runs gitleaks when gitleaks is installed. It is not installed
+      # here, deliberately: this job's checkout is shallow and a secret scan
+      # wants the whole history, so the `secrets` job below does that properly.
+      # `make ci` prints a loud skip line rather than silently passing.
+      #
+      # No emscripten either. Without emcc the twin is absent and build.py's
+      # link pass skips twin.js rather than calling it dead, so every other link
+      # is still checked for a fraction of the setup. The published site is
+      # built with emscripten by pages.yml.
+      - name: gates
+        run: make ci
+
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Pinned by version AND checksum, the way the pre-rename CI pinned every
+      # release binary it fetched: this decides whether code merges, so
+      # resolving "latest" at run time would put an unreviewed binary in that
+      # position. Bumping the version without the checksum fails the job.
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The whole history. A shallow clone would scan only the tip and miss
+          # exactly the case this job exists for -- a secret added and then
+          # removed within the same pull request.
+          fetch-depth: 0
+
+      # The released binary rather than gitleaks-action: the action requires an
+      # organisation licence key, and this repository is under an organisation.
+      # A pinned tarball has neither that constraint nor a second dependency.
+      - name: gitleaks
+        run: |
+          curl -fsSLo /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # --redact matters more than it looks: without it a finding prints the
+      # secret it found into a public build log, which turns a caught leak into
+      # a published one. Exit code is 1 on any finding, which fails the job.
+      - name: scan history
+        run: gitleaks git --redact --no-banner .

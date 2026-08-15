@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam scope purity
+.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam scope purity ci
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -35,6 +35,27 @@ check:
 ## drift: constants and integration patch-state identity stay exact
 drift:
 	@$(REPO_ROOT)/tests/tooling/drift_suite.sh
+
+## ci: every pull-request gate, in the order CI runs them  ·  run before opening one
+##   .github/workflows/ci.yml runs this target rather than listing the gates
+##   again, so what a pull request is judged by and what this prints cannot
+##   drift apart. Cheapest first: a drifted constant fails in a second instead
+##   of after two minutes of C suites.
+##
+##   The secret scan is the one difference. CI gives it its own job because it
+##   needs the whole history; here it runs against your checkout when gitleaks
+##   is installed, and says so loudly when it is not, because a skipped scan
+##   that looks like a pass is worse than no scan.
+ci:
+	@$(MAKE) --no-print-directory drift
+	@$(MAKE) --no-print-directory docs-check
+	@if command -v gitleaks >/dev/null 2>&1; then \
+	  gitleaks git --redact --no-banner "$(REPO_ROOT)"; \
+	else \
+	  printf '\n  !! gitleaks not installed — SECRET SCAN SKIPPED\n'; \
+	  printf '     CI still runs it. install: brew install gitleaks\n\n'; \
+	fi
+	@$(MAKE) --no-print-directory check
 
 ## seam: no call reaches the radio past the CCC STS seam
 seam:

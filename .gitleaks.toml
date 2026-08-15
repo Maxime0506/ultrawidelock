@@ -1,0 +1,45 @@
+# gitleaks configuration.
+#
+# The pull-request gate runs `gitleaks git`, which walks committed objects and
+# therefore never sees an ignored path -- 12 GB of build/ and workspace/ cost it
+# nothing, and this file does not make that scan faster.
+#
+# It exists for the other invocation. `gitleaks dir` scans the working tree as
+# it sits, and a bench checkout carries roughly 12 GB of generated output beside
+# 20 MB of source: a Zephyr workspace, three ESP-IDF build trees, the rendered
+# site, the graph export. Without the allowlist below, `gitleaks dir .` walks
+# all of it, which takes long enough that people stop running it -- and a scan
+# nobody runs finds nothing.
+#
+# The paths here are the generated ones from .gitignore. Nothing in the list is
+# a source tree, and nothing is excluded to silence a finding: as of this
+# commit the history scans clean with no allowlisted findings at all. If a real
+# false positive turns up later, add it as its own [[allowlists]] block with a
+# description saying which rule it answers, rather than widening these paths.
+
+[extend]
+# Every built-in rule, then the allowlist below on top.
+useDefault = true
+
+[[allowlists]]
+description = "generated trees: build output, the Zephyr workspace, rendered site, exports"
+# Anchored with (^|/) rather than a bare ^: gitleaks matches these against the
+# path as the scan presents it, which is repo-relative for `gitleaks dir .` and
+# absolute when a target is given as an absolute path. A bare ^build/ silently
+# matches neither in the second case, and an unanchored build/ would swallow an
+# unrelated src/build/ -- this form is the one that holds in both.
+paths = [
+  '''(^|/)build/''',
+  '''(^|/)workspace/''',
+  '''(^|/)twister-out/''',
+  '''(^|/)\.west/''',
+  '''(^|/)web/dist/''',
+  '''(^|/)web/vendor/''',
+  '''(^|/)graphify-out/''',
+  '''(^|/)captures/''',
+  '''(^|/)video/''',
+  '''(^|/)__pycache__/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.DS_Store$''',
+]
