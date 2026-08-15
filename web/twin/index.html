@@ -167,6 +167,22 @@
   .chip.locked { color: var(--faint); }
   .chip.unlocked { color: var(--btn-ink); background: var(--green); border-color: var(--green); }
   .chip.granted { color: var(--btn-ink); background: var(--btn); border-color: var(--btn); }
+  /* The verdict is the landing scope's verdict, not a second one. .scope-verdict
+   * is landing.css's own component and it reads --trace / --trace-line, so the
+   * only thing this page declares is which meaning each of its states carries.
+   * Mint grants, muted holds, red refuses — the same three the classifier
+   * ships and the same three the hero speaks. */
+  #v-verdict { --trace: var(--muted); --trace-line: var(--line-strong); }
+  #v-verdict[data-state="grant"]   { --trace: var(--path-first); --trace-line: var(--path-first-line); }
+  #v-verdict[data-state="refused"] { --trace: var(--refused);    --trace-line: var(--refused-line); }
+  /* The stamp. --ease-spring is the system's overshoot for "something arriving
+   * and settling" (tokens/scale.css) and this is the first thing on the site to
+   * spend it: a verdict lands, it does not fade in. */
+  #v-verdict.stamp { animation: verdict-stamp var(--dur-3) var(--ease-spring); }
+  @keyframes verdict-stamp {
+    from { transform: scale(.9); opacity: .35; }
+    to   { transform: none; opacity: 1; }
+  }
   .pips { display: inline-flex; gap: .25rem; vertical-align: middle; }
   .pip { width: .55rem; height: .55rem; border-radius: 50%; border: 1px solid var(--faint); transition: background .2s; }
   .pip.on { background: var(--amber); border-color: var(--amber); }
@@ -181,6 +197,31 @@
   .leg.next {
     color: var(--strong); border-color: color-mix(in srgb, var(--amber) 55%, transparent);
     background: color-mix(in srgb, var(--amber) 12%, var(--surface));
+  }
+  /* Single-step mode: the strip becomes the thing you are watching, so it says
+   * which leg is being driven and which ones this block has already spent.
+   * Free-running, the legs flick past at 192 ms a block and neither reading
+   * would survive long enough to be read, so both are scoped to .stepping. */
+  #legs.stepping .leg.done {
+    color: var(--faint); border-color: var(--hairline); background: transparent;
+  }
+  #legs.stepping .leg.next { position: relative; }
+  /* The pulse is a head with its trail behind it: the gradient ramps up over
+   * the leading half and cuts off at the head, and it travels the way the
+   * exchange does, left to right along the strip. Composited transform only. */
+  #legs.stepping .leg.next::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--amber) 10%, transparent) 42%,
+      color-mix(in srgb, var(--amber) 26%, transparent) 58%,
+      color-mix(in srgb, var(--amber) 52%, transparent) 66%,
+      transparent 68%);
+    animation: leg-pulse 1.15s var(--ease-linear) infinite;
+  }
+  @keyframes leg-pulse {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
   }
   #dbg-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45rem .6rem; margin-bottom: .55rem; }
   #dbg-stats .k { font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
@@ -291,6 +332,10 @@
     <section>
       <h2>Readouts</h2>
       <div id="readouts">
+        <div class="ro" style="grid-column:1/-1">
+          <span class="scope-verdict" id="v-verdict" data-state="hold"
+                aria-live="polite">held · no session</span>
+        </div>
         <div class="ro" id="ro-dist" style="grid-column:1/-1">
           <div class="k">last latched range</div>
           <div class="v"><span id="v-cm">—</span> <small>cm · true <span id="v-true">—</span> cm</small></div>
@@ -796,6 +841,7 @@ function blockCm(){
 function afterBlock(meas, before, trustBefore){
   if (meas.spoof){
     emitWave("bad");                                 // a red pulse the gate killed
+    refusedUntil = sim.t + REFUSED_MS;               // the verdict says so too
     log("bad", `Ghost-Peak spoof (${meas.cm} cm) REJECTED — layer 1; range stays ` +
                `${before === null ? "—" : before + " cm"}, trust reset`);
     return;
@@ -954,8 +1000,21 @@ function unproject(sx, sy){
   return { x: (dx * EY[1] - EY[0] * dy) / det, y: (EX[0] * dy - dx * EX[1]) / det };
 }
 
-/* Animation-only state (no bearing on the decision logic). */
-const scene = { waves: [], parts: [], boltPos: 1, boltVel: 0, beam: 0, bleAcc: 0, glow: 0.12 };
+/* Animation-only state (no bearing on the decision logic).
+ *
+ * The bolt used to be a hand-tuned velocity integrator with its own stiffness
+ * and damping constants — a spring nobody could point at a token for. It is a
+ * tween now, over --dur-3 and along --ease-spring, which is the curve
+ * tokens/scale.css reserves for "something arriving and settling". The
+ * overshoot in that curve is the whole point: a solenoid bolt snaps past its
+ * seat and settles back, and boltPos was already clamped to [-0.12, 1.12] to
+ * leave room for exactly that. jolt is the frame absorbing the hit. */
+const scene = {
+  waves: [], parts: [], beam: 0, bleAcc: 0, glow: 0.12,
+  boltPos: 1, boltFrom: 1, boltTo: 1, boltT: 0, retracting: false, boltContact: true,
+  joltT: 1e9,
+};
+const JOLT_MS = 160;      /* how long the frame rings for; 1px, damped to nothing */
 const WAVE = { uwb: ["--amber", 4.2, 1100], ble: ["--cyan", 8, 1500], ok: ["--green", 5.2, 1300], bad: ["--red", 2.4, 700] };
 function emitWave(kind){
   const w = WAVE[kind] || WAVE.uwb;
@@ -996,12 +1055,58 @@ function updateScene(dt){
     scene.bleAcc += dt;
     if (scene.bleAcc > 950){ scene.bleAcc = 0; emitWave("ble"); }
   }
+  /* the bolt: a token-driven tween, and the frame's answer to it */
   const target = sim.ctrl && sim.ctrl.locked ? 1 : 0;
-  if (RM.matches){ scene.boltPos = target; scene.boltVel = 0; return; }
-  const f = Math.min(1.6, dt / 16.67);
-  scene.boltVel += ((target - scene.boltPos) * 0.14 - scene.boltVel * 0.85) * f;
-  scene.boltVel = clamp(scene.boltVel, -0.5, 0.5);
-  scene.boltPos = clamp(scene.boltPos + scene.boltVel * f, -0.12, 1.12);
+  if (target !== scene.boltTo){
+    scene.boltFrom = scene.boltPos; scene.boltTo = target;
+    scene.boltT = 0; scene.retracting = target === 0; scene.boltContact = false;
+  }
+  const dur = MOTION.dur3;
+  if (RM.matches || dur <= 0){                       // reduced motion: no travel, no jolt
+    scene.boltPos = scene.boltTo; scene.boltContact = true; scene.joltT = 1e9; return;
+  }
+  if (scene.boltT < dur){
+    scene.boltT = Math.min(dur, scene.boltT + dt);
+    const prev = scene.boltPos;
+    const e = ease(scene.retracting ? MOTION.spring : MOTION.out, scene.boltT / dur);
+    scene.boltPos = clamp(scene.boltFrom + (scene.boltTo - scene.boltFrom) * e, -0.12, 1.12);
+    /* Contact is where the bolt stops travelling and starts settling back --
+     * the extreme of the overshoot, wherever the curve in the token puts it.
+     * Detected as the reversal rather than computed, so retuning --ease-spring
+     * moves the jolt with it; a curve with no overshoot fires at the end. */
+    if (!scene.boltContact && scene.retracting &&
+        (scene.boltPos >= prev || scene.boltT >= dur)){
+      scene.boltContact = true; scene.joltT = 0;
+    }
+  } else scene.boltPos = scene.boltTo;
+  if (scene.joltT < JOLT_MS) scene.joltT += dt;
+}
+
+/* ── Motion read from the design system, not invented here ─────────────────
+ * --dur-3 and --ease-spring are tokens, and under prefers-reduced-motion the
+ * stylesheet already collapses --dur-3 to 0ms — so reading them means the
+ * canvas obeys the same cap the CSS does instead of keeping a private copy of
+ * the timing that a token change would silently leave behind. */
+const MOTION = { dur3: 240, spring: null, out: null };
+function parseMs(v){
+  v = (v || "").trim();
+  const n = parseFloat(v) || 0;
+  return /ms$/.test(v) ? n : n * 1000;
+}
+function parseEase(v){
+  const m = (v || "").match(/cubic-bezier\(([^)]+)\)/);
+  if (!m) return null;
+  const p = m[1].split(",").map(Number);
+  return p.length === 4 && p.every(n => isFinite(n)) ? p : null;
+}
+/* y(x) of a CSS cubic-bezier: bisect x for the parameter, then read y. y leaves
+ * [0,1] when the curve overshoots, which is what --ease-spring is for. */
+function ease(p, x){
+  if (!p) return x;
+  const bx = t => 3 * (1 - t) * (1 - t) * t * p[0] + 3 * (1 - t) * t * t * p[2] + t * t * t;
+  let lo = 0, hi = 1, t = x;
+  for (let i = 0; i < 18; i++){ t = (lo + hi) / 2; bx(t) < x ? lo = t : hi = t; }
+  return 3 * (1 - t) * (1 - t) * t * p[1] + 3 * (1 - t) * t * t * p[3] + t * t * t;
 }
 
 /* The canvas palette, read once and cached.
@@ -1038,6 +1143,9 @@ function readPalette(){
   const next = Object.create(null);
   for (const name of PAL_TOKENS) next[name] = css.getPropertyValue(name).trim();
   PAL = next;
+  MOTION.dur3 = parseMs(css.getPropertyValue("--dur-3"));
+  MOTION.spring = parseEase(css.getPropertyValue("--ease-spring"));
+  MOTION.out = parseEase(css.getPropertyValue("--ease-out"));
 }
 function C(name){
   const hit = PAL[name];
@@ -1107,7 +1215,16 @@ function draw(){
   }
   cx.restore();
 
-  /* 2. door + reader + bolt (right, at the origin) as extruded iso boxes */
+  /* 2. door + reader + bolt (right, at the origin) as extruded iso boxes.
+   *    The whole assembly is offset by the jolt: when the bolt bottoms out,
+   *    something in the door absorbs it, and the frame rings for a sixth of a
+   *    second. One pixel of amplitude, damped linearly to nothing — enough to
+   *    feel as a hit at the instant of contact and not enough to read as the
+   *    scene moving. */
+  const jt = scene.joltT;
+  const jolt = jt < JOLT_MS
+    ? Math.cos(jt / JOLT_MS * Math.PI * 5) * (1 - jt / JOLT_MS) * dpr : 0;
+  cx.save(); cx.translate(jolt, 0);
   softShadow(dr.x, dr.y, 0.58 * S, 0.22 * S);
   box3(0.12, 0, 0, 0.92, 1.95, 0.3, locked ? panel2 : doorOpen, locked ? muted : green);
   const dt2 = project(0.12, 0, 0);
@@ -1127,6 +1244,7 @@ function draw(){
   box3(0.12, 0, 0.92, 0.34, 0.34, 0.16, accent, null);
   cx.fillStyle = "#fff"; cx.globalAlpha = 0.9;
   cx.beginPath(); cx.arc(rp.x, rp.y, Math.max(1.2 * dpr, 0.035 * S), 0, 6.283); cx.fill(); cx.globalAlpha = 1;
+  cx.restore();
 
   /* 3. the DS-TWR ranging beam, reader -> phone, pulsing on each block */
   if (sim.sessionActive){
@@ -1254,6 +1372,31 @@ for (const [i, name] of LEGS.entries()){
   d.className = "leg"; d.textContent = name; d.id = "leg-" + i;
   legsEl.append(d);
 }
+/* ── The verdict.
+ *
+ * Reused from the landing hero rather than reinvented: .scope-verdict is
+ * landing.css's component and it is what a visitor has already been taught to
+ * read one page earlier. What this page adds is its own three meanings and the
+ * stamp, because here the verdict is the outcome of a walk-up rather than of a
+ * slider, and an outcome should land.
+ *
+ * A rejected spoof holds the verdict for REFUSED_MS: the refusal is a decision
+ * the reader made, and at 192 ms a block it would otherwise be gone before it
+ * was seen. ── */
+const REFUSED_MS = 1600;
+let refusedUntil = 0;
+const verdictEl = $("v-verdict");
+let verdictText = verdictEl.textContent;
+function setVerdict(state, text){
+  if (text === verdictText) return;
+  verdictText = text;
+  verdictEl.dataset.state = state;
+  verdictEl.textContent = text;
+  verdictEl.classList.remove("stamp");
+  void verdictEl.offsetWidth;                        // restart the animation
+  verdictEl.classList.add("stamp");
+}
+
 const trustEl = $("v-trust");
 function buildTrustPips(k){
   trustEl.innerHTML = "";
@@ -1285,9 +1428,19 @@ function render(){
   const locked = sim.ctrl ? sim.ctrl.locked : true;
   $("v-bolt").textContent = locked ? "LOCKED" : "UNLOCKED";
   $("v-bolt").className = "chip " + (locked ? "locked" : "unlocked");
+  /* the verdict: a refusal it just made, else the decision it is holding */
+  if (sim.t < refusedUntil) setVerdict("refused", "refused · implausible first path");
+  else if (!locked) setVerdict("grant", "unlock");
+  else setVerdict("hold", sim.sessionActive ? "held · out of range" : "held · no session");
   /* firmware debugger */
   const leg = fw ? fw.leg() : -1;
-  for (let i = 0; i < LEGS.length; i++) $("leg-" + i).classList.toggle("next", i === leg);
+  const stepping = sim.paused;
+  legsEl.classList.toggle("stepping", stepping);
+  for (let i = 0; i < LEGS.length; i++){
+    const el = $("leg-" + i);
+    el.classList.toggle("next", i === leg);
+    el.classList.toggle("done", stepping && i < leg);
+  }
   $("d-block").textContent = fw ? String(fw.blockNo()) : "—";
   $("d-idx").textContent = fw ? "0x" + fw.pollIndex().toString(16) : "—";
   $("d-rx").textContent = fw ? String(fw.rxArms()) : "—";
