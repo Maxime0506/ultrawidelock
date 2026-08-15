@@ -78,16 +78,29 @@ def build_graph() -> Path | None:
     """
     source = ROOT / "graphify-out" / "graph.json"
     if not source.is_file():
-        print("build: graphify-out/graph.json absent, skipping the subsystem graph "
+        print("build: graphify-out/graph.json absent, skipping the graph "
               "(graphify . --update --code-only)")
         return None
     sys.path.insert(0, str(WEB / "graph"))
-    import graph as graph_mod                                  # noqa: PLC0415
 
     out = DIST / "graph" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(graph_mod.render(source), encoding="utf-8")
-    print(f"build: subsystem graph -> {out.relative_to(DIST)}")
+
+    # The 3D page is the graph. It needs the vendored renderer, which is
+    # gitignored, so the flat SVG stands in when that is absent rather than
+    # leaving a dead link.
+    lib = WEB / "vendor" / "3d-force-graph.min.js"
+    if lib.is_file():
+        import graph3d                                          # noqa: PLC0415
+        out.write_text(graph3d.render(source, ROOT), encoding="utf-8")
+        shutil.copy2(lib, out.parent / lib.name)
+        print(f"build: 3D graph -> {out.relative_to(DIST)}")
+    else:
+        import graph as graph_mod                                # noqa: PLC0415
+        out.write_text(graph_mod.render(source), encoding="utf-8")
+        print("build: 3d-force-graph not vendored, using the flat graph "
+              "(curl -sSL -o web/vendor/3d-force-graph.min.js "
+              "https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js)")
     return out
 
 
@@ -125,7 +138,8 @@ def check_links(pages: list[Path], have_twin: bool, have_graph: bool) -> list[st
             continue
         text = page.read_text(encoding="utf-8", errors="replace")
         for target in LINK_RE.findall(text):
-            if target.startswith(("http://", "https://", "mailto:", "data:", "//")):
+            if target.startswith(("http://", "https://", "mailto:", "data:", "//",
+                                  "about:", "blob:", "javascript:")):
                 continue
             resolved = (page.parent / target.split("?")[0].split("#")[0]).resolve()
             if resolved.is_dir():

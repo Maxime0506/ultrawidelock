@@ -94,3 +94,6 @@ captures/
 
 # graphify knowledge graph: generated, machine-local
 graphify-out/
+
+# vendored renderers, fetched not committed
+web/vendor/
