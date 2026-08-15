@@ -101,7 +101,14 @@ THEME_BOOT = ("<script>(function(){try{var t=localStorage.getItem('uwl-theme');"
 # Marks the document as scripted before any CSS runs, so the reveal animations
 # only hide their content when there is JavaScript present to bring it back.
 # Without this a reader with JS off gets a page of invisible sections.
-JS_FLAG = "<script>document.documentElement.className+=' js';</script>"
+#
+# `booted` is the same idea one step further, and it is the only thing that
+# starts the landing page's opening sequence. It is set here, ahead of the
+# stylesheet, rather than from a deferred script, because a class added after
+# the first paint would show the hero and then hide it to animate it back. The
+# sequence itself is pure animation-delay in landing.css; nothing schedules it,
+# nothing repeats it, and no script runs while it plays.
+JS_FLAG = "<script>document.documentElement.className+=' js booted';</script>"
 
 
 def rel_to_root(depth: int) -> str:
