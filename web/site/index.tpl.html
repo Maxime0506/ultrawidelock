@@ -70,6 +70,11 @@
           <text x="368" y="60">unlock bound &middot; 1.00 m</text>
         </g>
 
+        <!-- The grant, drawn once. A single ring leaves the lock body when the
+             measurement crosses inside the bound, and never repeats. -->
+        <circle class="hs-ring" cx="96" cy="86" r="38"
+                vector-effect="non-scaling-stroke"/>
+
         <!-- lock -->
         <g class="hs-lock">
           <rect class="body" x="84" y="68" width="24" height="36" rx="3"/>
