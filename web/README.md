@@ -75,11 +75,15 @@ version of the page you get.
 
 `graphify update .` writes the big one. It is 7,969 nodes and 18,457 edges, and
 this page reduces all of that to 17 subsystems and 49 edges — so the repository
-carries the 4 KB reduction and leaves the 11 MB where graphify put it. Building
-with the full graph present rewrites the distillate as a side effect, so it
-stays current and its diff is reviewable: one sorted line per subsystem, one per
-edge, and a reviewer can see that a subsystem gained four files or that a new
-dependency appeared.
+carries the 4 KB reduction and leaves the 11 MB where graphify put it.
+
+Refreshing the distillate is a deliberate step, `make docs-graph-refresh`, and
+never a side effect of an ordinary build. Its first line is the commit the graph
+was extracted at, so a build that rewrote it left a dirty tree in every worktree
+that had graphify data, and any two branches that had both built then conflicted
+on that line. Run the refresh, read the diff, commit it on its own: one sorted
+line per subsystem, one per edge, and a reviewer can see that a subsystem gained
+four files or that a new dependency appeared.
 
 That is deliberately not the `twin.js` mistake. This file is small, sorted,
 line-per-entry and regenerates deterministically; `twin.js` was 36 KB of

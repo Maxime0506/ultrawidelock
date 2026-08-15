@@ -100,6 +100,10 @@ Graph data:
   graph. `graphify-out/graph.json` (11 MB, not committed, produced by a tool
   that is not in this repository) yields the 3D file level graph. 7,969 nodes
   and 18,457 edges reduce to 17 subsystems and 49 edges.
+- The committed file is refreshed by `make docs-graph-refresh`, never as a side
+  effect of a build. It records the commit it was extracted at, so a build that
+  rewrote it dirtied every worktree and conflicted on that line between
+  branches.
 - The flat page is the default, not a degraded mode. The Graph nav link is
   emitted only when the graph was actually built.
 

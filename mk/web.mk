@@ -21,7 +21,8 @@
 #                                         the page says so instead of offering
 #                                         a button that downloads nothing
 
-.PHONY: docs docs-check docs-serve docs-clean docs-deps docs-graph3d release-all
+.PHONY: docs docs-check docs-serve docs-clean docs-deps docs-graph3d \
+        docs-graph-refresh release-all
 
 # ---------------------------------------------------------------------------
 # Auto-provisioning, used by `docs` and deliberately NOT by `docs-check`.
@@ -59,6 +60,19 @@ docs: docs-deps
 ##   Hermetic: never fetches, never installs, never prompts. This is the CI gate.
 docs-check:
 	@python3 $(REPO_ROOT)/web/build.py --check
+
+## docs-graph-refresh: rewrite web/graph/subsystems.json from graphify-out/
+##   The committed 4 KB distillate is the only graph data a fresh clone or CI
+##   has, so it has to be refreshed by hand and committed. This is deliberately
+##   not part of `docs`: rewriting it on every build left a dirty tree in each
+##   worktree that had graphify data, and its first line is the commit the
+##   graph was extracted at, so two branches that both built conflicted there
+##   on every merge. Run this, read the diff, commit it on its own.
+##
+##   Needs graphify-out/graph.json  (`graphify update .`); without it the
+##   build says so and leaves the committed file untouched.
+docs-graph-refresh:
+	@python3 $(REPO_ROOT)/web/build.py --refresh-graph
 
 ## docs-deps: fetch what the graph page needs, asking first  ·  used by `docs`
 docs-deps:

@@ -15,6 +15,8 @@ Two rules, both learned from the generator this replaces:
 Usage:
     python3 web/build.py            # build into web/dist/
     python3 web/build.py --check    # build, then fail on any dead internal link
+    python3 web/build.py --refresh-graph   # also rewrite the committed graph
+                                           # distillate from graphify-out/
 """
 
 from __future__ import annotations
@@ -82,6 +84,12 @@ NAV = (
 # published a nav item that 404'd on every build without graphify-out/ -- the
 # link gate deliberately excuses that path, so nothing caught it.
 HAVE_GRAPH = False
+
+# Set once in main() from --refresh-graph. Off by default: rewriting the
+# committed distillate on every build left a dirty tree in every worktree that
+# had graphify data, and since its first line is the commit the graph was
+# extracted at, two branches that both built conflicted there on every merge.
+REFRESH_GRAPH = False
 
 # Runs before the stylesheet so the first paint is already the right theme.
 # Inline and tiny on purpose: a separate file would be a round trip during
@@ -394,8 +402,11 @@ def graph_source() -> Path | None:
     from a fresh clone, in CI, and on a machine that has never heard of
     graphify -- which is the whole point of this build's second rule.
 
-    When the full graph is present it wins, and the distillate is rewritten from
-    it as a side effect, so it stays current and its diff is reviewable.
+    When the full graph is present it wins as the render's source, but the
+    committed distillate is only rewritten under --refresh-graph. Refreshing is
+    a deliberate command, `make docs-graph-refresh`, that produces one
+    reviewable commit; see REFRESH_GRAPH for why it is not a side effect of
+    every build.
     """
     sys.path.insert(0, str(WEB / "graph"))
     import graph as graph_mod                                   # noqa: PLC0415
@@ -404,9 +415,19 @@ def graph_source() -> Path | None:
     full = ROOT / "graphify-out" / "graph.json"
     if full.is_file():
         data = _json.loads(full.read_text())
-        if graph_mod.write_distillate(data):
-            print(f"build: refreshed {graph_mod.DISTILLATE.relative_to(ROOT)} "
-                  "from graphify-out/ (commit it)")
+        distillate = graph_mod.DISTILLATE.relative_to(ROOT)
+        if REFRESH_GRAPH:
+            if graph_mod.write_distillate(data):
+                print(f"build: refreshed {distillate} "
+                      "from graphify-out/ (commit it)")
+            else:
+                print(f"build: {distillate} already matches graphify-out/")
+        elif not graph_mod.distillate_is_current(data):
+            # Says it out loud rather than writing: this build renders from the
+            # full graph, so a stale committed file is invisible here and shows
+            # up only on a fresh clone or in CI.
+            print(f"build: {distillate} is behind graphify-out/ "
+                  "(make docs-graph-refresh)")
         return full
     if graph_mod.DISTILLATE.is_file():
         return graph_mod.DISTILLATE
@@ -895,11 +916,14 @@ def run_gates() -> list[str]:
 
 
 def main() -> int:
-    global HAVE_GRAPH
+    global HAVE_GRAPH, REFRESH_GRAPH
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true",
                     help="fail on any dead internal link")
+    ap.add_argument("--refresh-graph", action="store_true",
+                    help="rewrite web/graph/subsystems.json from graphify-out/")
     args = ap.parse_args()
+    REFRESH_GRAPH = args.refresh_graph
 
     clean()
     # Decided before any page is rendered, because the nav has to know whether
