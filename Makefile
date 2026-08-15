@@ -96,4 +96,5 @@ include $(REPO_ROOT)/mk/anchor.mk
 include $(REPO_ROOT)/mk/witness.mk
 include $(REPO_ROOT)/mk/setup.mk
 include $(REPO_ROOT)/mk/host.mk
+include $(REPO_ROOT)/mk/web.mk
 include $(REPO_ROOT)/mk/extras.mk
