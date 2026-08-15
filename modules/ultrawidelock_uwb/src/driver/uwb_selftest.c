@@ -28,7 +28,7 @@ static void uwb_selftest_work(struct ultrawidelock_dwork *dwork)
 {
 	// Configuration struct for the credential DS-TWR responder, containing ranging parameters
 	// (channel, preamble code, session ID, and STS index).
-	const struct ultrawidelock_uwb_ultrawidelock_cfg cfg = {
+	const struct ultrawidelock_uwb_cred_cfg cfg = {
 		.session_id = 0x02b02fd4u,
 		.channel = 9u,
 		.sync_code_index = 9u,
@@ -46,9 +46,9 @@ static void uwb_selftest_work(struct ultrawidelock_dwork *dwork)
 	/* Reset the per-boot wrap-log budget so the first CCC STS IVs print. */
 	ccc_shim_wrap_log_reset();
 
-	LOG_INF("SELFTEST: ultrawidelock_uwb_start_ultrawidelock() [responder-RX wrap probe] ...");
-	rc = ultrawidelock_uwb_start_ultrawidelock(&cfg);
-	LOG_INF("SELFTEST: ultrawidelock_uwb_start_ultrawidelock() = %d %s", rc,
+	LOG_INF("SELFTEST: ultrawidelock_uwb_start_cred() [responder-RX wrap probe] ...");
+	rc = ultrawidelock_uwb_start_cred(&cfg);
+	LOG_INF("SELFTEST: ultrawidelock_uwb_start_cred() = %d %s", rc,
 		rc == 0 ? "(reached ACTIVE)" : "(FAILED -- see DIAG above)");
 }
 

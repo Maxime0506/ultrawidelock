@@ -99,7 +99,7 @@ struct drvfake_state {
 
 	/* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ── */
 	unsigned start_ultrawidelock_calls;
-	struct ultrawidelock_uwb_ultrawidelock_cfg last_ultrawidelock_cfg;
+	struct ultrawidelock_uwb_cred_cfg last_ultrawidelock_cfg;
 	uint8_t last_ultrawidelock_ursk[32]; /* copied: cfg->ursk is a pointer */
 	int start_ultrawidelock_ret;
 };

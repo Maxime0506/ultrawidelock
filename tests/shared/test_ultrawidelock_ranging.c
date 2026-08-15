@@ -244,11 +244,11 @@ void ultrawidelock_uwb_session_event_free(struct ultrawidelock_uwb_session_event
 
 static int s_uwb_starts, s_uwb_stops, s_uwb_prewarms;
 static int s_uwb_start_rc;
-static struct ultrawidelock_uwb_ultrawidelock_cfg s_uwb_cfg;
+static struct ultrawidelock_uwb_cred_cfg s_uwb_cfg;
 static uint8_t s_uwb_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t s_pw_ch, s_pw_sync;
 
-int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
+int ultrawidelock_uwb_start_cred(const struct ultrawidelock_uwb_cred_cfg *cfg)
 {
 	s_uwb_starts++;
 	s_uwb_cfg = *cfg;

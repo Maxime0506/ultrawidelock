@@ -68,7 +68,7 @@ static void twin_on_latch(void)
  * the module, i.e. reboots the firmware). Returns 0 on success. */
 EMSCRIPTEN_KEEPALIVE int twin_boot(void)
 {
-	struct ultrawidelock_uwb_ultrawidelock_cfg c;
+	struct ultrawidelock_uwb_cred_cfg c;
 	uint8_t frame[128];
 	uint16_t len;
 
@@ -88,7 +88,7 @@ EMSCRIPTEN_KEEPALIVE int twin_boot(void)
 	c.ranging_config = g_rcfg;
 	c.rc_len = sizeof(g_rcfg);
 	ultrawidelock_host_rx_reset();
-	if (ultrawidelock_uwb_start_ultrawidelock(&c) != 0) {
+	if (ultrawidelock_uwb_start_cred(&c) != 0) {
 		return -1;
 	}
 	twin_peer_init(&g_peer, g_ursk, TWIN_SID, TWIN_STS0);
