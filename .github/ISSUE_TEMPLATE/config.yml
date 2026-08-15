@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/ultrawidelock/ultrawidelock/security/advisories/new
+    about: >
+      This is lock firmware. Report anything with a security consequence
+      privately, not as a public issue.
+  - name: Porting to a new board or chipset
+    url: https://github.com/ultrawidelock/ultrawidelock/blob/main/PORTING.md
+    about: The five HAL seams and the shortest board bring-up workflow.
+  - name: Contributing and verification gates
+    url: https://github.com/ultrawidelock/ultrawidelock/blob/main/CONTRIBUTING.md
+    about: What to run before opening a pull request.
