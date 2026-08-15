@@ -1,0 +1,124 @@
+# The website: render web/dist and publish it to GitHub Pages.
+#
+# This is the repository's only workflow, and it exists because deploying Pages
+# is the one step that cannot be done from a laptop. Everything else stays
+# manual on purpose: `make check` runs the host suites in seconds, `make
+# fw-check` links the Zephyr images, and `make esp-release` builds and bundles
+# the ESP32 firmware. None of that belongs here. A previous incarnation of this
+# repository carried nine workflows and 2515 lines of YAML, including 805 lines
+# that rebuilt firmware on every push; the firmware build alone took hours, and
+# it verified nothing a local `make` had not already verified.
+#
+# Manual only. `workflow_dispatch` and nothing else, deliberately:
+#
+#   - the repository's first push would otherwise publish the site in the same
+#     action that publishes the code, and those are two decisions, not one.
+#   - a site rebuild is worth starting when the prose changed or a release
+#     landed, which a human knows and a push trigger does not.
+#
+# Add `on: push: branches: [main]` later if the manual step becomes tedious.
+# That is a deliberate change, not a default.
+name: pages
+
+on:
+  workflow_dispatch:
+
+# Read-only by default; the publish job raises its own scope and nothing else
+# gets write access to anything.
+permissions:
+  contents: read
+
+# One site build at a time, and never cancel a deployment midway: a half-
+# deployed site is worse than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here talks to git after the checkout.
+          persist-credentials: false
+
+      # The twin is a WASM build of the real modules/ultrawidelock_uwb sources.
+      # web/build.py checks for emcc on PATH and, when it is absent, publishes
+      # the twin page with an explanation instead of a simulator -- so a failure
+      # here degrades the site rather than breaking it.
+      #
+      # Cloned from emscripten-core at a pinned tag rather than through a
+      # third-party setup action, because an action that installs a toolchain is
+      # an unpinned dependency wearing a pin. 6.0.6 is the version the twin is
+      # developed against locally; bump it deliberately.
+      - name: emscripten
+        env:
+          EMSDK_VERSION: "6.0.6"
+        run: |
+          git clone --depth 1 --branch "$EMSDK_VERSION" \
+            https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+          # build.py looks for emcc on PATH before it calls build-wasm.sh, so
+          # exporting it into the environment of later steps is what makes the
+          # twin build at all. (build-wasm.sh would source emsdk_env.sh itself,
+          # but it never gets the chance.)
+          . "$HOME/emsdk/emsdk_env.sh"
+          echo "$EMSDK/upstream/emscripten" >> "$GITHUB_PATH"
+
+      # The flasher offers three merged ESP32 images. They are gitignored --
+      # 6 MB of build output does not belong in the tree -- so the published
+      # page gets them from the latest release instead.
+      #
+      # Staged into build/esp32-matter-lock-<chip>/, because that is where
+      # web/build.py's stage_firmware() looks; it then copies them into
+      # web/dist/flash/ and checks them against the flasher's manifest.
+      #
+      # No release yet, or a release missing an image, is a normal state and not
+      # a failure: build.py marks the flasher page as carrying no firmware, and
+      # says which images were absent. That is the correct thing for the site to
+      # say, and it is how the page looks until the first release exists.
+      - name: firmware from the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view --repo "$REPO" >/dev/null 2>&1; then
+            echo "::notice::no release published yet -- the flasher page will say it carries no images"
+            exit 0
+          fi
+          for chip in esp32s3 esp32c5 esp32c6; do
+            name="ultrawidelock-matter-lock-$chip.bin"
+            mkdir -p "build/esp32-matter-lock-$chip"
+            gh release download --repo "$REPO" --pattern "$name" \
+              --dir "build/esp32-matter-lock-$chip" --clobber \
+              || echo "::notice::$name is not among the latest release's assets"
+          done
+
+      # --check fails the build on a dead internal link. Same gate as
+      # `make docs-check`, which is what runs locally.
+      - name: render the site
+        run: python3 web/build.py --check
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/dist
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Deploying needs no write access to the repository at all: pages:write
+    # publishes the artifact that build produced, id-token:write proves to Pages
+    # which workflow built it. Nothing in this job can touch a branch or a tag.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
