@@ -97,6 +97,10 @@ CORE_UNIT_SRCS=(
 	"$CRED/src/ultrawidelock_lat.c"
 	"$CRED/src/ultrawidelock_reader.c"
 	"$CRED/src/ultrawidelock_ranging.c"
+	"$CRED/src/ultrawidelock_device.c"
+	"$CRED/src/ultrawidelock_device_apdu.c"
+	"$CRED/src/ultrawidelock_ble_central.c"
+	"$CRED/src/ultrawidelock_assert_ec.c"
 	"$LOCK_MAIN/lock_led.c"
 )
 
@@ -157,6 +161,30 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
 	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_ranging"
 run_suite ranging "$OUT/cov_ranging"
 
+# The initiator half of the credential stack: ultrawidelock_device.c and its APDU
+# codec, over the reference host primitives. tests/shared/run.sh has proved these
+# since they were written; this mirror was simply never added, so they were
+# reported as having no host tests at all.
+cov_cc -DULTRAWIDELOCK_DEVICE_HAVE_EC -I"$CRED/include" -I"$CRED/src" \
+	"$SHARED/test_ultrawidelock_device.c" \
+	"$CRED/src/ultrawidelock_device.c" "$CRED/src/ultrawidelock_device_apdu.c" \
+	"$CRED/src/ultrawidelock_apdu.c" "$CRED/src/ultrawidelock_crypto.c" \
+	"$CRED/src/ultrawidelock_hash.c" \
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_device"
+run_suite device "$OUT/cov_device"
+
+cov_cc -I"$CRED/include" \
+	"$SHARED/test_ultrawidelock_ble_central.c" "$CRED/src/ultrawidelock_ble_central.c" \
+	-o "$OUT/cov_ble_central"
+run_suite ble_central "$OUT/cov_ble_central"
+
+cov_cc -I"$CRED/include" -I"$CRED/src" \
+	"$SHARED/test_ultrawidelock_assert_ec.c" \
+	"$CRED/src/ultrawidelock_assert.c" "$CRED/src/ultrawidelock_assert_ec.c" \
+	"$CRED/src/ultrawidelock_hash.c" \
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_assert_ec"
+run_suite assert_ec "$OUT/cov_assert_ec"
+
 # Header-inline logic (ultrawidelock_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
 cov_cc -I"$ROOT/modules/ultrawidelock_port/include" -I"$ROOT/modules/ultrawidelock_uwb/include" \
@@ -188,6 +216,11 @@ SIDE_UNIT_SRCS=(
 	"$CRED/src/ultrawidelock_ble_nimble.c"
 	"$ECOMP/ultrawidelock_reader/ultrawidelock_prov_nvs.c"
 	"$ECOMP/ultrawidelock_reader/ultrawidelock_stepup_worker.c"
+	"$ECOMP/ultrawidelock_reader/presence_link.c"
+	"$ECOMP/piv_ccid/piv_ccid.c"
+	"$ECOMP/piv_ccid/piv_apdu.c"
+	"$ROOT/ports/zephyr/store/matter_fab_settings.c"
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_crc.c"
 	"$ECOMP/ultrawidelock_uwb/port/dw3000_hw.c"
 	"$ECOMP/ultrawidelock_uwb/port/dw3000_spi.c"
 	"$ECOMP/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c"
@@ -266,6 +299,35 @@ cov_cc -I"$SDKFAKE" -I"$CRED/include" \
 	"$ET/test_esp_prov_nvs.c" "$ECOMP/ultrawidelock_reader/ultrawidelock_prov_nvs.c" \
 	"$CRED/src/ultrawidelock_prov.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_nvs"
 run_suite esp_nvs "$OUT/cov_esp_nvs"
+
+# The PIV CCID core and the presence link, mirroring tests/ports/esp32/run.sh.
+# Both run in make check today, inside the shared suite; neither was measured.
+cov_cc -I"$ECOMP/piv_ccid/include" \
+	"$ET/test_piv_ccid.c" "$ECOMP/piv_ccid/piv_ccid.c" "$ECOMP/piv_ccid/piv_apdu.c" \
+	-o "$OUT/cov_esp_piv"
+run_suite esp_piv "$OUT/cov_esp_piv"
+
+cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+	-DCONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS=1 -DCONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM=40 \
+	-I"$SDKFAKE" -I"$ECOMP/ultrawidelock_reader" \
+	-I"$CRED/include" -I"$CRED/src" -I"$ROOT/modules/ultrawidelock_port/include" \
+	-I"$ROOT/modules/ultrawidelock_uwb/include" \
+	"$ET/test_esp_presence_link.c" \
+	"$ECOMP/ultrawidelock_reader/presence_link.c" \
+	"$CRED/src/ultrawidelock_assert.c" "$CRED/src/ultrawidelock_hash.c" \
+	"$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_presence"
+run_suite esp_presence "$OUT/cov_esp_presence"
+
+# The DWM3001CDK settings glue, mirroring stage 4 of tests/host/run.sh. That
+# stage had no mirror here at all, so make test proved this file's 51 checks
+# while the report called it never built.
+cov_cc -DCONFIG_LOG_DEFAULT_LEVEL=3 \
+	-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
+	-I"$ROOT/modules/ultrawidelock_matter/include" -I"$ROOT/ports/zephyr/store" \
+	"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
+	"$HOSTD/settingsfake/settingsfake.c" \
+	"$ROOT/ports/zephyr/store/matter_fab_settings.c" -o "$OUT/cov_cdk_fab"
+run_suite cdk_fab "$OUT/cov_cdk_fab"
 
 cov_cc -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
 	-I"$SDKFAKE" -I"$ET" -I"$SHARED" -I"$CRED/include" -I"$CRED/src" \
@@ -489,6 +551,13 @@ ui_run "summary export" _cov_export
 UNBUILT_TSV="$OUT/unbuilt.tsv"
 : >"$UNBUILT_TSV"
 PLATFORM_RE='#include [<"](zephyr/|esp_|nimble/|host/|freertos/|nvs|mbedtls/|psa/|deca_|app/|driver/|crypto/|lib/)'
+# Every suite in the repo, including the ones this script does not mirror. A file
+# absent from the measured set is not thereby untested: the opt-in FreeRTOS
+# suite alone compiles thirty-odd of these. Saying "no host tests yet" about a
+# file with a test beside it is worse than saying nothing, because it is the
+# sentence someone reads before deciding to go and write that test.
+SUITE_SCRIPTS="$(cd "$ROOT" && ls tests/host/run.sh tests/shared/run.sh tests/sdk/run.sh \
+	tests/ports/*/run.sh 2>/dev/null)"
 while IFS= read -r rel; do
 	f="$ROOT/$rel"
 	for u in "${ALL_UNIT_SRCS[@]}"; do
@@ -498,13 +567,33 @@ while IFS= read -r rel; do
 	if grep -q -E "$PLATFORM_RE" "$f"; then
 		tag=target-only
 	fi
+	# Matched on the last two path components, because two ports carry files of
+	# the same name (dw3000_hw.c, ultrawidelock_seam_stubs.c) and a bare
+	# basename would credit one port's file with the other's tests.
+	frag="$(basename "$(dirname "$rel")")/$(basename "$rel")"
+	for s in $SUITE_SCRIPTS; do
+		if grep -q -F "$frag" "$ROOT/$s"; then
+			tag=elsewhere
+			break
+		fi
+	done
 	printf '%s\t%s\n' "$rel" "$tag" >>"$UNBUILT_TSV"
+# ports/zephyr/dw3000/ is excluded for the same reason modules/ultrawidelock_dw3000
+# is: THIRD_PARTY_NOTICES puts both in the DW3000 scope, derived from
+# br101/zephyr-dw3000-decadriver and carrying the component license. It was
+# inside the module tree when this list was written and moved out later; the
+# exclusion did not follow it, so 508 lines of upstream have been sitting in the
+# denominator of a report whose header says third-party sources are not in it.
+# The ESP-IDF backends of the same names stay: the notices file calls those
+# project-original implementations of the same seam headers.
 done < <(cd "$ROOT" && {
 	find modules ports \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
 		! -path '*/test/*' ! -path '*/managed_components/*' \
-		! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*'
+		! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' \
+		! -path 'ports/zephyr/dw3000/*'
 	find modules ports -name '*.h' ! -path '*/test/*' \
 		! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' \
+		! -path 'ports/zephyr/dw3000/*' \
 		-exec grep -l 'static inline' {} +
 } | LC_ALL=C sort)
 

@@ -29,6 +29,10 @@ import sys
 TAG_LABEL = {
     "untested": "no host tests yet",
     "target-only": "target-only (HW/SDK)",
+    # A suite compiles it, this report does not measure it. The distinction
+    # matters: the first two rows are work someone might do, this one is work
+    # already done and not being counted.
+    "elsewhere": "tested, not measured here",
 }
 
 
@@ -146,14 +150,17 @@ def main() -> int:
             + [len(frac(0, n)) for _, n, _ in unbuilt]
         )
         print()
+        # Not "never built on host": some of these rows have a suite behind
+        # them, they are just outside what this report instruments. The why
+        # column is what separates the two.
         print(
-            f"  {B}Never built on host{R}  "
+            f"  {B}Not measured here{R}  "
             f"{D}·  0% — line counts are SLOC estimates{R}"
         )
         print()
         print(
             f"    {D}{'file':<{uw}}   {'lines':>{ufracw}}   {'cover':>6}   "
-            f"{'why':<21}{R}"
+            f"{'why':<25}{R}"
         )
         for name, n, tag in unbuilt:
             print(
