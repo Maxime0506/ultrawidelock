@@ -147,6 +147,164 @@
     transform:translateX(calc(var(--travel) * .5))}
 }
 
+/* ----------------------------------------------------- the first paint --- */
+/* One orchestrated beat, and then silence.
+ *
+ * The page's whole claim is that it measures, so its arrival is a measurement
+ * being taken: the copy lands, the ruler sweeps out from the lock, the metre
+ * marks stamp in behind it, the decision line drops, the span is dimensioned,
+ * one DS-TWR round leaves, and the readouts settle. After that the hero is
+ * exactly the instrument it was before, and nothing here ever runs again.
+ *
+ * It is animation-delay under one .booted class and nothing else. No
+ * observer, no timers, no per-frame JavaScript. .booted is set inline in
+ * <head> beside the js flag, before the stylesheet, so no element is ever
+ * painted visible and then hidden -- and with scripting off the class never
+ * arrives, every rule below is inert, and the static SVG is what it already
+ * was: a complete, labelled round.
+ *
+ * The whole sequence lives inside no-preference rather than being overridden
+ * under reduce. The global cap in reset.css shortens durations but does not
+ * touch animation-delay, and a delay that survives its own duration is a
+ * jump. Under prefers-reduced-motion this sequence simply does not exist.
+ *
+ * Two constraints the SVG imposes. hero.js positions #hs-phone, #hs-rail and
+ * #hs-dim-tick with a transform *attribute*, and a CSS transform beats a
+ * presentation attribute, so those three may only fade -- animating transform
+ * on them would drag the phone to the origin for the length of the boot.
+ * #hs-dim spans its distance with x2 instead, so it is free to scale.
+ */
+@media (prefers-reduced-motion:no-preference){
+
+  /* The beat, in one place. Everything below is an offset from these. */
+  .booted .hero{
+    --boot-copy:0ms;       /* the headline lands                          */
+    --boot-scope:440ms;    /* the ruler leaves the lock                   */
+    --boot-tick:620ms;     /* first metre mark, then one every 40ms       */
+    --boot-mark:900ms;     /* the unlock bound drops                      */
+    --boot-strip:1000ms;   /* the stats under the band                    */
+    --boot-read:1080ms;    /* controls, then the readouts settle          */
+    --boot-round:1180ms;   /* one DS-TWR round leaves the lock            */
+  }
+
+  @keyframes uwl-boot-rise{
+    from{opacity:0;transform:translateY(var(--reveal-y))} to{opacity:1;transform:none}}
+  @keyframes uwl-boot-fade{from{opacity:0} to{opacity:1}}
+  @keyframes uwl-boot-sweep{from{transform:scaleX(0)} to{transform:scaleX(1)}}
+  @keyframes uwl-boot-stamp{
+    from{opacity:0;transform:scaleY(0)} to{opacity:1;transform:scaleY(1)}}
+
+  /* ---- the copy. One rise distance and one stagger, the same two the rest
+     of the site reveals with, so the hero does not arrive with its own idea
+     of how far up is. This is the first thing to read --reveal-step. ---- */
+  .booted .hero .eyebrow,.booted .hero h1,
+  .booted .hero .lede,.booted .hero .cta{
+    animation:uwl-boot-rise var(--dur-4) var(--ease-out) both}
+  .booted .hero .eyebrow{animation-delay:var(--boot-copy)}
+  .booted .hero h1{animation-delay:calc(var(--boot-copy) + var(--reveal-step))}
+  .booted .hero .lede{animation-delay:calc(var(--boot-copy) + var(--reveal-step) * 2)}
+  .booted .hero .cta{animation-delay:calc(var(--boot-copy) + var(--reveal-step) * 3)}
+
+  /* ---- the band's own chrome, just ahead of the drawing ---- */
+  .booted .scope-head,.booted .scope-foot{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:calc(var(--boot-scope) - 60ms)}
+
+  /* ---- the ruler. It leaves the lock because the lock is the origin of the
+     scale; scaling from anywhere else would draw a ruler that does not agree
+     with the numbers under it. --ease-emphatic puts the front of the line
+     most of the way out early, so the marks stamp in behind it. ---- */
+  .booted .hs-rule-g .hs-rule{
+    transform-box:view-box;transform-origin:96px 46px;
+    animation:uwl-boot-sweep var(--dur-4) var(--ease-emphatic) both;
+    animation-delay:var(--boot-scope)}
+
+  .booted .hs-tick line{
+    transform-box:view-box;transform-origin:0 46px;
+    animation:uwl-boot-stamp var(--dur-2) var(--ease-out) both}
+  .booted .hs-tick line:nth-child(1){animation-delay:var(--boot-tick)}
+  .booted .hs-tick line:nth-child(2){animation-delay:calc(var(--boot-tick) + 40ms)}
+  .booted .hs-tick line:nth-child(3){animation-delay:calc(var(--boot-tick) + 80ms)}
+  .booted .hs-tick line:nth-child(4){animation-delay:calc(var(--boot-tick) + 120ms)}
+  .booted .hs-tick line:nth-child(5){animation-delay:calc(var(--boot-tick) + 160ms)}
+  .booted .hs-tick line:nth-child(6){animation-delay:calc(var(--boot-tick) + 200ms)}
+  .booted .hs-tick line:nth-child(7){animation-delay:calc(var(--boot-tick) + 240ms)}
+
+  /* A numeral follows its own mark by 80ms: the mark is made, then it is
+     named. Numerals sit on the whole-metre ticks, which are 1, 3, 5 and 7. */
+  .booted .hs-rule-g .hs-num{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) both}
+  .booted .hs-num:nth-of-type(1){animation-delay:calc(var(--boot-tick) + 80ms)}
+  .booted .hs-num:nth-of-type(2){animation-delay:calc(var(--boot-tick) + 160ms)}
+  .booted .hs-num:nth-of-type(3){animation-delay:calc(var(--boot-tick) + 240ms)}
+  .booted .hs-num:nth-of-type(4){animation-delay:calc(var(--boot-tick) + 320ms)}
+
+  /* ---- the two devices. The lock is the origin, so it is there when the
+     ruler leaves it; the phone appears as the sweep reaches it. ---- */
+  .booted .hs-lock{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:var(--boot-scope)}
+  .booted .hs-phone{                    /* opacity only: JS owns its transform */
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:calc(var(--boot-scope) + 120ms)}
+
+  /* ---- the decision. Drops from the ruler it is measured against, then
+     names the constant it comes from. ---- */
+  .booted .hs-bound line{
+    transform-box:view-box;transform-origin:0 36px;
+    animation:uwl-boot-stamp var(--dur-3) var(--ease-out) both;
+    animation-delay:var(--boot-mark)}
+  .booted .hs-bound text{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) both;
+    animation-delay:calc(var(--boot-mark) + 80ms)}
+
+  /* ---- what the lock believes it measured. The span sweeps from the lock
+     like the ruler did, because it is the same measurement stated twice. ---- */
+  .booted #hs-dim{
+    transform-box:view-box;transform-origin:96px 0;
+    animation:uwl-boot-sweep var(--dur-3) var(--ease-emphatic) both;
+    animation-delay:calc(var(--boot-mark) + 100ms)}
+  .booted #hero-scope > line.hs-dim:not([id]),   /* the zero mark at the lock */
+  .booted #hs-dim-tick,.booted .hs-dim-cap{      /* JS owns #hs-dim-tick      */
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:calc(var(--boot-mark) + 100ms)}
+
+  /* ---- the protocol half, then the round itself ---- */
+  .booted #hero-scope > line.hs-rule,.booted #hs-lanes{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:calc(var(--boot-mark) + 140ms)}
+
+  /* The three lane pulses already loop as the live measurement. All that is
+     added here is one shared delay, which phases their first cycle to arrive
+     as the round this sequence has been building toward instead of being
+     halfway out of the lock while the ruler is still drawing. */
+  .booted .hs-p1,.booted .hs-p2,.booted .hs-p3{animation-delay:var(--boot-round)}
+
+  /* ---- the readouts settle. --ease-spring on the verdict is what the token
+     was declared for: something arriving and coming to rest. ---- */
+  .booted .scope-ctl label,.booted .scope-ctl input[type=range],
+  .booted #hs-relay-btn{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) both;
+    animation-delay:var(--boot-read)}
+  .booted .scope-read .r{
+    animation:uwl-boot-rise var(--dur-3) var(--ease-out) both}
+  .booted .scope-read .r:nth-child(1){animation-delay:calc(var(--boot-read) + 40ms)}
+  .booted .scope-read .r:nth-child(2){animation-delay:calc(var(--boot-read) + 80ms)}
+  .booted .scope-read .r:nth-child(3){animation-delay:calc(var(--boot-read) + 120ms)}
+  .booted .scope-verdict{
+    animation:uwl-boot-rise var(--dur-3) var(--ease-spring) both;
+    animation-delay:calc(var(--boot-read) + 200ms)}
+
+  /* ---- and the three figures under the band ---- */
+  .booted .strip .stat-b{
+    animation:uwl-boot-rise var(--dur-4) var(--ease-out) both}
+  .booted .strip .stat-b:nth-child(1){animation-delay:var(--boot-strip)}
+  .booted .strip .stat-b:nth-child(2){
+    animation-delay:calc(var(--boot-strip) + var(--reveal-step))}
+  .booted .strip .stat-b:nth-child(3){
+    animation-delay:calc(var(--boot-strip) + var(--reveal-step) * 2)}
+}
+
 /* ------------------------------------------------------- scope controls -- */
 .scope-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-4);
   margin-top:var(--sp-4);padding-top:var(--sp-4);
