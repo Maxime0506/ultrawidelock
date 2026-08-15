@@ -56,7 +56,8 @@ def inline(text: str) -> str:
     text = INLINE_CODE.sub(stash, text)
     text = html.escape(text)
     text = LINK.sub(
-        lambda m: f'<a href="{_href(m.group(2))}">{m.group(1)}</a>', text)
+        lambda m: f'<a href="{_href(m.group(2))}"'
+                  f'{_link_attrs(m.group(2))}>{m.group(1)}</a>', text)
     text = BOLD.sub(r"<strong>\1</strong>", text)
     text = ITALIC.sub(r"<em>\1</em>", text)
     return re.sub(r"\x00(\d+)\x00",
@@ -64,6 +65,19 @@ def inline(text: str) -> str:
 
 
 REPO_BLOB = "https://github.com/ultrawidelock/ultrawidelock/blob/main/"
+
+
+def _link_attrs(target: str) -> str:
+    """Mark links that leave the site.
+
+    The guides link outward constantly, and _href() sends anything with a path
+    separator to the source browser, so most links here are off-site whether
+    they were written that way or not. rel="noopener" because a new tab given
+    window.opener can navigate the one it came from.
+    """
+    leaves = (target.startswith(("http://", "https://"))
+              or ("/" in target and not target.startswith("#")))
+    return ' data-ext rel="noopener"' if leaves else ""
 
 
 def _href(target: str) -> str:
@@ -123,7 +137,13 @@ def render(text: str) -> tuple[str, list[tuple[int, str, str]]]:
                 anchor += "-x"
             seen.add(anchor)
             toc.append((level, title, anchor))
-            out.append(f'<h{level} id="{anchor}">{inline(title)}</h{level}>')
+            # A heading without a way to link to it is a heading nobody can
+            # send anyone to. The anchor is hidden until the heading is
+            # hovered or the link itself is focused, so it costs no ink.
+            link = (f'<a class="anchor" href="#{anchor}" '
+                    f'aria-label="Link to this section">#</a>')
+            out.append(
+                f'<h{level} id="{anchor}">{inline(title)}{link}</h{level}>')
             i += 1
             continue
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,6 +14,8 @@
        connect-src  blob: because the dropdown builds a single-build manifest client-side and
                     hands the button a blob URL; 'self' for manifest.json and the .bin images.
        object-src   none, frame-ancestors none: nothing embeds or is embedded.
+     Fonts, the stylesheet and the site's shared script are all same-origin, so default-src
+     'self' already covers them and no directive was widened to adopt the site chrome.
      If the flasher ever stops working after a dependency bump, check the browser console for a
      CSP violation before anything else. -->
 <meta http-equiv="Content-Security-Policy"
@@ -26,140 +28,64 @@
                base-uri 'self';
                form-action 'none';
                frame-ancestors 'none'">
-<title>Flash ultrawidelock to an ESP32 from the browser</title>
+<title>Flash UltraWideLock to an ESP32 from the browser</title>
+<meta name="description" content="Install the UltraWideLock ESP32 Matter lock over WebSerial. No ESP-IDF, no command line: the page detects your chip and writes the right merged image.">
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>document.documentElement.className+=' js';</script>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../assets/design/fonts/space-grotesk.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../assets/design/fonts/jetbrains-mono.woff2">
 <link rel="stylesheet" href="../assets/design/styles.css">
 <style>
-/* The palette comes from the design system now, so this page matches the rest
-   of the site instead of carrying v0.3.0's warm-paper theme. The build stages
-   it into dist/flash/, where ../assets/design/ resolves.
+/* Page-specific only. The type scale, colours, buttons, tables and callouts
+   all come from the design system now; this file used to redeclare its own
+   h1/h2/body sizes and a --serif alias that pointed at the sans face, left
+   over from a warm-paper theme the site no longer has. */
 
-   The original refused a webfont @import on a real argument: this page flashes
-   firmware over WebSerial, so every subresource it pulls joins that trust
-   chain, and Google Fonts could not be integrity-checked because its CSS is
-   generated per user-agent. That objection is answered rather than ignored --
-   the fonts are self-hosted in this repository now, served from the same
-   origin as the page.
+/* The install row. esp-web-tools swaps its own slotted content in when the
+   browser has no WebSerial or the page is not a secure context, so those two
+   states are markup below rather than something to detect here. */
+.flashrow{display:flex;flex-wrap:wrap;gap:var(--sp-4);align-items:center;
+  margin:var(--sp-6) 0}
+.boardrow{display:flex;flex-wrap:wrap;gap:var(--sp-3);align-items:center;
+  margin:var(--sp-5) 0 0}
+esp-web-install-button{--esp-tools-button-color:var(--accent);
+  --esp-tools-button-text-color:var(--inverse);
+  --esp-tools-progress-color:var(--accent);
+  --esp-tools-log-background:var(--sunken);
+  --esp-tools-log-color:var(--ink)}
+esp-web-install-button button.btn{font-size:var(--fs-500);
+  padding:var(--sp-3) var(--sp-8);min-height:2.9rem}
 
-   Only the four tokens the design system does not define are declared here,
-   mapped onto ones it does. */
-:root{
-  --accent-fg:var(--inverse);
-  --tint:var(--accent-tint);
-  --tint-line:var(--accent-line);
-  --herotint:var(--accent-tint);
-  --serif:var(--font-sans);
-}
-*{box-sizing:border-box}
-html{font-size:17px}
-body{margin:0; background:var(--ground); color:var(--ink);
-  font:var(--fs-500)/1.7 var(--font-sans)}
+/* Pairing card. The QR panel stays white in both themes and never inherits
+   --card: a scanner needs dark modules on a light field, and a phone camera
+   pointed at a dark-mode page gets neither. The quiet zone is padding here,
+   so the SVG itself carries no border modules. */
+.pair{display:flex;flex-wrap:wrap;gap:var(--sp-6);align-items:center;
+  padding:var(--sp-5) var(--sp-6);margin:var(--sp-5) 0;
+  border:var(--border);border-radius:var(--r-lg);background:var(--card)}
+.qr-card{background:#fff;border-radius:var(--r-md);padding:var(--sp-3);line-height:0}
+.qr-img{display:block;width:9rem;height:9rem}
+.pair-codes{flex:1 1 14rem;min-width:0}
+.pair-label{margin:0;font-size:var(--fs-100);text-transform:uppercase;
+  letter-spacing:var(--tr-caps);color:var(--faint)}
+.pair-code{margin:var(--sp-1) 0 var(--sp-4);
+  font-family:var(--font-mono);font-size:var(--fs-800);color:var(--strong);
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.pair-payload{margin:var(--sp-1) 0 0;overflow-wrap:anywhere}
 
-/* Topbar: the site shell's solid bar — wordmark crumb left, GitHub chip right. */
-.topbar{
-  position:sticky; top:0; z-index:10; display:flex; align-items:center;
-  gap:.55rem; height:3.4rem; padding:0 1.1rem;
-  background:var(--ground); border-bottom:1px solid var(--hairline);
-}
-.wordmark{color:var(--strong); font-weight:650; font-size:.9rem; text-decoration:none}
-.wordmark:hover{color:var(--accent)}
-.crumb-sep{color:var(--muted); font-size:.85rem}
-.crumb{color:var(--muted); font-size:.85rem}
-.spacer{flex:1}
-.gh-chip{
-  display:inline-flex; align-items:center; gap:.45rem;
-  border:1px solid var(--line); border-radius:999px; padding:.32rem .8rem;
-  color:var(--ink); font-size:.82rem; font-weight:550; text-decoration:none;
-}
-.gh-chip:hover{border-color:var(--tint-line); color:var(--strong)}
-
-/* Hero band: tinted gradient, uppercase eyebrow, serif display heading. */
-.hero-band{background:linear-gradient(180deg,var(--herotint),transparent 82%)}
-.hero-in{max-width:48rem; margin:0 auto; padding:3rem 1.25rem 0}
-.eyebrow{
-  color:var(--accent); font-size:.74rem; font-weight:650;
-  letter-spacing:.13em; text-transform:uppercase; margin-bottom:.6rem;
-}
-h1{
-  font-family:var(--serif); font-size:2.35rem; font-weight:430;
-  line-height:1.22; letter-spacing:0; color:var(--strong); margin:0 0 .8rem;
-}
-.lede{font-size:1.16rem; line-height:1.65; color:var(--muted); margin:0 0 1rem}
-
-main{max-width:48rem; margin:0 auto; padding:1.2rem 1.25rem 4rem}
-h2{
-  font-family:var(--serif); font-size:1.6rem; font-weight:500;
-  letter-spacing:0; color:var(--strong); margin:3rem 0 1rem;
-}
-p{margin:1.05rem 0}
-strong{color:var(--strong)}
-a{color:var(--accent)}
-a:hover{color:var(--accent-hover)}
-code{
-  background:var(--raise); border-radius:6px; padding:.12em .38em;
-  font-size:.85em; color:var(--strong);
-}
-ol li,ul li{margin:.35rem 0}
-
-/* Tables read like the rest of the site: horizontal hairlines only. */
-.tablewrap{overflow-x:auto}
-table{border-collapse:collapse; width:100%; margin:.9rem 0; font-size:.92rem}
-th,td{border:0; border-bottom:1px solid var(--hairline); padding:.6rem .8rem; text-align:left}
-th{border-bottom:1px solid var(--line); font-weight:600; color:var(--strong)}
-
-.callout{
-  background:var(--tint); border:1px solid var(--tint-line);
-  border-radius:12px; padding:.85rem 1.1rem; margin:1.2rem 0;
-}
-
-/* The install row: terracotta button; the component swaps in the alert when
-   the browser has no WebSerial or the page is not a secure context. */
-.flashrow{text-align:center; margin:1.8rem 0}
-.boardrow{text-align:center; margin:1.2rem 0 0}
-.boardrow label{margin-right:.5rem}
-.boardrow select{
-  font:inherit; padding:.45rem .7rem; border-radius:8px;
-  border:1px solid var(--line); background:var(--card); color:var(--ink);
-}
-esp-web-install-button button.btn{
-  background:var(--accent); color:var(--accent-fg); border:0; cursor:pointer;
-  font:inherit; font-weight:600; font-size:1rem;
-  padding:.75rem 1.7rem; border-radius:10px;
-}
-esp-web-install-button button.btn:hover{background:var(--accent-hover)}
-.alert{
-  display:inline-flex; gap:.65rem; align-items:baseline; text-align:left;
-  background:var(--tint); border:1px solid var(--tint-line); border-radius:12px;
-  padding:.85rem 1.1rem; max-width:34rem; color:var(--strong); font-size:.95rem;
-}
-.alert .sign{color:var(--accent); font-weight:650}
-
-/* Pairing card: the setup code, shown rather than fetched out of a boot log.
-   The QR panel is white in both themes and never inherits --card, because a
-   scanner needs dark modules on a light field and a phone camera pointed at a
-   dark-mode page gets neither. The quiet zone is padding here, so the SVG
-   itself carries no border modules. */
-.pair{
-  display:flex; flex-wrap:wrap; gap:1.4rem; align-items:center;
-  background:var(--card); border:1px solid var(--line); border-radius:14px;
-  padding:1.2rem 1.4rem; margin:1.4rem 0;
-}
-.qr-card{background:#fff; border-radius:10px; padding:.7rem; line-height:0}
-.qr-img{display:block; width:9rem; height:9rem}
-.pair-codes{flex:1 1 14rem; min-width:0}
-.pair-label{
-  color:var(--muted); font-size:.74rem; font-weight:650;
-  letter-spacing:.13em; text-transform:uppercase; margin:0;
-}
-.pair-code{
-  color:var(--strong); font-size:1.75rem; font-weight:600; letter-spacing:.02em;
-  font-variant-numeric:tabular-nums; margin:.15rem 0 .7rem;
-}
-.pair-payload{margin:.15rem 0 0; overflow-wrap:anywhere}
-
-.fine{
-  color:var(--muted); font-size:.88rem; border-top:1px solid var(--hairline);
-  margin-top:3rem; padding-top:1.2rem;
-}
+/* Chip support. The three parts are not equally proven and the page should
+   not imply they are. */
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+  gap:var(--sp-3);margin:0 0 var(--sp-6)}
+.chipcard{padding:var(--sp-4) var(--sp-5);border:var(--border);
+  border-radius:var(--r-md);background:var(--card)}
+.chipcard b{display:block;font-family:var(--font-mono);color:var(--strong);
+  margin-bottom:var(--sp-2)}
+.chipcard p{margin:var(--sp-2) 0 0;font-size:var(--fs-300);color:var(--muted);
+  line-height:var(--lh-normal)}
 </style>
 <!-- esp-web-tools, pinned. This script drives WebSerial and writes firmware to the board, so it
      is the highest-trust dependency on the page and it used to be the least pinned: the src was
@@ -184,74 +110,92 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
         crossorigin="anonymous"></script>
 </head>
 <body>
-<header class="topbar">
-  <a class="wordmark" href="../">ultrawidelock</a>
-  <span class="crumb-sep">/</span>
-  <span class="crumb">Flash from the browser</span>
-  <div class="spacer"></div>
-  <a class="gh-chip" href="https://github.com/ultrawidelock/ultrawidelock" target="_blank" rel="noopener" aria-label="ultrawidelock/ultrawidelock on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>ultrawidelock/ultrawidelock</a>
+<a class="skip" href="#main">Skip to content</a>
+@@TOOLBAR:flash from the browser@@
+
+<header class="hero-band">
+  <div class="hero-in">
+    <span class="eyebrow">Get started &middot; no toolchain</span>
+    <h1 style="font-size:var(--fs-900);letter-spacing:var(--tr-display);line-height:var(--lh-tight);color:var(--strong);margin:0 0 var(--sp-4);max-width:20ch">Flash UltraWideLock from your browser.</h1>
+    <p class="lede">The complete credential Matter lock on a single ESP32-S3, C5 or C6.
+    It commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet,
+    and the lock opens as you walk up. This page detects which chip you plugged in and
+    writes the right firmware over WebSerial. Nothing to install, no ESP-IDF.</p>
+  </div>
 </header>
 
-<header class="hero-band"><div class="hero-in">
-  <div class="eyebrow">Get started</div>
-  <h1>Flash ultrawidelock from your browser</h1>
-  <p class="lede">The complete credential Matter lock on a single ESP32-S3, C5 or
-  C6: it commissions into Apple Home over Wi-Fi, your iPhone carries
-  the key in Wallet, and the lock opens as you walk up (BLE + UWB approach
-  unlock). This page detects which chip you plugged in and flashes the right
-  firmware over WebSerial. Nothing to install, no ESP-IDF.</p>
-</div></header>
+<main id="main" class="page" style="max-width:56rem;padding-top:var(--sp-10);padding-bottom:var(--sp-20)">
 
-<main>
-<h2>What you need</h2>
+<div class="section-h"><h2>What you need</h2><span class="rule"></span></div>
+<div class="chips">
+  <div class="chipcard">
+    <b>ESP32-S3</b><span class="status status-ok">validated</span>
+    <p>Validated on the ESP32-S3-WROOM N16R8. Smaller variants are untested.</p>
+  </div>
+  <div class="chipcard">
+    <b>ESP32-C6</b><span class="status status-warn">ranging only</span>
+    <p>UWB ranging is bench-validated on the C6-DevKitC-1. The full Matter walk-up is not.</p>
+  </div>
+  <div class="chipcard">
+    <b>ESP32-C5</b><span class="status status-idle">builds</span>
+    <p>DevKitC-1-compatible pinout. It builds and flashes; it is not yet bench-validated.</p>
+  </div>
+</div>
 <ul>
-  <li>ESP32-S3 dev board (validated on ESP32-S3-WROOM N16R8; smaller variants
-  untested), ESP32-C6-DevKitC-1 (UWB ranging is bench-validated on this chip,
-  the full Matter walk-up is not), or ESP32-C5 dev board
-  (DevKitC-1-compatible pinout; builds, not yet bench-validated)</li>
-  <li>Qorvo DWM3000EVB (DW3110), the UWB radio, hand-wired over SPI</li>
+  <li>A Qorvo DWM3000EVB (DW3110) — the UWB radio, hand-wired over SPI</li>
   <li>11 jumper wires and a USB <strong>data</strong> cable</li>
-  <li>Chrome, Edge, or Firefox on a computer (WebSerial; Safari and mobile
-  browsers cannot flash)</li>
+  <li>Chrome, Edge, or Firefox on a computer. WebSerial does not exist in Safari
+  or on mobile browsers, so those cannot flash.</li>
 </ul>
-<p>Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor), a
-Home hub (HomePod or Apple TV), and a 2.4&nbsp;GHz Wi-Fi network.</p>
+<p>Apple side: an iPhone with a UWB chip (iOS&nbsp;26 is the validated floor), a Home
+hub (HomePod or Apple TV), and a 2.4&nbsp;GHz Wi-Fi network.</p>
 
-<h2>1. Wire the UWB radio</h2>
-<div class="callout"><strong>Check the DWM3000EVB's power-select jumper
-first.</strong> Wrong source and the radio fails silently (no device ID, a
-deaf responder), looking exactly like a software fault. It cost days on the
-bench once.</div>
-<p>Power the EVB from <strong>3V3</strong>, not 5&nbsp;V (the DW3000 is a
-3.3&nbsp;V part), share ground, and wire:</p>
+<div class="section-h"><h2>Install it</h2><span class="rule"></span></div>
+<ol class="steps">
+
+<li>
+<h3>Wire the UWB radio</h3>
+<div class="callout callout-warn"><span class="ico">first</span><div>
+  <p><strong>Check the DWM3000EVB's power-select jumper before anything else.</strong>
+  Wrong source and the radio fails silently — no device ID, a deaf responder — which
+  looks exactly like a software fault. It cost days on the bench once.</p>
+</div></div>
+<p>Power the EVB from <strong>3V3</strong>, not 5&nbsp;V (the DW3000 is a 3.3&nbsp;V
+part), share ground, and wire:</p>
 <div class="tablewrap">
-<table>
-<tr><th>DWM3000EVB (Arduino pin)</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th><th>ESP32-C6</th></tr>
-<tr><td>D13</td><td>SCLK</td><td>GPIO12</td><td>GPIO8</td><td>GPIO6</td></tr>
-<tr><td>D11</td><td>MOSI</td><td>GPIO11</td><td>GPIO9</td><td>GPIO7</td></tr>
-<tr><td>D12</td><td>MISO</td><td>GPIO13</td><td>GPIO23</td><td>GPIO2</td></tr>
-<tr><td>D10</td><td>CS</td><td>GPIO10</td><td>GPIO10</td><td>GPIO10</td></tr>
-<tr><td>D8</td><td>IRQ</td><td>GPIO5</td><td>GPIO5</td><td>GPIO3</td></tr>
-<tr><td>D7</td><td>RSTn</td><td>GPIO4</td><td>GPIO4</td><td>GPIO1</td></tr>
-<tr><td>D9</td><td>WAKEUP</td><td>GPIO6</td><td>GPIO6</td><td>GPIO0</td></tr>
-<tr><td>3V3</td><td>power</td><td>3V3</td><td>3V3</td><td>3V3</td></tr>
-<tr><td>GND</td><td>ground</td><td>GND</td><td>GND</td><td>GND</td></tr>
-<tr><td>D1</td><td>SPI-POL</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
-<tr><td>D0</td><td>SPI-PHA</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
+<table class="data">
+<caption class="figcap" style="caption-side:bottom;text-align:left;padding:var(--sp-3) var(--sp-4)">
+Pin map per chip. Scroll sideways for the C5 and C6 columns on a narrow screen.</caption>
+<thead><tr><th>EVB pin</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th><th>ESP32-C6</th></tr></thead>
+<tbody>
+<tr><td><code>D13</code></td><td>SCLK</td><td><code>GPIO12</code></td><td><code>GPIO8</code></td><td><code>GPIO6</code></td></tr>
+<tr><td><code>D11</code></td><td>MOSI</td><td><code>GPIO11</code></td><td><code>GPIO9</code></td><td><code>GPIO7</code></td></tr>
+<tr><td><code>D12</code></td><td>MISO</td><td><code>GPIO13</code></td><td><code>GPIO23</code></td><td><code>GPIO2</code></td></tr>
+<tr><td><code>D10</code></td><td>CS</td><td><code>GPIO10</code></td><td><code>GPIO10</code></td><td><code>GPIO10</code></td></tr>
+<tr><td><code>D8</code></td><td>IRQ</td><td><code>GPIO5</code></td><td><code>GPIO5</code></td><td><code>GPIO3</code></td></tr>
+<tr><td><code>D7</code></td><td>RSTn</td><td><code>GPIO4</code></td><td><code>GPIO4</code></td><td><code>GPIO1</code></td></tr>
+<tr><td><code>D9</code></td><td>WAKEUP</td><td><code>GPIO6</code></td><td><code>GPIO6</code></td><td><code>GPIO0</code></td></tr>
+<tr><td><code>3V3</code></td><td>power</td><td colspan="3">3V3 on all three — never 5&nbsp;V</td></tr>
+<tr><td><code>GND</code></td><td>ground</td><td colspan="3">GND</td></tr>
+<tr><td><code>D1</code></td><td>SPI-POL</td><td colspan="3">GND (mode-0 strap)</td></tr>
+<tr><td><code>D0</code></td><td>SPI-PHA</td><td colspan="3">GND (mode-0 strap)</td></tr>
+</tbody>
 </table>
 </div>
-<p>The C5 data pins differ because the S3's GPIO11/12 are the C5's UART0
-console and GPIO13 is its USB-Serial-JTAG. The C6 uses GPIO6/7/2 because those
-are SPI2's direct IO_MUX pins on that part, with the control signals kept clear
-of its strapping pins, its USB Serial/JTAG pair and UART0.</p>
-<p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB
-revision already fixes the mode (check its manual).</p>
+<p>The C5's data pins differ because the S3's GPIO11/12 are the C5's UART0 console and
+GPIO13 is its USB-Serial-JTAG. The C6 uses GPIO6/7/2 because those are SPI2's direct
+IO_MUX pins on that part, with the control signals kept clear of its strapping pins,
+its USB Serial/JTAG pair and UART0.</p>
+<p>The two straps hold the DW3000 in SPI mode 0. Skip them if your EVB revision already
+fixes the mode — check its manual.</p>
+</li>
 
-<h2>2. Flash</h2>
-<p>Plug the board in over USB, click Install, and pick its serial port. One
-merged image (bootloader, partition table, app) is written at offset 0x0.
-Reflashing wipes any previous commissioning either way; "erase device" also
-clears everything beyond the image, which is the safe pick on a used board.</p>
+<li>
+<h3>Write the firmware</h3>
+<p>Plug the board in over USB, click Install, and pick its serial port. One merged image
+— bootloader, partition table and app — is written in a single pass. Reflashing wipes any
+previous commissioning either way; &ldquo;erase device&rdquo; also clears everything
+beyond the image, which is the safe pick on a used board.</p>
 <div class="boardrow">
   <label for="board">Board</label>
   <select id="board">
@@ -260,31 +204,32 @@ clears everything beyond the image, which is the safe pick on a used board.</p>
 </div>
 <div class="flashrow">
   <esp-web-install-button manifest="manifest.json">
-    <button slot="activate" class="btn">Connect &amp; Install</button>
+    <button slot="activate" class="btn btn-primary">Connect &amp; install</button>
     <span slot="unsupported" class="alert"><span class="sign">&#9888;</span>
-    <span>This browser can't flash over WebSerial. Use <strong>Chrome</strong>,
-    <strong>Edge</strong>, or <strong>Firefox</strong> on a computer &mdash;
-    Safari and mobile browsers don't support it.</span></span>
+    <span>This browser cannot flash over WebSerial. Use <strong>Chrome</strong>,
+    <strong>Edge</strong>, or <strong>Firefox</strong> on a computer — Safari and
+    mobile browsers do not support it.</span></span>
     <span slot="not-allowed" class="alert"><span class="sign">&#9888;</span>
-    <span>WebSerial needs a secure page: open this page over
-    <strong>https</strong> (or localhost) and retry.</span></span>
+    <span>WebSerial needs a secure page. Open this page over <strong>https</strong>
+    (or localhost) and try again.</span></span>
   </esp-web-install-button>
 </div>
-<p>No port in the list? Use a data cable, or hold the board's BOOT button
-while plugging it in, then retry. After a BOOT-button flash, replug before
-first boot.</p>
+<p>No port in the list? Use a data cable rather than a charge-only one, or hold the
+board's BOOT button while plugging it in, then retry. After a BOOT-button flash,
+replug before first boot.</p>
+</li>
 
-<h2>3. Pair it</h2>
-<p>The board comes up advertising for commissioning, and this is its setup
-code. It is the same on every board flashed from this page: the image builds
-with Matter's test setup parameters, so the passcode and discriminator are
-fixed rather than per-device. Scan it with the iPhone you want to carry the
-key, or type the digits into Home.</p>
+<li>
+<h3>Pair it</h3>
+<p>The board comes up advertising for commissioning, and this is its setup code. It is
+the same on every board flashed from this page: the image builds with Matter's test
+setup parameters, so the passcode and discriminator are fixed rather than per-device.
+Scan it with the iPhone you want to carry the key, or type the digits into Home.</p>
 <div class="pair">
   <div class="qr-card">
 <!-- QR image: MT:Y.K9042C00KA0648G00 sha256:d14b494f3995adb0ce49b4d6c8a9e6ef16876431d57f88a4297186c71758a4f3
      Generated by check_codes.py --svg; regenerate rather than hand-edit. -->
-<svg class="qr-img" viewBox="0 0 25 25" shape-rendering="crispEdges" role="img" aria-label="Matter setup QR code for the ultrawidelock ESP32 lock"><path fill="#141413" d="M0 0h7v1h-7zM9 0h2v1h-2zM12 0h4v1h-4zM18 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h2v1h-2zM11 1h5v1h-5zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h1v1h-1zM13 2h2v1h-2zM18 2h1v1h-1zM20 2h3v1h-3zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h4v1h-4zM14 3h3v1h-3zM18 3h1v1h-1zM20 3h3v1h-3zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h2v1h-2zM11 4h1v1h-1zM13 4h1v1h-1zM15 4h1v1h-1zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM12 5h3v1h-3zM16 5h1v1h-1zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h7v1h-7zM8 7h3v1h-3zM12 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM3 8h4v1h-4zM8 8h4v1h-4zM13 8h6v1h-6zM20 8h2v1h-2zM23 8h1v1h-1zM0 9h2v1h-2zM5 9h1v1h-1zM9 9h1v1h-1zM12 9h1v1h-1zM14 9h1v1h-1zM16 9h6v1h-6zM23 9h1v1h-1zM0 10h1v1h-1zM3 10h1v1h-1zM5 10h3v1h-3zM9 10h1v1h-1zM11 10h2v1h-2zM14 10h2v1h-2zM17 10h2v1h-2zM20 10h1v1h-1zM23 10h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM5 11h1v1h-1zM7 11h2v1h-2zM10 11h2v1h-2zM14 11h1v1h-1zM16 11h3v1h-3zM21 11h1v1h-1zM1 12h1v1h-1zM6 12h1v1h-1zM8 12h1v1h-1zM13 12h4v1h-4zM19 12h2v1h-2zM22 12h1v1h-1zM0 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM19 13h1v1h-1zM21 13h3v1h-3zM0 14h2v1h-2zM3 14h1v1h-1zM5 14h2v1h-2zM8 14h4v1h-4zM13 14h1v1h-1zM15 14h2v1h-2zM18 14h1v1h-1zM20 14h1v1h-1zM22 14h1v1h-1zM0 15h1v1h-1zM2 15h2v1h-2zM5 15h1v1h-1zM9 15h1v1h-1zM11 15h2v1h-2zM16 15h3v1h-3zM20 15h1v1h-1zM23 15h1v1h-1zM0 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM11 16h1v1h-1zM13 16h1v1h-1zM15 16h7v1h-7zM8 17h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM15 17h2v1h-2zM20 17h2v1h-2zM0 18h7v1h-7zM10 18h5v1h-5zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h5v1h-5zM0 19h1v1h-1zM6 19h1v1h-1zM8 19h3v1h-3zM12 19h1v1h-1zM14 19h3v1h-3zM20 19h1v1h-1zM22 19h2v1h-2zM0 20h1v1h-1zM2 20h3v1h-3zM6 20h1v1h-1zM8 20h3v1h-3zM12 20h3v1h-3zM16 20h6v1h-6zM0 21h1v1h-1zM2 21h3v1h-3zM6 21h1v1h-1zM8 21h1v1h-1zM12 21h1v1h-1zM14 21h1v1h-1zM18 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h1v1h-1zM9 22h1v1h-1zM11 22h1v1h-1zM13 22h3v1h-3zM18 22h4v1h-4zM23 22h2v1h-2zM0 23h1v1h-1zM6 23h1v1h-1zM8 23h3v1h-3zM12 23h3v1h-3zM17 23h2v1h-2zM20 23h1v1h-1zM23 23h1v1h-1zM0 24h7v1h-7zM13 24h1v1h-1zM15 24h2v1h-2zM18 24h1v1h-1zM20 24h1v1h-1zM23 24h2v1h-2z"/></svg>
+<svg class="qr-img" viewBox="0 0 25 25" shape-rendering="crispEdges" role="img" aria-label="Matter setup QR code for the UltraWideLock ESP32 lock"><path fill="#141413" d="M0 0h7v1h-7zM9 0h2v1h-2zM12 0h4v1h-4zM18 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h2v1h-2zM11 1h5v1h-5zM18 1h1v1h-1zM24 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h1v1h-1zM13 2h2v1h-2zM18 2h1v1h-1zM20 2h3v1h-3zM24 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h4v1h-4zM14 3h3v1h-3zM18 3h1v1h-1zM20 3h3v1h-3zM24 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h2v1h-2zM11 4h1v1h-1zM13 4h1v1h-1zM15 4h1v1h-1zM18 4h1v1h-1zM20 4h3v1h-3zM24 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM12 5h3v1h-3zM16 5h1v1h-1zM18 5h1v1h-1zM24 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h7v1h-7zM8 7h3v1h-3zM12 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM3 8h4v1h-4zM8 8h4v1h-4zM13 8h6v1h-6zM20 8h2v1h-2zM23 8h1v1h-1zM0 9h2v1h-2zM5 9h1v1h-1zM9 9h1v1h-1zM12 9h1v1h-1zM14 9h1v1h-1zM16 9h6v1h-6zM23 9h1v1h-1zM0 10h1v1h-1zM3 10h1v1h-1zM5 10h3v1h-3zM9 10h1v1h-1zM11 10h2v1h-2zM14 10h2v1h-2zM17 10h2v1h-2zM20 10h1v1h-1zM23 10h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM5 11h1v1h-1zM7 11h2v1h-2zM10 11h2v1h-2zM14 11h1v1h-1zM16 11h3v1h-3zM21 11h1v1h-1zM1 12h1v1h-1zM6 12h1v1h-1zM8 12h1v1h-1zM13 12h4v1h-4zM19 12h2v1h-2zM22 12h1v1h-1zM0 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM19 13h1v1h-1zM21 13h3v1h-3zM0 14h2v1h-2zM3 14h1v1h-1zM5 14h2v1h-2zM8 14h4v1h-4zM13 14h1v1h-1zM15 14h2v1h-2zM18 14h1v1h-1zM20 14h1v1h-1zM22 14h1v1h-1zM0 15h1v1h-1zM2 15h2v1h-2zM5 15h1v1h-1zM9 15h1v1h-1zM11 15h2v1h-2zM16 15h3v1h-3zM20 15h1v1h-1zM23 15h1v1h-1zM0 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM11 16h1v1h-1zM13 16h1v1h-1zM15 16h7v1h-7zM8 17h1v1h-1zM10 17h1v1h-1zM12 17h1v1h-1zM15 17h2v1h-2zM20 17h2v1h-2zM0 18h7v1h-7zM10 18h5v1h-5zM16 18h1v1h-1zM18 18h1v1h-1zM20 18h5v1h-5zM0 19h1v1h-1zM6 19h1v1h-1zM8 19h3v1h-3zM12 19h1v1h-1zM14 19h3v1h-3zM20 19h1v1h-1zM22 19h2v1h-2zM0 20h1v1h-1zM2 20h3v1h-3zM6 20h1v1h-1zM8 20h3v1h-3zM12 20h3v1h-3zM16 20h6v1h-6zM0 21h1v1h-1zM2 21h3v1h-3zM6 21h1v1h-1zM8 21h1v1h-1zM12 21h1v1h-1zM14 21h1v1h-1zM18 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM0 22h1v1h-1zM2 22h3v1h-3zM6 22h1v1h-1zM9 22h1v1h-1zM11 22h1v1h-1zM13 22h3v1h-3zM18 22h4v1h-4zM23 22h2v1h-2zM0 23h1v1h-1zM6 23h1v1h-1zM8 23h3v1h-3zM12 23h3v1h-3zM17 23h2v1h-2zM20 23h1v1h-1zM23 23h1v1h-1zM0 24h7v1h-7zM13 24h1v1h-1zM15 24h2v1h-2zM18 24h1v1h-1zM20 24h1v1h-1zM23 24h2v1h-2z"/></svg>
   </div>
   <div class="pair-codes">
     <p class="pair-label">Manual pairing code</p>
@@ -294,54 +239,61 @@ key, or type the digits into Home.</p>
   </div>
 </div>
 <p>The board prints the same two lines on its console at every boot, and
-<code>codes</code> reprints them, so if this page and the board ever disagree,
-the board is right.</p>
+<code>codes</code> reprints them. If this page and the board ever disagree, the board
+is right.</p>
+</li>
 
-<h2>4. First boot</h2>
+<li>
+<h3>First boot</h3>
 <ol>
-  <li>Home app: add accessory, scan the code above or type the 11 digits. Keep
-  the phone next to the board; commissioning starts over BLE, then joins your
-  2.4&nbsp;GHz Wi-Fi. Expect a minute or two. There is no Improv Wi-Fi step:
-  the network join happens during commissioning.</li>
-  <li>Optional, to watch it go: a serial console at 115200 baud. The
-  installer's "Logs &amp; Console" option works, or
-  <code>screen /dev/cu.usbmodem&hellip; 115200</code> (macOS),
-  <code>screen /dev/ttyACM0 115200</code> (Linux), PuTTY (Windows). The boot
-  log ends at a <code>matter&gt;</code> prompt.</li>
-  <li>Home warns about an uncertified accessory (test certificates); add
-  anyway.</li>
-  <li>Home then provisions the key into Wallet on its own. Walk up: the
-  Wallet animation plays, the lock opens, and it relocks as you leave.</li>
+  <li>In Home: add accessory, scan the code above or type the 11 digits. Keep the phone
+  next to the board; commissioning starts over BLE, then joins your 2.4&nbsp;GHz Wi-Fi.
+  Expect a minute or two. There is no Improv Wi-Fi step — the network join happens
+  during commissioning.</li>
+  <li>To watch it go, open a serial console at 115200 baud. The installer's
+  &ldquo;Logs &amp; Console&rdquo; option works, or
+  <code>screen /dev/cu.usbmodem&hellip; 115200</code> on macOS,
+  <code>screen /dev/ttyACM0 115200</code> on Linux, PuTTY on Windows. The boot log
+  ends at a <code>matter&gt;</code> prompt.</li>
+  <li>Home warns about an uncertified accessory, because the image carries test
+  certificates. Add it anyway.</li>
+  <li>Home then provisions the key into Wallet on its own. Walk up: the Wallet
+  animation plays, the lock opens, and it relocks as you leave.</li>
 </ol>
-<p>The <code>matter&gt;</code> console also has <code>status</code>,
-<code>range</code>, <code>lock</code>/<code>unlock</code>, and
-<code>factoryreset</code>.</p>
+<p>The <code>matter&gt;</code> console also has <code>status</code>, <code>range</code>,
+<code>lock</code>/<code>unlock</code>, and <code>factoryreset</code>.</p>
+</li>
+</ol>
 
-<h2>Troubleshooting</h2>
+<div class="section-h"><h2>When it does not work</h2><span class="rule"></span></div>
 <div class="tablewrap">
-<table>
-<tr><th>Symptom</th><th>Likely cause and fix</th></tr>
+<table class="data">
+<thead><tr><th>Symptom</th><th>Likely cause, and the fix</th></tr></thead>
+<tbody>
 <tr><td>Install button finds no port</td><td>Charge-only cable, or hold BOOT while plugging in, then retry</td></tr>
 <tr><td>No boot log</td><td>Wrong port, or still in download mode: replug</td></tr>
-<tr><td>No valid UWB device ID</td><td>Power-select jumper (see Wire it), 5&nbsp;V instead of 3V3, or a wrong SPI line</td></tr>
-<tr><td><code>range</code> shows nothing with the phone near</td><td>UWB wiring, or no key yet: finish commissioning, check Wallet</td></tr>
-<tr><td>Home cannot find the accessory</td><td>No hub, Bluetooth off, or already commissioned (reflash or <code>factoryreset</code>)</td></tr>
-<tr><td>Commissioning fails near the end</td><td>Wi-Fi join: 2.4&nbsp;GHz required; remove the half-added accessory and retry</td></tr>
+<tr><td>No valid UWB device ID</td><td>The power-select jumper, 5&nbsp;V instead of 3V3, or a wrong SPI line</td></tr>
+<tr><td><code>range</code> shows nothing with the phone near</td><td>UWB wiring, or no key yet: finish commissioning and check Wallet</td></tr>
+<tr><td>Home cannot find the accessory</td><td>No hub, Bluetooth off, or already commissioned — reflash or <code>factoryreset</code></td></tr>
+<tr><td>Commissioning fails near the end</td><td>The Wi-Fi join: 2.4&nbsp;GHz is required. Remove the half-added accessory and retry</td></tr>
+</tbody>
 </table>
 </div>
 <p>More depth: the
-<a href="https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
-and the
-<a href="https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/esp32-gotchas.md">known traps</a>.</p>
+<a href="../docs/esp32-bringup.html">bring-up checklist</a> and the
+<a href="../docs/esp32-gotchas.html">known traps</a>.</p>
 
-<p class="fine">Evaluation firmware with Matter test certificates; do not put
-it in charge of a door you care about. Reflashing wipes commissioning; remove
-the stale accessory from Home before re-adding. The nRF5340 DK target is out
-of scope here: it programs over a SEGGER J-Link probe, not WebSerial. Use its
-<a href="https://github.com/ultrawidelock/ultrawidelock/releases">release bundle</a>
-instead. Source and docs:
-<a href="https://github.com/ultrawidelock/ultrawidelock">github.com/ultrawidelock/ultrawidelock</a>.</p>
+<div class="callout callout-warn"><span class="ico">note</span><div>
+  <p><strong>Evaluation firmware, with Matter test certificates.</strong> Do not put it
+  in charge of a door you care about. Reflashing wipes commissioning, so remove the
+  stale accessory from Home before re-adding. The nRF5340 DK target is out of scope
+  here — it programs over a SEGGER J-Link probe, not WebSerial. Use its
+  <a href="https://github.com/ultrawidelock/ultrawidelock/releases" data-ext>release bundle</a>
+  instead.</p>
+</div></div>
+
 </main>
+@@FOOTER@@
 <script>
 /* Board dropdown: auto-detect uses the committed manifest as-is (ESP Web
  * Tools matches the connected chip against builds[]); picking a board serves
