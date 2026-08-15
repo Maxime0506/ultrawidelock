@@ -40,9 +40,14 @@ REPO = "https://github.com/ultrawidelock/ultrawidelock/blob/main/"
 # spread already tuned for a dark surface -- and the stage here is always dark,
 # so one set serves. Every node also carries its name and its group, so colour
 # is never the only channel.
-COLORS = ["#7fb8ff", "#8fd6a8", "#e6c069", "#d5a8f0", "#e59a76",
-          "#a9d6ff", "#5fecc4", "#f2717a", "#41c98a", "#e0b341",
-          "#9fd0ff", "#b8e6c8", "#c8b3f0", "#ffc9a8"]
+# Cool only. The earlier set borrowed the syntax palette wholesale, which
+# dragged an orange and a warm yellow onto a mint-on-teal stage and read as
+# the old warm-paper theme. These are the theme's own mints, teals, blues and
+# violets; every node still carries its name and group as text, so colour
+# stays a second channel rather than the only one.
+COLORS = ["#2ee6b8", "#7fb8ff", "#8fd6a8", "#d5a8f0", "#5fecc4",
+          "#a9d6ff", "#41c98a", "#63e0f0", "#b8e6c8", "#9fd0ff",
+          "#8ff5d8", "#c8b3f0", "#7ff0d4", "#6fd7c0"]
 
 # A file's header comment. Sources here open with an SPDX line, then the real
 # description in a // run or a /** @file */ block, so the FIRST comment is
