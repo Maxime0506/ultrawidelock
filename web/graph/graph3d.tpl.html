@@ -18,7 +18,13 @@
    here. The stage keeps an opaque near-black of its own on purpose: the halo
    shells blend against it and the dust sheets are drawn over it. */
 :root{
-  --stage:#04100e; --barbg:rgba(6,16,18,.78);
+  /* --stage stays dark in both themes on purpose (see above). --barbg must
+     not: the bar's text is --strong/--muted/--faint, which flip with the
+     theme, so a fixed dark bar left the breadcrumb at 1.04:1 on light. Deriving
+     it from --surface with the same recipe .topbar uses keeps the frosted look
+     and tracks the theme, and the dark result is within a point of the literal
+     it replaces. */
+  --stage:#04100e; --barbg:color-mix(in srgb,var(--surface) 88%,transparent);
   --mono:var(--font-mono); --sans:var(--font-sans); --serif:var(--font-sans);
 }
 *{box-sizing:border-box}
@@ -43,7 +49,8 @@ a{color:inherit;text-decoration:none}
 .crumbs .cr:hover{color:var(--accent)}
 .crumbs .cr:last-child{cursor:default}
 .crumbs .cr:last-child:hover{color:var(--strong)}
-.crumbs .sep{color:var(--faint);font-family:var(--sans);font-size:.85rem}
+/* --muted, not --faint: on the light bar --faint is 3.93:1. */
+.crumbs .sep{color:var(--muted);font-family:var(--sans);font-size:.85rem}
 .bar .sp{flex:1}
 .bar input{width:15rem;max-width:34vw;padding:.42rem .8rem;border:1px solid var(--line);
   border-radius:99px;background:var(--card);color:var(--strong);font-family:var(--sans);

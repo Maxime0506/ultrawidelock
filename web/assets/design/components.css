@@ -192,7 +192,7 @@
     color var(--dur-1) var(--ease-out),transform var(--dur-1) var(--ease-out)}
 .btn:hover{background:var(--raise);border-color:var(--line-strong)}
 .btn:active{transform:translateY(1px)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--inverse);
+.btn-primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--inverse);
   box-shadow:var(--shadow-2)}
 .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);
   color:var(--inverse)}
@@ -480,7 +480,7 @@ table.data tbody tr:hover{background:var(--raise)}
 
 .skip{position:absolute;left:var(--sp-3);top:calc(-1 * var(--sp-16));
   z-index:var(--z-palette);padding:var(--sp-2) var(--sp-4);
-  background:var(--accent);color:var(--inverse);border-radius:var(--r-sm);
+  background:var(--accent-solid);color:var(--inverse);border-radius:var(--r-sm);
   text-decoration:none;font-weight:var(--fw-medium)}
 .skip:focus{top:var(--sp-3);color:var(--inverse)}
 

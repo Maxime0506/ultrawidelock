@@ -49,10 +49,14 @@
 .scope-band{background:var(--scope);border-top:var(--border-hair);
   border-bottom:var(--border-hair)}
 .scope-in{max-width:var(--page-max);margin:0 auto;padding:var(--sp-6) var(--sp-8)}
+/* --muted, not --faint, for every label in this band. The band's surface is
+   --scope, and --faint measures 4.22:1 there on the light theme against the
+   4.5 small text needs; --muted is 5.53:1. The SVG labels below already
+   carried this fix -- these are the HTML ones beside them. */
 .scope-head{display:flex;align-items:center;gap:var(--sp-3);
   margin-bottom:var(--sp-2);
   font-family:var(--font-mono);font-size:var(--fs-100);
-  text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--faint)}
+  text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--muted)}
 .scope-head .sp{flex:1}
 
 /* The instrument is 3.6:1 and full of 10px type. Squeezed into a phone it
@@ -152,7 +156,7 @@
   margin-top:var(--sp-4);padding-top:var(--sp-4);
   border-top:var(--border-hair)}
 .scope-ctl label{font-family:var(--font-mono);font-size:var(--fs-100);
-  text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--faint)}
+  text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--muted)}
 .scope-ctl input[type=range]{flex:1 1 12rem;min-width:9rem;accent-color:var(--accent)}
 .btn-warn{border-color:var(--path-late-line);color:var(--path-late);
   background:var(--path-late-tint)}
@@ -163,7 +167,7 @@
   font-variant-numeric:tabular-nums}
 .scope-read .r{display:flex;flex-direction:column;gap:2px}
 .scope-read .k{font-size:var(--fs-100);text-transform:uppercase;
-  letter-spacing:var(--tr-caps);color:var(--faint)}
+  letter-spacing:var(--tr-caps);color:var(--muted)}
 .scope-read .v{font-size:var(--fs-700);color:var(--strong);line-height:1}
 .scope-read .v small{font-size:var(--fs-200);color:var(--muted);margin-left:.2em}
 .scope-verdict{display:inline-flex;align-items:center;gap:var(--sp-2);
@@ -175,7 +179,7 @@
   border-radius:var(--r-pill);background:currentColor}
 .scope-note{margin:var(--sp-3) 0 0;font-size:var(--fs-200);
   color:var(--path-late);font-family:var(--font-mono)}
-.scope-foot{margin:var(--sp-3) 0 0;font-size:var(--fs-200);color:var(--faint)}
+.scope-foot{margin:var(--sp-3) 0 0;font-size:var(--fs-200);color:var(--muted)}
 
 @media (max-width:56rem){
   .scope-read{margin-left:0;width:100%;gap:var(--sp-5)}

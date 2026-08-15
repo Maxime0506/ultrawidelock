@@ -27,7 +27,14 @@ body{
 code,kbd,pre,samp,.mono{font-family:var(--font-mono);letter-spacing:var(--tr-mono)}
 a{color:var(--accent-ink);text-decoration-color:var(--accent-line);text-underline-offset:.18em}
 a:hover{color:var(--accent-hover);text-decoration-color:currentColor}
-:focus-visible{outline:none;box-shadow:var(--focus-ring);border-radius:var(--r-sm)}
+/* The visible ring is the box-shadow, which is what lets it sit outside the
+   element without touching its own border. The transparent outline under it is
+   not decoration: forced-colours mode (Windows High Contrast) drops box-shadow
+   entirely, and a keyboard user there would otherwise have no focus indicator
+   anywhere on the site. A transparent outline is repainted in a system colour
+   by that mode, so the ring survives it. */
+:focus-visible{outline:var(--bw-2) solid transparent;outline-offset:var(--bw-2);
+  box-shadow:var(--focus-ring);border-radius:var(--r-sm)}
 hr{border:0;border-top:var(--border);margin:var(--sp-10) 0}
 img,svg,canvas{max-width:100%}
 

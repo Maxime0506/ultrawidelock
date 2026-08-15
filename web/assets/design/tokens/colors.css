@@ -24,6 +24,13 @@
   --accent:#2ee6b8;
   --accent-ink:#5fecc4;
   --accent-hover:#8ff5d8;
+  /* The accent as a filled background carrying --inverse text. It is its own
+     token because the two themes disagree about what is safe there: on dark,
+     --inverse on --accent is 12.10:1 and --accent can be used directly; on
+     light, white on --accent is only 4.33:1, which is under the 4.5 the button
+     label needs, so the fill steps down to the darker --accent-ink value and
+     clears 6.05:1. Marks and rules keep using --accent in both. */
+  --accent-solid:#2ee6b8;
   --accent-tint:rgba(46,230,184,.11);
   --accent-line:rgba(46,230,184,.42);
   --accent-glow:0 0 0 1px rgba(46,230,184,.35),0 6px 26px -10px rgba(46,230,184,.5);
@@ -80,6 +87,7 @@
     --accent:#0e8a68;
     --accent-ink:#0b7057;
     --accent-hover:#085343;
+    --accent-solid:#0b7057;
     --accent-tint:rgba(14,138,104,.09);
     --accent-line:rgba(14,138,104,.32);
     --accent-glow:0 0 0 1px rgba(14,138,104,.28),0 6px 22px -12px rgba(14,138,104,.4);
@@ -168,6 +176,7 @@
   --accent:#0e8a68;
   --accent-ink:#0b7057;
   --accent-hover:#085343;
+  --accent-solid:#0b7057;
   --accent-tint:rgba(14,138,104,.09);
   --accent-line:rgba(14,138,104,.32);
   --accent-glow:0 0 0 1px rgba(14,138,104,.28),0 6px 22px -12px rgba(14,138,104,.4);

@@ -18,6 +18,7 @@ colors:
   accent: "#2ee6b8"
   accent-ink: "#5fecc4"
   accent-hover: "#8ff5d8"
+  accent-solid: "#2ee6b8"
   accent-tint: "rgba(46,230,184,.11)"
   accent-line: "rgba(46,230,184,.42)"
   ok: "#41c98a"
@@ -88,7 +89,7 @@ spacing:
   "28": "6.58rem"
 components:
   button-primary:
-    backgroundColor: "{colors.accent}"
+    backgroundColor: "{colors.accent-solid}"
     textColor: "{colors.inverse}"
     rounded: "{rounded.md}"
     padding: "0.47rem 1.176rem"
@@ -242,6 +243,13 @@ same file, and both must land in the same commit. The light values live in
 - **Mint Hover** (`#8ff5d8`): the one step brighter that a hover moves to.
   Light theme moves the other way, to **#085343**, since there brightening is
   the wrong direction for emphasis.
+- **Solid Mint** (`#2ee6b8` dark, **#0b7057** light): the accent used as a
+  *filled background carrying `--inverse` text*, which is the primary button
+  and the skip link. It exists because the themes disagree about what is safe
+  there: on dark, `--inverse` on `--accent` is 12.10:1; on light, white on
+  `--accent` is only 4.33:1, so the fill steps down to the darker value and
+  clears 6.05:1. Marks, rules and fills that carry no text keep using
+  `--accent` in both themes.
 
 ### Secondary
 
@@ -558,7 +566,9 @@ allowed to move, because the movement is the information.
   `--line`, 7px corners, `--fs-400`.
 - **Focus:** the global ring, which is a 2px halo in the page colour (`--ground`
   in dark, `--surface` in light) followed by a 4px `--focus` ring, so it reads
-  on any background without touching the element's own border. The command
+  on any background without touching the element's own border. Under it sits a
+  transparent 2px `outline`, which is invisible normally and repainted by
+  forced-colours mode, where `box-shadow` is dropped entirely. The command
   palette's search input is the exception:
   it suppresses the ring because the whole floating panel is already the focus.
 - **Placeholder:** `--faint`.
@@ -640,7 +650,11 @@ mid-flight rather than vanishing, so it still shows what travels where.
 - **Do** ship both theme values in the same commit. Dark is canonical; light is
   a peer that has to hold up, and a token with only one half declared is a bug.
 - **Do** check small text against the surface it actually lands on. Use
-  `--muted` over `--faint` on the scope face, where `--faint` measures 4.22:1.
+  `--muted` over `--faint` on the scope face, where `--faint` measures 4.22:1,
+  and on the graph's light bar, where it measures 3.93:1.
+- **Do** pair any `box-shadow` focus ring with a transparent `outline`.
+  Forced-colours mode drops shadows, and a ring that exists only as a shadow
+  leaves High Contrast keyboard users with no indicator at all.
 - **Do** mark a selection with the inset rule (`inset 2px 0 0 var(--accent)`
   plus `--accent-tint`), on every list in the system.
 - **Do** give a too-wide element its own scroll box with a sensible minimum,
