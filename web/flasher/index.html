@@ -53,11 +53,164 @@
   margin:var(--sp-5) 0 0}
 esp-web-install-button{--esp-tools-button-color:var(--accent);
   --esp-tools-button-text-color:var(--inverse);
-  --esp-tools-progress-color:var(--accent);
-  --esp-tools-log-background:var(--sunken);
-  --esp-tools-log-color:var(--ink)}
+  --esp-tools-button-border-radius:var(--r-md)}
 esp-web-install-button button.btn{font-size:var(--fs-500);
   padding:var(--sp-3) var(--sp-8);min-height:2.9rem}
+
+/* Theming the installer's own dialog. esp-web-tools 10.4.0 dropped the
+   --esp-tools-progress-color / --esp-tools-log-* hooks this file used to set:
+   grep the three shipped chunks and the only --esp-tools-* names left are the
+   button's. What the dialog does read is Material 3's --md-sys-color-*, which
+   it declares on its own :host — and a normal declaration from this document
+   beats a :host declaration in the shadow tree, so styling the host element
+   from here reaches every control inside it without piercing anything.
+
+   The scrim is the reason this matters. The dialog is a real <dialog> opened
+   with showModal(), so its scrim covers the whole viewport at a fixed 32%
+   opacity while the write runs. Painting it --ground instead of black leaves
+   the write instrument below legible through it: the dialog stays the thing
+   you click, the instrument stays the thing you watch. If a future bump
+   renames these, the dialog reverts to stock Material and nothing breaks. */
+ewt-install-dialog{
+  --text-color:var(--muted);
+  --danger-color:var(--refused);
+  --roboto-font:var(--font-sans);
+  --md-ref-typeface-brand:var(--font-sans);
+  --md-ref-typeface-plain:var(--font-sans);
+  --md-sys-typescale-headline-font:var(--font-sans);
+  --md-sys-typescale-title-font:var(--font-sans);
+  --md-sys-color-primary:var(--accent);
+  --md-sys-color-on-primary:var(--inverse);
+  --md-sys-color-secondary:var(--accent-ink);
+  --md-sys-color-surface:var(--card);
+  --md-sys-color-surface-container:var(--card);
+  --md-sys-color-surface-container-high:var(--card);
+  --md-sys-color-surface-container-highest:var(--raise);
+  --md-sys-color-secondary-container:var(--raise);
+  --md-sys-color-on-secondary-container:var(--strong);
+  --md-sys-color-primary-container:var(--accent-tint);
+  --md-sys-color-tertiary:var(--accent-ink);
+  --md-sys-color-tertiary-container:var(--accent-tint);
+  --md-sys-color-on-surface:var(--strong);
+  --md-sys-color-on-surface-variant:var(--muted);
+  --md-sys-color-outline-variant:var(--line);
+  --md-sys-color-error:var(--refused);
+  --md-sys-color-on-error-container:var(--refused);
+  --md-sys-color-scrim:var(--ground);
+  --md-dialog-container-shape:var(--r-lg)}
+
+/* The write instrument. esp-web-tools reports the flash as one merged image
+   at offset 0, so a bare percentage hides the only structure the reader cares
+   about: which region the write head is in. The offsets below are this
+   project's own partition table (apps/esp32-matter-lock/partitions.csv and
+   partitions_8mb.csv agree on everything below ota_0, and
+   CONFIG_PARTITION_TABLE_OFFSET is 0xC000), so the map is the same on all
+   three chips and the ticks are real addresses rather than decoration.
+
+   Everything up to ota_0 is 128 KB of a ~2 MB image, which is why the ticks
+   cluster hard at the left. That crowding is the truth about this image: the
+   header regions go by in the first few percent and the app is the rest of
+   the write. The bar stays linear so it cannot lie about progress. */
+.inst{margin:var(--sp-6) 0 0;padding:var(--sp-5) var(--sp-6) var(--sp-5);
+  border:var(--border);border-radius:var(--r-lg);background:var(--card);
+  box-shadow:var(--shadow-1),var(--shadow-inset)}
+.inst-h{display:flex;align-items:baseline;gap:var(--sp-3);flex-wrap:wrap}
+.inst-chip{font-family:var(--font-mono);font-size:var(--fs-200);
+  color:var(--faint);font-variant-numeric:tabular-nums}
+/* --fs-800 is the size this system already gives a headline number
+   (.stat-b b); a readout is not the place to invent a bigger one. */
+.inst-pct{margin-left:auto;font-family:var(--font-mono);font-size:var(--fs-800);
+  line-height:var(--lh-tight);color:var(--strong);letter-spacing:var(--tr-mono);
+  font-variant-numeric:tabular-nums}
+.inst-pct s{text-decoration:none;font-size:var(--fs-400);color:var(--faint);
+  margin-left:.12em}
+/* The write head has a counterpart in the numerals: a caret that only exists
+   while bytes are moving, so a stalled write reads as stalled. */
+.inst-pct::after{content:"";display:inline-block;width:1px;height:.72em;
+  margin-left:.24em;background:var(--accent);opacity:0;
+  transform:translateY(.04em)}
+.inst[data-state="writing"] .inst-pct::after,
+.inst[data-state="erasing"] .inst-pct::after{opacity:1;
+  animation:inst-caret 1.1s steps(1,end) infinite}
+@keyframes inst-caret{0%,54%{opacity:1}55%,100%{opacity:.18}}
+
+/* Rule. .inst-fill spans the full track and is slid left by (1 - p), so its
+   right border lands exactly at the head. That keeps the moving part on
+   transform rather than on width, and gives the fill and the leading tick a
+   single source of position. */
+.inst-rule{position:relative;height:1.6rem;margin:var(--sp-5) 0 var(--sp-2);
+  overflow:hidden}
+.inst-track{position:absolute;left:0;right:0;top:.8rem;height:1px;
+  background:var(--line)}
+.inst-fill{position:absolute;left:0;top:.34rem;width:100%;height:.92rem;
+  border-right:var(--bw-1) solid var(--accent-hover);
+  transform:translateX(calc((var(--p,0) - 1) * 100%));
+  transition:transform var(--dur-2) var(--ease-linear)}
+.inst-fill::before{content:"";position:absolute;left:0;right:0;top:.46rem;
+  height:1px;background:var(--accent)}
+.inst[data-state="idle"] .inst-fill,
+.inst[data-state="ready"] .inst-fill{visibility:hidden}
+.inst[data-state="writing"] .inst-fill{will-change:transform}
+.inst[data-state="erasing"] .inst-fill{
+  animation:inst-sweep 1.6s var(--ease-in-out) infinite}
+@keyframes inst-sweep{0%{transform:translateX(-100%)}
+  50%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+.inst[data-state="failed"] .inst-fill{border-right-color:var(--refused)}
+.inst[data-state="failed"] .inst-fill::before{background:var(--refused)}
+.inst[data-state="done"] .inst-fill{border-right-color:transparent}
+.inst[data-state="done"] .inst-fill::before{background:var(--ok)}
+
+/* Boundary ticks. Placed only once the image size is known, because the
+   fraction of the write each partition occupies is not knowable before then;
+   they arrive together as the map resolving onto the rule. */
+.inst-ticks{position:absolute;inset:0;pointer-events:none}
+.inst-tick{position:absolute;left:var(--at);top:.92rem;width:1px;height:.42rem;
+  background:var(--faint);transform-origin:top;animation:inst-mark var(--dur-3)
+  var(--ease-out) var(--d,0ms) backwards}
+.inst-tick[data-at="past"]{background:var(--accent-ink);height:.56rem}
+@keyframes inst-mark{from{transform:scaleY(0);opacity:0}
+  to{transform:scaleY(1);opacity:1}}
+.inst-ends{display:flex;justify-content:space-between;
+  font-family:var(--font-mono);font-size:var(--fs-100);color:var(--faint);
+  font-variant-numeric:tabular-nums}
+
+/* Region ledger. The rule shows where the head is; this says what it is in,
+   and it is readable before anything is plugged in. */
+.inst-map{list-style:none;margin:var(--sp-5) 0 0;padding:0;
+  border-top:var(--border-hair)}
+.inst-map li{display:grid;grid-template-columns:6.2rem minmax(0,1fr) auto;
+  gap:var(--sp-3);align-items:baseline;padding:var(--sp-1) var(--sp-3);
+  border-bottom:var(--border-hair);font-family:var(--font-mono);
+  font-size:var(--fs-300);color:var(--faint);font-variant-numeric:tabular-nums;
+  transition:color var(--dur-2) var(--ease-out),
+    background-color var(--dur-2) var(--ease-out)}
+.inst-map li b{font-weight:var(--fw-regular);color:inherit}
+.inst-map li i{font-style:normal;color:inherit;opacity:.72}
+.inst-map li[data-at="past"]{color:var(--muted)}
+.inst-map li[data-at="now"]{color:var(--strong);background:var(--accent-tint);
+  box-shadow:inset var(--bw-2) 0 0 var(--accent)}
+.inst[data-state="failed"] .inst-map li[data-at="now"]{
+  color:var(--refused);background:var(--refused-tint);
+  box-shadow:inset var(--bw-2) 0 0 var(--refused)}
+
+/* Outcome. A failure names the reason the installer gave and the next thing
+   to do, in --refused; a red bar with no sentence is not a report. */
+.inst-out{margin:var(--sp-5) 0 0;font-size:var(--fs-400);color:var(--muted);
+  line-height:var(--lh-normal)}
+.inst-out p{margin:0}
+.inst-out p + p{margin-top:var(--sp-2)}
+.inst-why{font-family:var(--font-mono);font-size:var(--fs-300);
+  color:var(--strong);overflow-wrap:anywhere}
+.inst[data-state="failed"] .inst-out{padding-left:var(--sp-4);
+  border-left:var(--bw-rule) solid var(--refused)}
+.inst[data-state="failed"] .inst-why{color:var(--refused)}
+@media (max-width:34rem){
+  .inst{padding:var(--sp-4)}
+  .inst-pct{font-size:var(--fs-700)}
+  .inst-map li{grid-template-columns:5.4rem minmax(0,1fr);
+    font-size:var(--fs-200)}
+  .inst-map li i{grid-column:2;justify-self:end}
+}
 
 /* Pairing card. The QR panel stays white in both themes and never inherits
    --card: a scanner needs dark modules on a light field, and a phone camera
@@ -214,6 +367,43 @@ beyond the image, which is the safe pick on a used board.</p>
     (or localhost) and try again.</span></span>
   </esp-web-install-button>
 </div>
+
+<!-- Write instrument. Idle it is the flash map: what the merged image covers
+     and where each partition starts, readable before anything is plugged in.
+     During the write it is driven from the installer's own progress, so the
+     addresses and the percentage are the same numbers esptool reports. The
+     ota_0 size and the ticks are filled in when the image size is known. -->
+<div class="inst" id="inst" data-state="idle">
+  <div class="inst-h">
+    <span class="status status-idle inst-state" aria-live="polite">standby</span>
+    <span class="inst-chip">no board</span>
+    <span class="inst-pct" aria-hidden="true">0<s>%</s></span>
+  </div>
+  <div class="inst-rule" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+       aria-valuenow="0" aria-label="Firmware write progress">
+    <span class="inst-track"></span>
+    <span class="inst-fill"></span>
+    <span class="inst-ticks"></span>
+  </div>
+  <div class="inst-ends"><span>0x000000</span><span class="inst-end">image end</span></div>
+  <ol class="inst-map">
+    <li data-off="0"      data-end="49152"><b>0x000000</b><span>bootloader</span><i>48 KB</i></li>
+    <li data-off="49152"  data-end="53248"><b>0x00C000</b><span>partition table</span><i>4 KB</i></li>
+    <li data-off="53248"  data-end="61440"><b>0x00D000</b><span>esp_secure_cert</span><i>8 KB</i></li>
+    <li data-off="65536"  data-end="114688"><b>0x010000</b><span>nvs</span><i>48 KB</i></li>
+    <li data-off="114688" data-end="118784"><b>0x01C000</b><span>nvs_keys</span><i>4 KB</i></li>
+    <li data-off="118784" data-end="126976"><b>0x01D000</b><span>otadata</span><i>8 KB</i></li>
+    <li data-off="126976" data-end="131072"><b>0x01F000</b><span>phy_init</span><i>4 KB</i></li>
+    <li data-off="131072"><b>0x020000</b><span>ota_0 (app)</span><i class="inst-app">rest of image</i></li>
+  </ol>
+  <div class="inst-out" aria-live="polite">
+    <p>Nothing written yet. The write runs left to right from
+    <code>0x000000</code>. The seven regions ahead of the app cover the first
+    128&nbsp;KB; <code>ota_0</code> is everything after
+    <code>0x020000</code>.</p>
+  </div>
+</div>
+
 <p>No port in the list? Use a data cable rather than a charge-only one, or hold the
 board's BOOT button while plugging it in, then retry. After a BOOT-button flash,
 replug before first boot.</p>
@@ -334,6 +524,213 @@ is right.</p>
       new Blob([JSON.stringify(m)], { type: "application/json" }));
     btn.setAttribute("manifest", blob);
   });
+})();
+
+/* Write instrument driver. Lives in this script element rather than a second
+ * one: the CSP's 'unsafe-inline' is already the weakest thing on the page and
+ * this adds no origin, no fetch and no new inline block to it.
+ *
+ * esp-web-tools 10.4.0 fires no progress event. Its install button appends an
+ * <ewt-install-dialog> to <body> and the flash callback writes each step to
+ * that element's _installState. So: watch for the element, then read that
+ * property on a rAF while it is connected. Reading is deliberate — patching
+ * the accessor would put us inside the one dependency on this page that can
+ * brick a board, and a read that stops matching a future release costs a
+ * frozen readout next to a dialog that still works.
+ *
+ * Only two numbers here are ours: percentage is esptool's own (bytesWritten
+ * is not used — 10.4.0 mixes compressed and uncompressed counts into it), and
+ * bytesTotal is the merged image size. Everything else is the partition table
+ * in the markup above. */
+(() => {
+  const inst = document.getElementById("inst");
+  if (!inst) return;
+  const q = (s) => inst.querySelector(s);
+  const stateEl = q(".inst-state"), chipEl = q(".inst-chip"),
+        pctEl = q(".inst-pct"), ruleEl = q(".inst-rule"),
+        fillEl = q(".inst-fill"), ticksEl = q(".inst-ticks"),
+        endEl = q(".inst-end"), appEl = q(".inst-app"), outEl = q(".inst-out"),
+        rows = Array.from(inst.querySelectorAll(".inst-map li"));
+  const IDLE = outEl.innerHTML;
+
+  /* What each failure actually means here, and the next move. The installer's
+   * own message is shown verbatim beside it — it carries the serial error. */
+  const NEXT = {
+    failed_initialize:
+      "The board never answered the ESP bootloader. Unplug it, hold BOOT " +
+      "while plugging it back in, then run Connect &amp; install again and " +
+      "pick the port. An empty port list means a charge-only cable.",
+    not_supported:
+      "This page carries ESP32-S3, C5 and C6 images only. Pick the matching " +
+      "part in the Board menu, or build for yours with ESP-IDF.",
+    failed_firmware_download:
+      "The image beside this page did not download. Reload and retry; if it " +
+      "fails again this build shipped without firmware and the button has " +
+      "nothing to write.",
+    write_failed:
+      "The board is part-written and will not boot. Leave it plugged in, run " +
+      "Connect &amp; install again, and tick &ldquo;Erase device&rdquo; so " +
+      "the half-written image goes with it.",
+  };
+  const STATUS = {idle: "idle", ready: "live", erasing: "warn",
+                  writing: "live", done: "ok", failed: "err"};
+
+  const hex = (n) => "0x" + n.toString(16).toUpperCase().padStart(6, "0");
+  const kb = (n) => n >= 1048576
+    ? (n / 1048576).toFixed(2) + " MB" : Math.round(n / 1024) + " KB";
+  const esc = (s) => { const d = document.createElement("div");
+                       d.textContent = s; return d.innerHTML; };
+
+  let total = 0;
+
+  const set = (state, word) => {
+    inst.dataset.state = state;
+    stateEl.className = "status status-" + STATUS[state] + " inst-state";
+    stateEl.textContent = word;
+  };
+
+  /* Written to only on change. The installer reports progress many times a
+   * second and these attributes drive transitions on 16 elements. */
+  const at = (bytes) => {
+    for (const li of rows) {
+      const off = +li.dataset.off, end = +li.dataset.end || total || Infinity;
+      const v = bytes >= end ? "past" : bytes >= off ? "now" : "next";
+      if (li.dataset.at !== v) li.dataset.at = v;
+      const t = bytes >= off ? "past" : "next";
+      if (li.tickEl && li.tickEl.dataset.at !== t) li.tickEl.dataset.at = t;
+    }
+  };
+
+  /* The ticks cannot be placed until the image size is known, so they arrive
+   * together the moment it is: the map resolving onto the rule. */
+  const layout = (bytes) => {
+    if (total || !bytes) return;
+    total = bytes;
+    endEl.textContent = hex(total);
+    appEl.textContent = kb(Math.max(0, total - 131072));
+    rows.forEach((li, i) => {
+      const off = +li.dataset.off;
+      if (off <= 0 || off >= total) return;
+      const t = document.createElement("span");
+      t.className = "inst-tick";
+      t.dataset.at = "next";
+      t.style.setProperty("--at", (off / total * 100).toFixed(4) + "%");
+      t.style.setProperty("--d", i * 45 + "ms");
+      ticksEl.append(t);
+      li.tickEl = t;
+    });
+  };
+
+  const progress = (pct) => {
+    pctEl.firstChild.nodeValue = String(Math.round(pct));
+    fillEl.style.setProperty("--p", (pct / 100).toFixed(5));
+    ruleEl.setAttribute("aria-valuenow", String(Math.round(pct)));
+    if (total) at(total * pct / 100);
+  };
+
+  /* Same guard, and it matters more here: outEl is an aria-live region, so
+   * rewriting identical prose on every progress tick would read the same
+   * sentence aloud a hundred times. Compared against what was last passed in,
+   * not against outEl.innerHTML, which comes back re-serialised. */
+  let said = null;
+  const say = (html) => {
+    if (html === said) return;
+    said = html;
+    outEl.innerHTML = html;
+  };
+
+  const apply = (s) => {
+    if (!s) {
+      set("ready", "connected");
+      chipEl.textContent = "reading chip";
+      say("<p>The port is open. Confirm the install in the dialog and the " +
+          "write starts at <code>0x000000</code>.</p>");
+      return;
+    }
+    if (s.chipFamily) chipEl.textContent = s.chipFamily;
+    if (s.state === "initializing" || s.state === "preparing") {
+      set("ready", s.state === "preparing" ? "preparing" : "connecting");
+      say("<p>" + esc(s.message || "") + "</p>");
+    } else if (s.state === "erasing") {
+      set("erasing", "erasing");
+      progress(0);
+      /* The sweep is the erase; where reduced motion stops it, the rule parks
+       * full-width, which is the same statement: all of it is in play. */
+      fillEl.style.setProperty("--p", "1");
+      say("<p>Erasing the whole flash before the write. Every partition in " +
+          "the map goes, commissioning included.</p>");
+    } else if (s.state === "writing") {
+      const d = s.details || {};
+      layout(d.bytesTotal);
+      set("writing", "writing");
+      progress(d.percentage || 0);
+      const now = rows.find((li) => li.dataset.at === "now");
+      say("<p>Writing " + (total ? kb(total) : "the merged image") +
+          " over WebSerial" +
+          (now ? ", inside <code>" +
+             now.querySelector("span").textContent + "</code>" : "") +
+          ". Keep this tab in front — the transfer slows in a background tab." +
+          "</p>");
+    } else if (s.state === "finished") {
+      set("done", "written");
+      progress(100);
+      rows.forEach((li) => { li.dataset.at = "past"; });
+      say("<p>The image is on the board. It reboots into commissioning mode " +
+          "and advertises over BLE — pair it with the code below.</p>");
+    } else if (s.state === "error") {
+      const code = (s.details || {}).error;
+      set("failed", "failed");
+      say("<p class=\"inst-why\">" + esc(s.message || code || "Unknown error") +
+          "</p><p>" + (NEXT[code] ||
+            "The installer stopped without a recognised cause. Replug the " +
+            "board and retry; if it repeats, open the browser console — a " +
+            "CSP violation there explains it faster than anything else.") +
+          "</p>" + (total && inst.dataset.wrote
+            ? "<p>Stopped at " + inst.dataset.wrote + "%.</p>" : ""));
+    }
+    if (s.state === "writing") inst.dataset.wrote =
+      String(Math.round((s.details || {}).percentage || 0));
+  };
+
+  const reset = () => {
+    total = 0;
+    delete inst.dataset.wrote;
+    ticksEl.textContent = "";
+    rows.forEach((li) => { delete li.dataset.at; li.tickEl = null; });
+    appEl.textContent = "rest of image";
+    endEl.textContent = "image end";
+    progress(0);
+  };
+
+  const watch = (dlg) => {
+    reset();
+    apply(undefined);
+    let last = null;
+    const step = () => {
+      if (!dlg.isConnected) {
+        /* Dialog dismissed. A finished or failed run stays on the page as the
+         * record; anything earlier never wrote a byte, so say so. */
+        if (inst.dataset.state === "ready" || inst.dataset.state === "erasing")
+          { set("idle", "standby"); chipEl.textContent = "no board";
+            reset(); say(IDLE); }
+        return;
+      }
+      let s;
+      try { s = dlg._installState; } catch { s = undefined; }
+      if (s !== last) { last = s; try { apply(s); } catch { /* keep going */ } }
+      /* Not rAF: the dialog can outlive the write on screen, and a poll that
+       * survives a backgrounded tab is worth more here than one that runs at
+       * 60fps. 120ms under a 150ms transition still reads as continuous. */
+      setTimeout(step, 120);
+    };
+    step();
+  };
+
+  new MutationObserver((muts) => {
+    for (const m of muts)
+      for (const n of m.addedNodes)
+        if (n.nodeName === "EWT-INSTALL-DIALOG") watch(n);
+  }).observe(document.body, {childList: true});
 })();
 </script>
 </body>
