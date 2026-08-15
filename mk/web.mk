@@ -10,12 +10,15 @@
 # generator is stdlib Python in this repository, and the whole site builds with
 # no toolchain, no node and nothing installed.
 #
-# Three optional inputs, each degrading rather than failing:
+# Four optional inputs, each degrading rather than failing:
 #   emcc                                  the twin's simulator
 #   graphify-out/graph.json               the graph page
 #   web/vendor/3d-force-graph.min.js      3D rather than the flat SVG graph
+#   build/esp32-matter-lock-*/*.bin       the flasher's images; without them
+#                                         the page says so instead of offering
+#                                         a button that downloads nothing
 
-.PHONY: docs docs-check docs-serve docs-clean
+.PHONY: docs docs-check docs-serve docs-clean release-all
 
 ##@ Docs
 ## docs: build the website  ->  web/dist/index.html
@@ -50,3 +53,22 @@ docs-serve: docs
 docs-clean:
 	@rm -rf $(REPO_ROOT)/web/dist
 	@printf '  removed web/dist\n'
+
+## release-all: build every publishable image, then the site around them
+##   The three release bundles plus a site whose flasher actually carries
+##   firmware. There is no CI, so this is the whole release procedure: run it,
+##   check the bundles under build/release/, publish, then push.
+##
+##   Needs both toolchains and RELEASE_KEY=<path> for the signed Zephyr image.
+##   Deliberately not the dev key `make dfu-key` writes.
+release-all:
+	@if [ -z '$(RELEASE_KEY)' ]; then \
+	  printf '  release-all needs RELEASE_KEY=<path to the production key>\n' >&2; \
+	  printf '  the checkout dev key must not sign a published image.\n' >&2; \
+	  exit 1; \
+	fi
+	@$(MAKE) --no-print-directory esp-release
+	@$(MAKE) --no-print-directory release RELEASE_KEY='$(RELEASE_KEY)'
+	@$(MAKE) --no-print-directory nrf-release
+	@$(MAKE) --no-print-directory docs-check
+	@printf '\n  bundles in %s/release, site in web/dist\n' '$(ULTRAWIDELOCK_BUILD_ROOT)'

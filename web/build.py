@@ -169,6 +169,78 @@ def build_docs() -> list[Path]:
     return written
 
 
+# Where `make esp-release` leaves the merged single-image binaries. Each is
+# bootloader + partition table + app fused at offset 0, which is what the
+# flasher writes.
+ESP_CHIPS = ("esp32s3", "esp32c5", "esp32c6")
+
+
+def stage_firmware() -> list[Path]:
+    """Copy the ESP32 images the flasher offers, and check its manifest.
+
+    The manifest names three .bin files. Nothing verified they existed, so the
+    page shipped a button that 404'd: the link gate only walks HTML href/src,
+    not JSON. Now a missing image is a build-time answer rather than a
+    runtime failure for whoever clicked it.
+    """
+    import json                                                # noqa: PLC0415
+
+    flash_dir = DIST / "flash"
+    manifest = flash_dir / "manifest.json"
+    if not manifest.is_file():
+        return []
+
+    wanted = []
+    for build in json.loads(manifest.read_text()).get("builds", []):
+        for part in build.get("parts", []):
+            wanted.append((build.get("chipFamily", "?"), part["path"]))
+
+    staged, missing = [], []
+    for family, name in wanted:
+        src = ROOT / "build" / f"esp32-matter-lock-{_chip_of(name)}" / name
+        if src.is_file():
+            dest = flash_dir / name
+            shutil.copy2(src, dest)
+            staged.append(dest)
+        else:
+            missing.append((family, name))
+
+    if staged:
+        total = sum(f.stat().st_size for f in staged)
+        print(f"build: {len(staged)} firmware image(s) -> flash/  "
+              f"({total // 1024} KB)")
+    if missing:
+        print(f"build: {len(missing)} firmware image(s) absent, the flasher "
+              f"will say so (make esp-release)")
+        _mark_flasher_unbuilt(flash_dir / "index.html", missing)
+    return staged
+
+
+def _chip_of(binary_name: str) -> str:
+    for chip in ESP_CHIPS:
+        if binary_name.endswith(f"-{chip}.bin"):
+            return chip
+    return binary_name.rsplit("-", 1)[-1].removesuffix(".bin")
+
+
+def _mark_flasher_unbuilt(page: Path, missing: list) -> None:
+    """Say plainly on the page that this build carries no images."""
+    if not page.is_file():
+        return
+    names = ", ".join(family for family, _ in missing)
+    note = ('<div class="callout callout-warn"><span class="ico">warn</span>'
+            "<div><p><strong>No firmware in this build.</strong> Images for "
+            f"{names} were not staged, so the install button has nothing to "
+            "write. Build them with <code>make esp-release</code>, or use a "
+            "published release.</p></div></div>")
+    text = page.read_text()
+    if "No firmware in this build" in text:
+        return
+    marker = '<div class="flashrow">'
+    if marker in text:
+        page.write_text(text.replace(marker, note + marker, 1))
+
+
 def copy_trees() -> list[Path]:
     written: list[Path] = []
     for src, rel in TREES.items():
@@ -229,6 +301,7 @@ def main() -> int:
     have_twin = build_twin_wasm()
     written = copy_trees()
     written += build_docs()
+    written += stage_firmware()
     graph_page = build_graph()
     if graph_page:
         written.append(graph_page)
