@@ -414,25 +414,34 @@
  * world pacing still read constants here. ── */
 const FW = {
   ULTRAWIDELOCK_UNLOCK_RANGE_CM: 100,  // apps/esp32-matter-lock/main/app_main.cpp:131
-  ULTRAWIDELOCK_RELOCK_RANGE_CM: 250,  // apps/esp32-matter-lock/main/app_main.cpp:132
-  ULTRAWIDELOCK_APPROACH_MEDIAN_N: 5,  // modules/ultrawidelock_cred/include/ultrawidelock_approach.h:48
-  ULTRAWIDELOCK_NEAR_DWELL: 2,         // apps/esp32-matter-lock/main/app_main.cpp:133
-  ULTRAWIDELOCK_FAR_DWELL: 3,          // apps/esp32-matter-lock/main/app_main.cpp:134
-  ULTRAWIDELOCK_MOTOR_MS: 500,         // apps/esp32-matter-lock/main/app_main.cpp:146
-  ULTRAWIDELOCK_PREDICT_MARGIN_MS: 250, // apps/esp32-matter-lock/main/app_main.cpp:147
-  ULTRAWIDELOCK_PREDICT_VMIN_CM_S: 30, // apps/esp32-matter-lock/main/app_main.cpp:148
-  KF_REJECT_MAX: 3,            // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:26
-  KF_STALE_MS: 1000,           // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:27
-  KF_MIN_SAMPLES: 6,           // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:29
-  PRED_DWELL_N: 2,             // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:34
-  PRED_GRACE_MS: 900,          // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:35
-  CTRL_TICK_MS: 200,           // apps/esp32-matter-lock/main/app_main.cpp:325
+  ULTRAWIDELOCK_RELOCK_RANGE_CM: 250,  // apps/esp32-matter-lock/main/app_main.cpp:133
+  ULTRAWIDELOCK_APPROACH_MEDIAN_N: 5,  // modules/ultrawidelock_cred/include/ultrawidelock_approach.h:36
+  ULTRAWIDELOCK_NEAR_DWELL: 2,         // apps/esp32-matter-lock/main/app_main.cpp:134
+  ULTRAWIDELOCK_FAR_DWELL: 3,          // apps/esp32-matter-lock/main/app_main.cpp:135
+  ULTRAWIDELOCK_MOTOR_MS: 500,         // apps/esp32-matter-lock/main/app_main.cpp:147
+  ULTRAWIDELOCK_PREDICT_MARGIN_MS: 250, // apps/esp32-matter-lock/main/app_main.cpp:148
+  ULTRAWIDELOCK_PREDICT_VMIN_CM_S: 30, // apps/esp32-matter-lock/main/app_main.cpp:149
+  KF_REJECT_MAX: 3,            // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:29
+  KF_STALE_MS: 1000,           // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:30
+  KF_MIN_SAMPLES: 6,           // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:32
+  PRED_DWELL_N: 2,             // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:44
+  PRED_GRACE_MS: 1800,         // modules/ultrawidelock_cred/src/ultrawidelock_approach.c:45
+  CTRL_TICK_MS: 200,           // apps/esp32-matter-lock/main/app_main.cpp:330
   BLOCK_MS: 192,               // modules/ultrawidelock_uwb/src/driver/uwb_selftest.c:36
-  SPOOF_CM: -400,              // tests/host/test_twin.c:127
 };
 
-/* Kalman tuning mirrored from ultrawidelock_approach.c:15-20 — float-valued in the C
- * (900.0f, …), so listed here rather than in the integer-cited FW table. */
+/* The twin's own world, not the firmware's. A Ghost-Peak spoof has no single
+ * constant in the C tree to cite -- how far a spoofed first path appears to
+ * pull the range in is a property of the attack being simulated, not of the
+ * lock. This used to sit in the FW table above citing tests/host/test_twin.c,
+ * a file that no longer exists; the citation could not be checked because
+ * check_constants.py was reading paths relative to web/ and failing to open
+ * every one of them. */
+const WORLD = { SPOOF_CM: -400 };
+
+/* Kalman tuning mirrored from ultrawidelock_approach.c:26-28 and :34 -- all
+ * float-valued in the C (900.0f, …), so listed here rather than in the
+ * integer-cited FW table above. */
 const KF = { R_CM2: 900, QA: 22500, GATE_CM: 100, VINIT_CM2S2: 40000 };
 
 /* The firmware's own walk-up phase names (ultrawidelock_lat.h:21-31). M4_DONE and up
@@ -646,7 +655,7 @@ async function selfTest(){
     ok("one_block.not_trusted", w.trustedCm() === null);
     ok("latch.notified", w.takeLatches() === 1);
     /* Ghost-Peak spoof through the same full-frame path */
-    w.block(FW.SPOOF_CM);
+    w.block(WORLD.SPOOF_CM);
     ok("spoof.range_not_reduced", w.lastCm() === 234);
     ok("spoof.not_trusted", w.trustedCm() === null);
     ok("spoof.trust_reset", w.trustLevel() === 0);
@@ -810,7 +819,7 @@ function authAdvance(){
 function blockCm(){
   if (sim.spoofArmed){
     sim.spoofArmed = false;
-    return { cm: FW.SPOOF_CM, spoof: true };         // test_twin.c:127
+    return { cm: WORLD.SPOOF_CM, spoof: true };
   }
   let cm = sim.trueCm();
   if (sim.noise){

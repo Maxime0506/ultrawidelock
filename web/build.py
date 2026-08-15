@@ -20,6 +20,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html
+import json
 import re
 import shutil
 import subprocess
@@ -53,6 +55,315 @@ def clean() -> None:
     # starting with an underscore. Nothing here needs Jekyll, so opt out rather
     # than depend on no future asset ever being named that way.
     (DIST / ".nojekyll").touch()
+
+
+# ---------------------------------------------------------------- the shell --
+# Every page's chrome is generated from here rather than pasted into each
+# source file. Before this, the topbar existed in four versions that had already
+# drifted: the landing page had a theme toggle, the docs template had none, the
+# twin persisted its choice under a different localStorage key than the rest of
+# the site, and the 3D graph had no toggle at all and a bootstrap that ignored a
+# saved light preference on a dark-preferring OS.
+
+SITE = "https://ultrawidelock.com"
+GITHUB = "https://github.com/ultrawidelock/ultrawidelock"
+
+# The navigable surface, in nav order: path from the site root -> label.
+# The graph is conditional; see nav().
+NAV = (
+    ("docs/index.html", "Docs"),
+    ("twin/index.html", "Twin"),
+    ("flash/index.html", "Flash"),
+    ("graph/index.html", "Graph"),
+)
+
+# Set once in main(), read by nav(). The graph is the one page that may not
+# exist: it needs graphify, which is not in this repository. Linking it anyway
+# published a nav item that 404'd on every build without graphify-out/ -- the
+# link gate deliberately excuses that path, so nothing caught it.
+HAVE_GRAPH = False
+
+# Runs before the stylesheet so the first paint is already the right theme.
+# Inline and tiny on purpose: a separate file would be a round trip during
+# which the wrong theme is on screen.
+THEME_BOOT = ("<script>(function(){try{var t=localStorage.getItem('uwl-theme');"
+              "if(t)document.documentElement.setAttribute('data-theme',t);}"
+              "catch(e){}})();</script>")
+
+# Marks the document as scripted before any CSS runs, so the reveal animations
+# only hide their content when there is JavaScript present to bring it back.
+# Without this a reader with JS off gets a page of invisible sections.
+JS_FLAG = "<script>document.documentElement.className+=' js';</script>"
+
+
+def rel_to_root(depth: int) -> str:
+    """Prefix that walks from a page `depth` levels down back to the site root."""
+    return "../" * depth
+
+
+def head(title: str, desc: str, depth: int, canon: str, *,
+         extra: str = "") -> str:
+    """The <head> every page shares.
+
+    The font preloads matter more than they look. Fonts are only discovered
+    once the stylesheet has been fetched and parsed, so without these the two
+    faces start downloading a full round trip late and the page swaps under the
+    reader. Preloading moves them onto the wire beside the CSS.
+    """
+    rel = rel_to_root(depth)
+    return f"""<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html_escape(title)}</title>
+<meta name="description" content="{html_escape(desc)}">
+<link rel="canonical" href="{SITE}/{canon}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{html_escape(title)}">
+<meta property="og:description" content="{html_escape(desc)}">
+<meta property="og:url" content="{SITE}/{canon}">
+<meta property="og:image" content="{SITE}/assets/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="{rel}assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="{rel}assets/design/fonts/space-grotesk.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="{rel}assets/design/fonts/jetbrains-mono.woff2">
+{THEME_BOOT}
+{JS_FLAG}
+<link rel="stylesheet" href="{rel}assets/design/styles.css">{extra}"""
+
+
+THEME_BTN = ('<button class="icon-btn" data-theme-toggle aria-pressed="false" '
+             'title="Switch theme" aria-label="Switch theme">'
+             '<svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">'
+             '<circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/>'
+             '<circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/>'
+             '<circle cx="14.6" cy="8" r="1.1"/></svg>'
+             '<svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">'
+             '<path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>')
+
+NAV_BTN = ('<button class="icon-btn navtoggle" data-nav-toggle aria-expanded="false" '
+           'aria-controls="navlinks" aria-label="Menu">'
+           '<svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">'
+           '<rect x="2" y="4" width="12" height="1.6" rx=".8"/>'
+           '<rect x="2" y="7.2" width="12" height="1.6" rx=".8"/>'
+           '<rect x="2" y="10.4" width="12" height="1.6" rx=".8"/></svg></button>')
+
+
+def nav(depth: int, current: str = "") -> str:
+    """The sticky topbar. `current` is a root-relative path, "" for home."""
+    rel = rel_to_root(depth)
+    links = []
+    for path, label in NAV:
+        if path.startswith("graph/") and not HAVE_GRAPH:
+            continue
+        here = ' aria-current="page"' if path == current else ""
+        links.append(f'<a class="navlink" href="{rel}{path}"{here}>{label}</a>')
+    links.append(f'<a class="navlink" href="{GITHUB}" data-ext>Source</a>')
+    home = ' aria-current="page"' if not current else ""
+    return (f'<header class="topbar">'
+            f'<a class="wordmark" href="{rel}index.html"{home}>UltraWideLock '
+            f'<span class="ver">v0.3.0</span></a>'
+            f'<div class="spacer"></div>'
+            f'<nav class="navlinks" id="navlinks" aria-label="Main">'
+            f'{"".join(links)}</nav>'
+            f'{THEME_BTN}{NAV_BTN}</header>')
+
+
+def footer(depth: int) -> str:
+    rel = rel_to_root(depth)
+    graph = (f'<a href="{rel}graph/index.html">Subsystem graph</a>'
+             if HAVE_GRAPH else "")
+    return f"""<footer class="footer">
+  <div class="footer-in">
+    <div class="footer-col">
+      <a class="wordmark" href="{rel}index.html">UltraWideLock <span class="ver">v0.3.0</span></a>
+      <p class="fine">Portable firmware for NFC and UWB smart locks, on nRF52833, nRF5340 and ESP32.
+      ISC licensed.</p>
+    </div>
+    <div class="footer-col">
+      <span class="footer-cap">Docs</span>
+      <a href="{rel}docs/index.html">All guides</a>
+      <a href="{rel}docs/troubleshooting.html">Troubleshooting</a>
+      <a href="{rel}docs/porting.html">Porting</a>
+    </div>
+    <div class="footer-col">
+      <span class="footer-cap">Tools</span>
+      <a href="{rel}twin/index.html">Digital twin</a>
+      <a href="{rel}flash/index.html">Web flasher</a>
+      {graph}
+    </div>
+    <div class="footer-col">
+      <span class="footer-cap">Source</span>
+      <a href="{GITHUB}" data-ext>github.com/ultrawidelock</a>
+      <a href="{GITHUB}/blob/main/LICENSE" data-ext>LICENSE (ISC)</a>
+      <a href="{GITHUB}/blob/main/CONTRIBUTING.md" data-ext>Contributing</a>
+      <a href="{GITHUB}/blob/main/SECURITY.md" data-ext>Security</a>
+    </div>
+  </div>
+  <div class="footer-bar">
+    <span>ISC &middot; no CLA</span>
+    <span>built static, works offline</span>
+    <span>bench defaults, not a product</span>
+  </div>
+</footer>
+<script src="{rel}assets/design/site.js" defer></script>"""
+
+
+def html_escape(text: str) -> str:
+    return html.escape(text, quote=True)
+
+
+def shell(page: str, depth: int, current: str = "") -> str:
+    """Substitute the shared chrome into a page source."""
+    return (page.replace("@@HEAD@@", "")          # pages build their own head
+                .replace("@@NAV@@", nav(depth, current))
+                .replace("@@FOOTER@@", footer(depth)))
+
+
+# ------------------------------------------------------------- asset bundle --
+# Authoring order. Tokens first (nothing can reference a variable that has not
+# been declared as a fallback target), then the reset, then components, then the
+# two page-scoped sheets.
+CSS_PARTS = (
+    "tokens/typography.css",
+    "tokens/scale.css",
+    "tokens/colors.css",
+    "tokens/reset.css",
+    "components.css",
+    "landing.css",
+    "docs.css",
+)
+
+# theme.js first: it defines the toggle behaviour site.js wires up.
+JS_PARTS = ("js/theme.js", "js/site.js")
+
+COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+BLANKS_RE = re.compile(r"\n{2,}")
+
+
+def bundle_css() -> Path:
+    """Concatenate the design system into one stylesheet.
+
+    styles.css used to be five @import lines. An @import cannot be discovered
+    until the sheet containing it has already arrived and been parsed, so that
+    was a five-deep serial fetch chain in front of the first paint of every
+    page -- the single most expensive thing about the old build. The sources
+    stay split for authoring; only the output is joined.
+    """
+    src = WEB / "assets" / "design"
+    out = DIST / "assets" / "design" / "styles.css"
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    chunks = []
+    for part in CSS_PARTS:
+        path = src / part
+        if not path.is_file():
+            raise SystemExit(f"build: missing stylesheet {path}")
+        body = COMMENT_RE.sub("", path.read_text(encoding="utf-8"))
+        chunks.append(BLANKS_RE.sub("\n", body).strip())
+    out.write_text("\n".join(chunks) + "\n", encoding="utf-8")
+    return out
+
+
+def bundle_js() -> list[Path]:
+    """One deferred bundle for the shared behaviour, one for the landing hero.
+
+    The hero is a separate file because it is ~9 KB that only one page uses,
+    and it is the only script on the site heavy enough for that to matter.
+    """
+    src = WEB / "assets" / "design"
+    written = []
+
+    out = DIST / "assets" / "design" / "site.js"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    chunks = []
+    for part in JS_PARTS:
+        path = src / part
+        if not path.is_file():
+            raise SystemExit(f"build: missing script {path}")
+        chunks.append(path.read_text(encoding="utf-8").strip())
+    # Not minified: these are small, they gzip well, and a regex JS minifier
+    # that has to tell a regex literal from a division is a bug generator.
+    out.write_text("\n".join(chunks) + "\n", encoding="utf-8")
+    written.append(out)
+
+    hero = src / "js" / "hero.js"
+    if hero.is_file():
+        dest = DIST / "assets" / "design" / "hero.js"
+        shutil.copy2(hero, dest)
+        written.append(dest)
+    return written
+
+
+FAVICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<rect width="32" height="32" rx="7" fill="#061012"/>
+<circle cx="9" cy="16" r="3.2" fill="#2ee6b8"/>
+<path d="M14.5 10.2a8 8 0 0 1 0 11.6" fill="none" stroke="#2ee6b8"
+      stroke-width="2.2" stroke-linecap="round" opacity=".72"/>
+<path d="M19.6 6.4a13.6 13.6 0 0 1 0 19.2" fill="none" stroke="#2ee6b8"
+      stroke-width="2.2" stroke-linecap="round" opacity=".38"/>
+</svg>
+"""
+
+
+def emit_meta(pages: list[str]) -> list[Path]:
+    """CNAME, robots.txt, sitemap.xml, favicon.
+
+    `pages` is the list of root-relative page paths that should be indexed.
+    """
+    written = []
+
+    def put(rel_path: str, body: str) -> None:
+        dest = DIST / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(body, encoding="utf-8")
+        written.append(dest)
+
+    # Custom domain. Every internal link on the site is relative, so dropping
+    # this file is all it takes to serve from a project subpath instead.
+    put("CNAME", "ultrawidelock.com\n")
+    put("robots.txt", f"User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n")
+    put("assets/favicon.svg", FAVICON)
+
+    urls = "".join(
+        f"  <url><loc>{SITE}/{p}</loc></url>\n"
+        for p in sorted(pages))
+    put("sitemap.xml",
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}</urlset>\n")
+
+    # A 404 that carries the site's own chrome, so a bad link lands somewhere
+    # navigable instead of on GitHub's default page.
+    put("404.html", f"""<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+{head("Page not found — UltraWideLock",
+      "That page is not here. The guides, the twin, the flasher and the source are.",
+      0, "404.html")}
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{nav(0)}
+<main id="main" class="page" style="padding-top:var(--sp-20);padding-bottom:var(--sp-20)">
+  <span class="eyebrow">404</span>
+  <h1 style="font-size:var(--fs-900);color:var(--strong);margin:0 0 var(--sp-4)">
+  That page is not here.</h1>
+  <p class="lede" style="margin-bottom:var(--sp-8)">The link may be from an older
+  layout of this site. Everything below still is.</p>
+  <ul class="rows mono">
+    <li><a href="index.html"><span class="row-name">home</span><span class="row-desc">what this firmware is, and how a door opens</span></a></li>
+    <li><a href="docs/index.html"><span class="row-name">guides</span><span class="row-desc">bring-up, porting and bench notes</span></a></li>
+    <li><a href="twin/index.html"><span class="row-name">twin</span><span class="row-desc">the ranging stack, running in the page</span></a></li>
+    <li><a href="flash/index.html"><span class="row-name">flash</span><span class="row-desc">write an ESP32 image over WebSerial</span></a></li>
+    <li><a href="{GITHUB}" data-ext><span class="row-name">source</span><span class="row-desc">github.com/ultrawidelock</span></a></li>
+  </ul>
+</main>
+{footer(0)}
+</body>
+</html>
+""")
+    return written
 
 
 def build_twin_wasm() -> bool:
@@ -116,8 +427,69 @@ def build_graph() -> Path | None:
 DOCS = ROOT / "docs"
 
 
+# The reading order of the guides, grouped. Ordering them by filename put
+# "Add the key" first and "Troubleshooting" in the middle of the board
+# bring-ups, which is not how anyone reads them. Anything not named here still
+# appears, under "More" -- a curated list must not be able to hide a new file.
+DOC_GROUPS = (
+    ("Start", ("configuring", "add-the-key", "troubleshooting")),
+    ("Boards", ("esp32-bringup", "esp32-gotchas", "nrf5340-bringup",
+                "nrf5340-wiring", "dwm3001cdk-surgery", "hardware-validation")),
+    ("Porting", ("porting", "porting-esp32", "chipset-memory")),
+    ("Protocol", ("protocol-notes", "protocol-research", "range-integrity",
+                  "approach-direction", "uwb-mac-login")),
+    ("Reference", ("reference",)),
+)
+
+
+def _title_of(md: Path) -> str:
+    for line in md.read_text(encoding="utf-8").splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return md.stem.replace("-", " ")
+
+
+def _summary_of(md: Path) -> str:
+    """First real sentence of a guide, for the index cards and meta description.
+
+    The index used to print the filename stem as every guide's description,
+    which told a reader nothing they could not already see in the link.
+    """
+    body = md.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(body):
+        if not line.startswith("# "):
+            continue
+        for follow in body[i + 1:]:
+            text = follow.strip()
+            if not text or text.startswith(("#", "|", "```", ">", "-", "*")):
+                continue
+            text = re.sub(r"[`*\[\]]", "", text)
+            text = re.sub(r"\(([^)]*)\)", "", text)
+            cut = text.find(". ")
+            if 0 < cut < 160:
+                return text[:cut + 1].strip()
+            return (text[:157].rstrip() + "…") if len(text) > 160 else text
+        break
+    return f"{_title_of(md)} — an UltraWideLock guide."
+
+
+def _ordered(pages: list[Path]) -> list[tuple[str, list[Path]]]:
+    """Group the guides for the sidebar, keeping every file reachable."""
+    by_stem = {md.stem: md for md in pages}
+    grouped, placed = [], set()
+    for cap, stems in DOC_GROUPS:
+        members = [by_stem[s] for s in stems if s in by_stem]
+        placed.update(md.stem for md in members)
+        if members:
+            grouped.append((cap, members))
+    rest = [md for md in pages if md.stem not in placed]
+    if rest:
+        grouped.append(("More", rest))
+    return grouped
+
+
 def build_docs() -> list[Path]:
-    """Render docs/*.md into dist/docs/ with a sidebar and an index."""
+    """Render docs/*.md into dist/docs/ with a sidebar, a TOC and search."""
     if not DOCS.is_dir():
         print("build: no docs/ directory, skipping the guides")
         return []
@@ -131,47 +503,119 @@ def build_docs() -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     tpl = (WEB / "site" / "docs.tpl.html").read_text()
 
-    def title_of(md: Path) -> str:
-        for line in md.read_text().splitlines():
-            if line.startswith("# "):
-                return line[2:].strip()
-        return md.stem.replace("-", " ")
-
-    titles = {md: title_of(md) for md in pages}
+    titles = {md: _title_of(md) for md in pages}
+    summaries = {md: _summary_of(md) for md in pages}
+    groups = _ordered(pages)
+    # Reading order, flattened: what prev/next walks.
+    flat = [md for _cap, members in groups for md in members]
 
     def tree_for(current: str) -> str:
-        here = ' class="on"' if not current else ""
-        rows = [f'<a href="index.html"{here}>All guides</a>']
-        for md in pages:
-            on = ' class="on"' if md.stem == current else ""
-            rows.append(f'<a href="{md.stem}.html"{on}>{titles[md]}</a>')
+        rows = ['<div class="tree-cap">Guides</div>',
+                f'<a class="doclink{" on" if not current else ""}" '
+                f'href="index.html">All guides</a>']
+        for cap, members in groups:
+            rows.append(f'<div class="tree-cap">{html_escape(cap)}</div>')
+            for md in members:
+                on = " on" if md.stem == current else ""
+                rows.append(f'<a class="doclink{on}" href="{md.stem}.html">'
+                            f'{html_escape(titles[md])}</a>')
         return "".join(rows)
 
-    written = []
-    for md in pages:
-        body, _toc = markdown.render(md.read_text())
-        page = (tpl.replace("@@TITLE@@", titles[md])
-                   .replace("@@SLUG@@", md.stem)
-                   .replace("@@TREE@@", tree_for(md.stem))
+    def toc_for(toc: list) -> str:
+        """The on-this-page rail.
+
+        markdown.render() has always returned this and build.py has always
+        thrown it away, so every guide shipped without one. Only h2/h3 are
+        listed: the h1 is the page title, and h4 and below are too fine to
+        navigate by.
+        """
+        rows = [f'<a class="toc-link lv{lvl}" href="#{anchor}">'
+                f'{html_escape(title)}</a>'
+                for lvl, title, anchor in toc if 2 <= lvl <= 3]
+        if len(rows) < 2:
+            return ""      # a one-entry contents list is furniture, not a tool
+        return ('<aside class="toc-rail"><div class="toc-in">'
+                '<div class="toc-cap">On this page</div>'
+                f'<nav aria-label="On this page">{"".join(rows)}</nav>'
+                "</div></aside>")
+
+    def pager_for(md: Path) -> str:
+        i = flat.index(md)
+        parts = []
+        if i > 0:
+            prev = flat[i - 1]
+            parts.append(f'<a class="prev" href="{prev.stem}.html">'
+                         f'<span class="dir">Previous</span>'
+                         f'<span class="to">{html_escape(titles[prev])}</span></a>')
+        if i + 1 < len(flat):
+            nxt = flat[i + 1]
+            parts.append(f'<a class="next" href="{nxt.stem}.html">'
+                         f'<span class="dir">Next</span>'
+                         f'<span class="to">{html_escape(titles[nxt])}</span></a>')
+        return f'<nav class="pager" aria-label="Guides">{"".join(parts)}</nav>' \
+            if parts else ""
+
+    def render(md: Path | None, title: str, desc: str, slug: str,
+               body: str, toc_html: str, pager: str) -> str:
+        crumb = (f'<a href="../index.html">home</a><span class="sep">/</span>'
+                 f'<a href="index.html">guides</a>'
+                 + (f'<span class="sep">/</span><b>{html_escape(title)}</b>'
+                    if md is not None else ""))
+        return (tpl.replace("@@HEAD@@",
+                            head(f"{title} — UltraWideLock", desc, 1,
+                                 f"docs/{slug}.html"))
+                   .replace("@@NAV@@", nav(1, "docs/index.html"))
+                   .replace("@@CRUMB@@", crumb)
+                   .replace("@@TREE@@", tree_for(slug if md is not None else ""))
+                   .replace("@@TOC@@", toc_html)
+                   .replace("@@PAGER@@", pager)
+                   .replace("@@FOOTER@@", footer(1))
                    .replace("@@BODY@@", body))
+
+    written, index = [], []
+    for md in pages:
+        body, toc = markdown.render(md.read_text(encoding="utf-8"))
         dest = out_dir / f"{md.stem}.html"
-        dest.write_text(page, encoding="utf-8")
+        dest.write_text(render(md, titles[md], summaries[md], md.stem, body,
+                               toc_for(toc), pager_for(md)), encoding="utf-8")
         written.append(dest)
 
-    cards = "".join(
-        f'<li><a href="{md.stem}.html"><span class="row-name">{titles[md]}</span>'
-        f'<span class="row-desc">{md.stem}</span></a></li>' for md in pages)
-    index = (tpl.replace("@@TITLE@@", "Guides")
-                .replace("@@SLUG@@", "index")
-                .replace("@@TREE@@", tree_for(""))
-                .replace("@@BODY@@",
-                         "<h1>Guides</h1><p>Bring-up, porting and bench notes "
-                         "for the boards this firmware runs on.</p>"
-                         '<ul class="rows mono">' + cards + "</ul>"))
+        index.append({"t": titles[md], "u": f"{md.stem}.html",
+                      "k": "guide", "c": summaries[md]})
+        for lvl, title, anchor in toc:
+            if lvl == 1:
+                continue
+            index.append({"t": title, "u": f"{md.stem}.html#{anchor}",
+                          "k": "section", "c": titles[md]})
+
+    cards = []
+    for cap, members in groups:
+        rows = "".join(
+            f'<li><a href="{md.stem}.html">'
+            f'<span class="row-name">{html_escape(titles[md])}</span>'
+            f'<span class="row-desc">{html_escape(summaries[md])}</span></a></li>'
+            for md in members)
+        cards.append(f'<h2>{html_escape(cap)}</h2><ul class="rows">{rows}</ul>')
+
     dest = out_dir / "index.html"
-    dest.write_text(index, encoding="utf-8")
+    dest.write_text(render(
+        None, "Guides",
+        "Bring-up, porting and bench notes for the boards this firmware runs on.",
+        "index",
+        '<span class="eyebrow">Documentation</span><h1>Guides</h1>'
+        '<p class="lede">Bring-up, porting and bench notes for the boards this '
+        "firmware runs on. Every one of them is a file in <code>docs/</code>, "
+        "readable on GitHub as well as here.</p>" + "".join(cards),
+        "", ""), encoding="utf-8")
     written.append(dest)
-    print(f"build: {len(pages)} guide(s) -> docs/")
+
+    search = out_dir / "search.json"
+    search.write_text(json.dumps(index, separators=(",", ":")),
+                      encoding="utf-8")
+    written.append(search)
+
+    print(f"build: {len(pages)} guide(s) -> docs/  "
+          f"({len(index)} search entries)")
     return written
 
 
@@ -247,6 +691,9 @@ def _mark_flasher_unbuilt(page: Path, missing: list) -> None:
         page.write_text(text.replace(marker, note + marker, 1))
 
 
+DESIGN = WEB / "assets" / "design"
+
+
 def copy_trees() -> list[Path]:
     written: list[Path] = []
     for src, rel in TREES.items():
@@ -258,11 +705,33 @@ def copy_trees() -> list[Path]:
             # Build inputs that live beside the pages they produce.
             if path.name.startswith("_ref-") or path.name.endswith(".tpl.html"):
                 continue
+            # Under the design system only the fonts are shipped as files. The
+            # stylesheets and scripts are inputs to bundle_css()/bundle_js(),
+            # and copying them too would publish both halves of every rule --
+            # dead bytes, and two sources of truth for whoever edits next.
+            if src == DESIGN and path.parent.name != "fonts":
+                continue
             out = DIST / rel / path.relative_to(src)
             out.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, out)
             written.append(out)
     return written
+
+
+def stage_social() -> list[Path]:
+    """The og:image, from the repository's own social preview.
+
+    Link previews are the one place the site is seen before it is visited, and
+    a missing og:image renders as a bare grey card in every chat app.
+    """
+    src = ROOT / "assets" / "social-preview.png"
+    if not src.is_file():
+        print("build: assets/social-preview.png absent, og:image will 404")
+        return []
+    dest = DIST / "assets" / "social-preview.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+    return [dest]
 
 
 LINK_RE = re.compile(r'(?:href|src)="([^"#][^"]*)"')
@@ -297,23 +766,105 @@ def check_links(pages: list[Path], have_twin: bool, have_graph: bool) -> list[st
     return dead
 
 
+LANDING_TITLE = "UltraWideLock — NFC and UWB smart lock firmware"
+LANDING_DESC = ("Portable firmware for NFC and UWB smart locks. Implements "
+                "Aliro, the CSA's door-lock credential standard, on nRF52833, "
+                "nRF5340 and ESP32.")
+
+
+def build_landing() -> Path:
+    """Render the landing page around the shared chrome."""
+    tpl = (WEB / "site" / "index.tpl.html").read_text(encoding="utf-8")
+    page = (tpl.replace("@@HEAD@@",
+                        head(LANDING_TITLE, LANDING_DESC, 0, "index.html"))
+               .replace("@@NAV@@", nav(0))
+               .replace("@@FOOTER@@", footer(0)))
+    dest = DIST / "index.html"
+    dest.write_text(page, encoding="utf-8")
+    return dest
+
+
+# The tool pages keep their own <head> -- the flasher's CSP and the twin's
+# inline canvas styles are page-specific and do not belong in a shared partial
+# -- but they share the bar, so the wordmark, the theme toggle and the way back
+# are identical everywhere instead of three hand-written near-copies.
+TOOLBAR_RE = re.compile(r"@@TOOLBAR:([^@]*)@@")
+
+GH_MARK = ('<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" '
+           'aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 '
+           '5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49'
+           '-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
+           '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2'
+           '-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 '
+           '.67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 '
+           '2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75'
+           '-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55'
+           '.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>')
+
+
+def tool_bar(crumb: str, depth: int) -> str:
+    rel = rel_to_root(depth)
+    return (f'<header class="topbar toolbar">'
+            f'<a class="wordmark" href="{rel}index.html">UltraWideLock</a>'
+            f'<span class="crumb-sep" aria-hidden="true">/</span>'
+            f'<span class="crumb">{html_escape(crumb)}</span>'
+            f'<div class="spacer"></div>'
+            f'<a class="navlink hide-narrow" href="{rel}docs/index.html">Docs</a>'
+            f'<a class="gh-chip" href="{GITHUB}" data-ext '
+            f'aria-label="ultrawidelock on GitHub">{GH_MARK}'
+            f'<span class="hide-narrow">ultrawidelock</span></a>'
+            f'{THEME_BTN}</header>')
+
+
+def inject_shell(pages: list[Path]) -> None:
+    """Substitute the shared chrome into pages that asked for it."""
+    for page in pages:
+        if page.suffix != ".html":
+            continue
+        text = page.read_text(encoding="utf-8")
+        if "@@" not in text:
+            continue
+        depth = len(page.relative_to(DIST).parts) - 1
+        text = TOOLBAR_RE.sub(
+            lambda m: tool_bar(m.group(1), depth), text)
+        text = (text.replace("@@NAV@@", nav(depth))
+                    .replace("@@FOOTER@@", footer(depth))
+                    .replace("@@SITEJS@@",
+                             f'<script src="{rel_to_root(depth)}'
+                             f'assets/design/site.js" defer></script>'))
+        page.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
+    global HAVE_GRAPH
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true",
                     help="fail on any dead internal link")
     args = ap.parse_args()
 
     clean()
+    # Decided before any page is rendered, because the nav has to know whether
+    # to carry a Graph link at all.
+    HAVE_GRAPH = (ROOT / "graphify-out" / "graph.json").is_file()
+
     have_twin = build_twin_wasm()
     written = copy_trees()
+    written.append(bundle_css())
+    written += bundle_js()
+    written += stage_social()
+    written.append(build_landing())
     written += build_docs()
     written += stage_firmware()
     graph_page = build_graph()
     if graph_page:
         written.append(graph_page)
+
+    inject_shell(written)
+    written += emit_meta([str(p.relative_to(DIST)) for p in written
+                          if p.suffix == ".html" and p.name != "404.html"])
     print(f"build: {len(written)} file(s) -> {DIST.relative_to(ROOT)}")
 
-    dead = check_links(written, have_twin, graph_page is not None)
+    dead = check_links(written, have_twin, HAVE_GRAPH)
     if dead:
         for entry in dead:
             print(f"build: dead link  {entry}", file=sys.stderr)

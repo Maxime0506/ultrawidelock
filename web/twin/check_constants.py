@@ -18,7 +18,12 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# The repository root, which is what the citations are relative to. This read
+# parent.parent -- web/ -- for as long as the gate has existed, so every cited
+# path resolved to web/apps/... or web/modules/..., nothing could be read, and
+# the check could only ever have failed. It is wired into `make docs-check`
+# now, so it would no longer fail quietly.
+ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(__file__).resolve().parent / "index.html"
 
 ENTRY = re.compile(r"^\s*([A-Z][A-Z0-9_]*):\s*(-?\d+),\s*// ([\w./-]+):(\d+)\s*$")
