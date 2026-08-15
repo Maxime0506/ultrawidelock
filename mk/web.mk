@@ -12,8 +12,11 @@
 #
 # Four optional inputs, each degrading rather than failing:
 #   emcc                                  the twin's simulator
-#   graphify-out/graph.json               the graph page
+#   graphify-out/graph.json               file-level graph data; without it the
+#                                         page still builds, from the committed
+#                                         web/graph/subsystems.json
 #   web/vendor/3d-force-graph.min.js      3D rather than the flat SVG graph
+#                                         (needs the graphify data too)
 #   build/esp32-matter-lock-*/*.bin       the flasher's images; without them
 #                                         the page says so instead of offering
 #                                         a button that downloads nothing

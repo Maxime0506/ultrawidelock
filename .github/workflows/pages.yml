@@ -1,13 +1,14 @@
 # The website: render web/dist and publish it to GitHub Pages.
 #
-# This is the repository's only workflow, and it exists because deploying Pages
-# is the one step that cannot be done from a laptop. Everything else stays
-# manual on purpose: `make check` runs the host suites in seconds, `make
-# fw-check` links the Zephyr images, and `make esp-release` builds and bundles
-# the ESP32 firmware. None of that belongs here. A previous incarnation of this
-# repository carried nine workflows and 2515 lines of YAML, including 805 lines
-# that rebuilt firmware on every push; the firmware build alone took hours, and
-# it verified nothing a local `make` had not already verified.
+# One of the repository's two workflows -- ci.yml gates pull requests -- and
+# this one exists because deploying Pages is the one step that cannot be done
+# from a laptop. Everything else stays manual on purpose: `make check` runs the
+# host suites in seconds, `make fw-check` links the Zephyr images, and `make
+# esp-release` builds and bundles the ESP32 firmware. None of that belongs here.
+# A previous incarnation of this repository carried nine workflows and 2515
+# lines of YAML, including 805 lines that rebuilt firmware on every push; the
+# firmware build alone took hours, and it verified nothing a local `make` had
+# not already verified.
 #
 # Manual only. `workflow_dispatch` and nothing else, deliberately:
 #

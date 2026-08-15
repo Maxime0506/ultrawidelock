@@ -310,7 +310,7 @@
       <div class="ctl"><label for="c-angle">approach angle</label>
         <input id="c-angle" type="range" min="-70" max="70" step="5" value="0"><output id="o-angle">0°</output></div>
       <div class="ctl"><label for="c-thresh">unlock threshold</label>
-        <input id="c-thresh" type="range" min="20" max="240" step="5" value="100"><output id="o-thresh">100 cm</output></div>
+        <input id="c-thresh" type="range" min="50" max="240" step="5" value="100"><output id="o-thresh">100 cm</output></div>
       <div class="ctl" id="ctl-ble"><label for="c-ble">BLE radius <small>(SIM)</small></label>
         <input id="c-ble" type="range" min="3" max="12" step="0.5" value="8"><output id="o-ble">8.0 m</output></div>
       <div class="ctl"><label for="c-noise">range noise (bench-like spikes)</label>
@@ -856,9 +856,9 @@ function step(dtMs){
   /* walking */
   if (sim.walking !== 0 && d > 0.001){
     const v = sim.speed * sim.walking * dtMs / 1000;
-    const nd = Math.max(0.15, Math.min(14, d - v));
+    const nd = Math.max(PHONE_MIN_M, Math.min(PHONE_MAX_M, d - v));
     sim.phone.x *= nd / d; sim.phone.y *= nd / d;
-    if (nd <= 0.15 || nd >= 14) setWalking(0);
+    if (nd <= PHONE_MIN_M || nd >= PHONE_MAX_M) setWalking(0);
   }
   /* BLE link follows the radius ring */
   const dist = Math.hypot(sim.phone.x, sim.phone.y);
@@ -896,6 +896,22 @@ const RM = matchMedia("(prefers-reduced-motion: reduce)");
  * per-canvas: resize() tips the camera toward top-down as the canvas narrows. */
 const EX = [1.0, 0.0], EY = [0.30, -0.50], HZ = 1.0;
 const FX0 = -10, FX1 = 1.0, FY0 = -3.4, FY1 = 3.4;   // floor stage bounds (m)
+
+/* How close the phone may get, and why it is not smaller.
+ *
+ * The door is drawn as box3(0.12, 0, 0, 0.92, ...): centred at x = 0.12 and
+ * 0.92 m wide, so its near face is at 0.12 - 0.46 = -0.34. The phone is
+ * box3(px, py, 0, 0.30, ...), half a width of 0.15. A phone centre closer than
+ * -0.49 is therefore inside the door slab.
+ *
+ * Both movement paths used to clamp at 0.15 m, which let you push the phone
+ * 0.19 m into the door, where it drew on top of the jamb and became
+ * indistinguishable from it -- it looked like the phone vanished on arrival.
+ * A phone cannot be inside a door, so it stops at the face. The threshold
+ * slider starts at 50 cm for the same reason: an unlock ring the phone cannot
+ * reach is one the reader can never demonstrate. */
+const PHONE_MIN_M = 0.5;
+const PHONE_MAX_M = 14;
 const view = { W: 0, H: 0, cx: 0, cy: 0, S: 40 };
 /* Auto-frame: fit the whole floor, the door top and the phone's travel into the
  * canvas with a margin and center the result, so nothing runs off the edges at
@@ -991,23 +1007,42 @@ function updateScene(dt){
 /* The canvas palette, read once and cached.
  *
  * draw() used to open with getComputedStyle(document.documentElement) and pull
- * sixteen custom properties out of it, every frame, at 60 fps -- immediately
+ * a dozen custom properties out of it, every frame, at 60 fps -- immediately
  * after the previous frame's render() had written a dozen text nodes and
  * toggled twenty classes. That is a forced style recalculation on a dirtied
  * tree, sixty times a second, to fetch values that only change when the theme
- * does. So it is fetched when the theme changes, and not otherwise. */
-let PAL = null;
+ * does.
+ *
+ * C() keeps its original name and signature on purpose. It used to be a local
+ * inside draw(), and moving the lookup out of the frame while turning C() into
+ * a local of the *reader* left one caller stranded: the wavefront pass resolves
+ * its colour dynamically, `hexA(C(WAVE[w.kind][0]), …)`, because the token to
+ * read depends on the kind of wave. That line then threw ReferenceError on
+ * every frame in which a wave existed -- so the scene was correct until
+ * something emitted one, and from the first wave onward draw() aborted partway:
+ * the floor survived, the door and the phone never got drawn, and the throw
+ * escaped frame() before its requestAnimationFrame, killing the loop.
+ *
+ * So the cache is a map keyed by token name and C() reads it. Anything not in
+ * the cached set falls back to a live read rather than returning undefined,
+ * because a token added to WAVE later must not silently render as nothing. */
+const PAL_TOKENS = [
+  "--card", "--hairline", "--line", "--muted", "--faint", "--strong",
+  "--ink", "--accent", "--amber", "--cyan", "--green", "--red",
+  "--panel2", "--raise", "--door-open", "--mono",
+];
+let PAL = Object.create(null);
 
 function readPalette(){
   const css = getComputedStyle(document.documentElement);
-  const C = n => css.getPropertyValue(n).trim();
-  PAL = {
-    ground: C("--card"), grid: C("--hairline"), line: C("--line"),
-    muted: C("--muted"), faint: C("--faint"), strong: C("--strong"),
-    ink: C("--ink"), accent: C("--accent"), amber: C("--amber"),
-    cyan: C("--cyan"), green: C("--green"), panel2: C("--panel2"),
-    raise: C("--raise"), doorOpen: C("--door-open"), mono: C("--mono")
-  };
+  const next = Object.create(null);
+  for (const name of PAL_TOKENS) next[name] = css.getPropertyValue(name).trim();
+  PAL = next;
+}
+function C(name){
+  const hit = PAL[name];
+  if (hit !== undefined) return hit;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 readPalette();
 /* theme.js dispatches this after it has set data-theme, so the new values are
@@ -1015,10 +1050,10 @@ readPalette();
 addEventListener("uwl:theme", readPalette);
 
 function draw(){
-  const ground = PAL.ground, grid = PAL.grid, line = PAL.line, muted = PAL.muted,
-        faint = PAL.faint, strong = PAL.strong, ink = PAL.ink, accent = PAL.accent,
-        amber = PAL.amber, cyan = PAL.cyan, green = PAL.green, panel2 = PAL.panel2,
-        raise = PAL.raise, doorOpen = PAL.doorOpen, mono = PAL.mono,
+  const ground = C("--card"), grid = C("--hairline"), line = C("--line"), muted = C("--muted"),
+        faint = C("--faint"), strong = C("--strong"), ink = C("--ink"), accent = C("--accent"),
+        amber = C("--amber"), cyan = C("--cyan"), green = C("--green"), panel2 = C("--panel2"),
+        raise = C("--raise"), doorOpen = C("--door-open"), mono = C("--mono"),
         motion = !RM.matches, dpr = devicePixelRatio, S = view.S;
   const W = view.W, H = view.H;
   const locked = sim.ctrl ? sim.ctrl.locked : true;
@@ -1120,10 +1155,18 @@ function draw(){
   roundRect(pb.flX + pb.w * 0.16, pb.fty + pb.h * 0.12, pb.w * 0.68, pb.h * 0.76, Math.min(4 * dpr, pb.w * 0.16));
   cx.fillStyle = sim.connected ? hexA(cyan, 0.9) : hexA(muted, 0.4); cx.fill();
 
-  /* 5. distance label above the phone (the slab is 0.58 m tall — clear it) */
+  /* 5. distance label above the phone (the slab is 0.58 m tall — clear it).
+   *    On a plate, because at the near end of the walk this text lands on the
+   *    door's face and unbacked mono at 11px is unreadable against it. */
   const lp = project(sim.phone.x, sim.phone.y, 0.8);
-  cx.font = `${11 * dpr}px ${mono}`; cx.fillStyle = muted;
-  cx.fillText((sim.trueCm() / 100).toFixed(2) + " m", lp.x, lp.y);
+  const label = (sim.trueCm() / 100).toFixed(2) + " m";
+  cx.font = `${11 * dpr}px ${mono}`;
+  const lw = cx.measureText(label).width, padx = 5 * dpr, pady = 3 * dpr;
+  roundRect(lp.x - lw / 2 - padx, lp.y - 9 * dpr - pady,
+            lw + padx * 2, 12 * dpr + pady * 2, 3 * dpr);
+  cx.fillStyle = hexA(ground, 0.82); cx.fill();
+  cx.fillStyle = muted;
+  cx.fillText(label, lp.x, lp.y);
 
   /* 6. gentle vignette */
   let vg = cx.createRadialGradient(W / 2, H * 0.5, H * 0.32, W / 2, H * 0.5, H * 0.95);
@@ -1319,9 +1362,9 @@ cv.addEventListener("pointermove", e => {
   if (!dragging) return;
   const r = cv.getBoundingClientRect();
   const u = unproject((e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio);
-  const wx = Math.max(FX0 + 0.3, Math.min(-0.15, u.x)), wy = Math.max(FY0 + 0.3, Math.min(FY1 - 0.3, u.y));
+  const wx = Math.max(FX0 + 0.3, Math.min(-PHONE_MIN_M, u.x)), wy = Math.max(FY0 + 0.3, Math.min(FY1 - 0.3, u.y));
   const d = Math.hypot(wx, wy) || 0.001;
-  const cl = Math.max(0.15, Math.min(14, d));
+  const cl = Math.max(PHONE_MIN_M, Math.min(PHONE_MAX_M, d));
   sim.phone.x = wx * cl / d; sim.phone.y = wy * cl / d;
   /* keep the angle slider honest: 0° = straight out from the door */
   const deg = Math.round(((Math.atan2(sim.phone.y, sim.phone.x) * 180 / Math.PI - 180) + 540) % 360 - 180);
@@ -1367,10 +1410,22 @@ let running = true;
 
 function frame(now){
   const dt = Math.min(100, now - lastT); lastT = now;
-  step(dt);
-  updateScene(dt);
-  draw();
-  render();
+  try {
+    step(dt);
+    updateScene(dt);
+    draw();
+    render();
+  } catch (e) {
+    /* A throw in here used to end the loop without saying anything. The last
+     * half-drawn frame stayed on screen -- floor painted, door and phone
+     * missing, because they are drawn after the pass that threw -- and the
+     * page looked like it had simply lost two objects. Whatever breaks next,
+     * it says so in the log the reader is already looking at. */
+    running = false;
+    log("bad", "render stopped: " + ((e && e.message) || e));
+    console.error("twin: render loop stopped", e);
+    return;
+  }
   if (running) requestAnimationFrame(frame);
 }
 
