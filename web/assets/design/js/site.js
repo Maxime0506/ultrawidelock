@@ -26,6 +26,12 @@
       return;
     }
 
+    /* The stagger is the design system's --reveal-step, read once here rather
+     * than hardcoded. It used to be a literal 60 that happened to agree with
+     * the token; now the token is the only place the number lives. */
+    var step = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue("--reveal-step")) || 60;
+
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
         if (!e.isIntersecting) return;
@@ -33,7 +39,7 @@
          * than a single flash. Read off the element, not a global counter,
          * so scroll order never matters. */
         var i = +(e.target.getAttribute("data-reveal") || 0);
-        e.target.style.transitionDelay = (i * 60) + "ms";
+        e.target.style.transitionDelay = (i * step) + "ms";
         e.target.classList.add("is-in");
         io.unobserve(e.target);              /* one-shot: never re-hide */
       });

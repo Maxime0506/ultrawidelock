@@ -201,6 +201,108 @@
 .card b.card-t{display:block;color:var(--strong);font-size:var(--fs-600);
   margin-bottom:var(--sp-2);letter-spacing:var(--tr-heading)}
 
+/* --------------------------------------------------------- first paint --- */
+/* One orchestrated beat, then silence. The headline rises, the scope draws
+   itself from the lock outwards, the metre ticks stamp in, one DS-TWR round
+   runs, and the readouts settle. Nothing after that moves until the reader
+   scrolls.
+
+   The whole sequence is animation-delay under the single .booted class that
+   index.tpl.html carries in its markup, so it starts at the first frame rather
+   than when a script arrives, costs no per-frame JavaScript, and can never
+   replay -- there is no observer and no repeat.
+
+   Skipped entirely under reduced motion. The SVG in the page is already a
+   complete, labelled, static round; a reader who asked for less movement gets
+   the finished instrument, which is the honest thing to give them. Because
+   every rule below lives inside this query and every animation fills
+   `backwards`, no element is ever hidden by a state this block did not also
+   animate away. */
+@media (prefers-reduced-motion:no-preference){
+  /* One `from` each: the resting state is the element's own, so nothing here
+     can strand a mark in a state the stylesheet has to undo. */
+  @keyframes uwl-boot-rise{from{opacity:0;transform:translateY(var(--reveal-y))}}
+  @keyframes uwl-boot-fade{from{opacity:0}}
+  @keyframes uwl-boot-draw{from{transform:scaleX(0)}}
+  @keyframes uwl-boot-stamp{from{opacity:0;transform:scaleY(0)}}
+  @keyframes uwl-boot-settle{from{opacity:0;transform:translateY(var(--sp-1))}}
+
+  /* 1. the claim */
+  .booted .hero h1{
+    animation:uwl-boot-rise var(--dur-4) var(--ease-out) both}
+
+  /* 2. the instrument names itself, then draws its own scale. The ruler grows
+     from the lock, because the lock is the origin the distance is measured
+     from -- scaling it from anywhere else would be drawing a different
+     statement. */
+  .booted .scope-head{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) 200ms backwards}
+  .booted .hs-rule-g .hs-rule{
+    transform-box:fill-box;transform-origin:left center;
+    animation:uwl-boot-draw var(--dur-4) var(--ease-emphatic) 240ms backwards}
+
+  /* 3. metre ticks stamp 40ms apart, each rising off the rule it belongs to,
+     and its number follows one beat behind. */
+  .booted .hs-tick line{
+    transform-box:fill-box;transform-origin:center bottom;
+    animation:uwl-boot-stamp var(--dur-2) var(--ease-out) var(--bd) backwards}
+  .booted .hs-tick line:nth-child(1){--bd:420ms}
+  .booted .hs-tick line:nth-child(2){--bd:460ms}
+  .booted .hs-tick line:nth-child(3){--bd:500ms}
+  .booted .hs-tick line:nth-child(4){--bd:540ms}
+  .booted .hs-tick line:nth-child(5){--bd:580ms}
+  .booted .hs-tick line:nth-child(6){--bd:620ms}
+  .booted .hs-tick line:nth-child(7){--bd:660ms}
+  .booted .hs-rule-g .hs-num{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) var(--bd) backwards}
+  .booted .hs-rule-g .hs-num:nth-of-type(1){--bd:460ms}
+  .booted .hs-rule-g .hs-num:nth-of-type(2){--bd:540ms}
+  .booted .hs-rule-g .hs-num:nth-of-type(3){--bd:620ms}
+  .booted .hs-rule-g .hs-num:nth-of-type(4){--bd:700ms}
+
+  /* 4. the decision, then the two ends of the measurement */
+  .booted .hs-bound{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) 720ms backwards}
+  .booted .hs-lock{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) 780ms backwards}
+  .booted .hs-phone{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) 840ms backwards}
+
+  /* 5. the protocol lanes arrive, and the round runs. The three pulses keep
+     the loop and the geometry they already had; all this adds is when the
+     first one leaves, and `backwards` so they are not parked at the lock
+     waiting for their turn. */
+  .booted #hero-scope > .hs-rule{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) 860ms backwards}
+  .booted #hs-lanes{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) 880ms backwards}
+  .booted .hs-p1,.booted .hs-p2,.booted .hs-p3{
+    animation-delay:1000ms;animation-fill-mode:backwards}
+
+  /* 6. what the lock believes it measured, then the readouts settle under it.
+     The verdict lands on --ease-spring: it is a stamp, and it is the one mark
+     on the page that is a conclusion rather than a reading. */
+  .booted .hs-dim,.booted .hs-dim-cap{
+    animation:uwl-boot-fade var(--dur-3) var(--ease-out) 1060ms backwards}
+  .booted .scope-ctl > label,.booted .scope-ctl > input,
+  .booted .scope-ctl > button{
+    animation:uwl-boot-fade var(--dur-2) var(--ease-out) 1120ms backwards}
+  .booted .scope-read > *{
+    animation:uwl-boot-settle var(--dur-3) var(--ease-out) var(--bd) backwards}
+  .booted .scope-read > :nth-child(1){--bd:1180ms}
+  .booted .scope-read > :nth-child(2){--bd:1240ms}
+  .booted .scope-read > :nth-child(3){--bd:1300ms}
+  .booted .scope-verdict{
+    animation:uwl-boot-settle var(--dur-3) var(--ease-spring) 1400ms backwards}
+
+  /* 7. the three standing numbers, last */
+  .booted .strip .stat-b{
+    animation:uwl-boot-settle var(--dur-3) var(--ease-out) var(--bd) backwards}
+  .booted .strip .stat-b:nth-child(1){--bd:1480ms}
+  .booted .strip .stat-b:nth-child(2){--bd:1540ms}
+  .booted .strip .stat-b:nth-child(3){--bd:1600ms}
+}
+
 /* ---------------------------------------------------------- the ladder --- */
 /* The unlock sequence. Numbered because it genuinely is a sequence -- these
    are protocol steps in the order they happen, and the order is the content. */

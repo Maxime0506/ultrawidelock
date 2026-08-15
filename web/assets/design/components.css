@@ -65,11 +65,17 @@
     background:var(--surface);border-bottom:var(--border);
     box-shadow:var(--shadow-2);
     /* Collapsed by default. Animating max-height rather than height keeps
-       this to CSS with no measurement step. */
+       this to CSS with no measurement step. The fade, the 4px drift and the
+       .98 scale are the shared overlay curve -- this sheet is an overlay, and
+       it used to be the one that opened by a different mechanism. */
     max-height:0;overflow:hidden;opacity:0;pointer-events:none;
-    transition:max-height var(--dur-3) var(--ease-out),
-      opacity var(--dur-2) var(--ease-out)}
-  .topbar .navlinks.on{max-height:22rem;opacity:1;pointer-events:auto}
+    transform:translateY(calc(-1 * var(--sp-1))) scale(.98);
+    transform-origin:top center;
+    transition:max-height var(--dur-2) var(--ease-out),
+      opacity var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-out)}
+  .topbar .navlinks.on{max-height:22rem;opacity:1;pointer-events:auto;
+    transform:none}
   .navlink{padding:var(--sp-3);font-size:var(--fs-500)}
   .navlink[aria-current]::after{display:none}
   .navlink[aria-current]{background:var(--accent-tint);color:var(--accent-ink)}
@@ -223,10 +229,6 @@ kbd{display:inline-block;padding:.06em .38em;border:var(--border);
 .card p{margin:0;color:var(--muted);font-size:var(--fs-400);line-height:var(--lh-normal)}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
   gap:var(--sp-4)}
-a.card,.feats a{transition:border-color var(--dur-2) var(--ease-out),
-  box-shadow var(--dur-2) var(--ease-out),transform var(--dur-2) var(--ease-out)}
-a.card:hover,.feats a:hover{border-color:var(--accent-line);
-  box-shadow:var(--shadow-2);transform:translateY(-1px)}
 .f-ico{display:grid;place-items:center;width:1.9rem;height:1.9rem;flex:none;
   border:var(--border-accent);border-radius:var(--r-sm);
   background:var(--accent-tint);color:var(--accent-ink)}
@@ -242,9 +244,7 @@ a.card:hover,.feats a:hover{border-color:var(--accent-line);
 .rows li{border-bottom:var(--border-hair)}
 /* A row is either a link or a plain .rowline; both lay out identically. */
 .rows a,.rows .rowline{display:flex;gap:var(--sp-4);align-items:baseline;
-  padding:var(--sp-3) var(--sp-2);text-decoration:none;
-  transition:background var(--dur-1) var(--ease-out)}
-.rows a:hover{background:var(--raise)}
+  padding:var(--sp-3) var(--sp-2);text-decoration:none}
 /* The name column is a fixed gutter so the descriptions line up into a second
    column. Below --bp-rows there is no room for two columns, so the row stacks
    and the gutter is dropped rather than squeezing the description to nothing. */
@@ -255,6 +255,51 @@ a.card:hover,.feats a:hover{border-color:var(--accent-line);
   .rows a,.rows .rowline{flex-direction:column;gap:var(--sp-1)}
   .row-name{min-width:0}
 }
+
+/* ------------------------------------------------- selecting a reading --- */
+/* One rule set for every hoverable card and row on the site. Hover here means
+   picking out one measurement, so it is marked the way this system marks a
+   measurement: the surface raises exactly one tonal step, and a 2px accent
+   rule grows out of the middle of the left edge.
+   Deliberately no lift and no grown shadow. A card that rises under the
+   cursor is claiming to be a physical object sitting on the page, and these
+   are readings. Shadow stays reserved for the things that genuinely leave the
+   page plane.
+   The active-state pattern is untouched: .item.on and .res.sel keep
+   --accent-tint with the static inset rule, so "you are here" and "you are
+   pointing at this" remain two different marks. */
+a.card,.feats a,.pager a,.rows a,
+table.data tbody tr,.doc table tbody tr{position:relative;
+  transition:background var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out)}
+/* On a table the rule belongs to the row, but a <tr> is a table-row box and
+   cannot carry a positioned pseudo-element of its own, so it is drawn inside
+   the row's first cell -- same edge, same origin. */
+a.card::before,.feats a::before,.pager a::before,.rows a::before,
+table.data tbody tr > :first-child::before,
+.doc table tbody tr > :first-child::before{
+  content:"";position:absolute;left:0;width:var(--bw-2);
+  background:var(--accent);border-radius:var(--r-pill);pointer-events:none;
+  transform:scaleY(0);transform-origin:center;
+  transition:transform var(--dur-2) var(--ease-out)}
+/* Cards are rounded, so their rule stops clear of the corner arcs. Rows are
+   square and take the whole edge. */
+a.card::before,.feats a::before,.pager a::before{top:var(--sp-2);bottom:var(--sp-2)}
+.rows a::before,
+table.data tbody tr > :first-child::before,
+.doc table tbody tr > :first-child::before{top:0;bottom:0}
+
+a.card:is(:hover,:focus-visible),.feats a:is(:hover,:focus-visible),
+.pager a:is(:hover,:focus-visible),.rows a:is(:hover,:focus-visible),
+table.data tbody tr:hover,.doc table tbody tr:hover{background:var(--raise)}
+a.card:is(:hover,:focus-visible),.feats a:is(:hover,:focus-visible),
+.pager a:is(:hover,:focus-visible){border-color:var(--accent-line)}
+a.card:is(:hover,:focus-visible)::before,
+.feats a:is(:hover,:focus-visible)::before,
+.pager a:is(:hover,:focus-visible)::before,
+.rows a:is(:hover,:focus-visible)::before,
+table.data tbody tr:hover > :first-child::before,
+.doc table tbody tr:hover > :first-child::before{transform:scaleY(1)}
 
 /* ---------------------------------------------------------- code blocks -- */
 .prewrap{position:relative;margin:0 0 var(--sp-6)}
@@ -300,21 +345,47 @@ a.card:hover,.feats a:hover{border-color:var(--accent-line);
   font-weight:var(--fw-medium);white-space:nowrap;position:sticky;top:0}
 .doc tbody tr:last-child td,table.data tbody tr:last-child td{border-bottom:0}
 .doc td code,table.data td code{font-size:var(--fs-300)}
-table.data tbody tr:hover{background:var(--raise)}
 
 /* --------------------------------------------------- search + results --- */
+/* Every overlay on the site shares one physics: a fade, a 4px drift, and a
+   .98 to 1 scale on --dur-2 --ease-out. The palette set that curve; the scrim
+   and the mobile nav sheet now answer to it too, so opening any of the three
+   feels like the same mechanism rather than three separately tuned ones. The
+   scrim takes the fade alone -- it covers the viewport, and a full-bleed sheet
+   that slides is a distraction rather than an arrival. */
 .scrim{position:fixed;inset:0;z-index:var(--z-scrim);
   background:color-mix(in srgb,var(--sunken) 72%,transparent);
   backdrop-filter:blur(3px);opacity:0;pointer-events:none;
-  transition:opacity var(--dur-3) var(--ease-out)}
+  transition:opacity var(--dur-2) var(--ease-out)}
 .scrim.on{opacity:1;pointer-events:auto}
 .palette{position:fixed;z-index:var(--z-palette);top:12vh;left:50%;
-  width:min(40rem,calc(100vw - var(--sp-8)));transform:translate(-50%,-6px) scale(.99);
+  width:min(40rem,calc(100vw - var(--sp-8)));
+  transform:translate(-50%,-4px) scale(.98);
   opacity:0;pointer-events:none;
   border:var(--border);border-radius:var(--r-lg);background:var(--surface);
   box-shadow:var(--shadow-3);overflow:hidden;
-  transition:opacity var(--dur-3) var(--ease-out),transform var(--dur-3) var(--ease-emphatic)}
+  transition:opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out)}
 .palette.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+
+/* Without this the palette and the scrim only ever animated shut. They open
+   from `hidden`, and a transition cannot start on an element that was not
+   rendered a frame ago, so the entrance was a pop and the exit a fade.
+   @starting-style supplies the frame that was missing, and allow-discrete
+   lets `display` hold on through the exit instead of snapping. site.js keeps
+   its own timed hide, which is what a browser without either feature falls
+   back to -- today's behaviour exactly. */
+@supports (transition-behavior:allow-discrete){
+  .scrim{transition:opacity var(--dur-2) var(--ease-out),
+    display var(--dur-2) allow-discrete}
+  .palette{transition:opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out),
+    display var(--dur-2) allow-discrete}
+  @starting-style{
+    .scrim.on{opacity:0}
+    .palette.on{opacity:0;transform:translate(-50%,-4px) scale(.98)}
+  }
+}
 .palette input,.field{width:100%;padding:var(--sp-4) var(--sp-5);
   border:0;border-bottom:var(--border-hair);background:transparent;
   color:var(--strong);font:inherit;font-size:var(--fs-600)}
@@ -548,12 +619,18 @@ table.data tbody tr:hover{background:var(--raise)}
    with its own idea of how far "up" is. site.js adds .is-in; the no-JS and
    reduced-motion cases are handled by the two guards below, which is why the
    initial state is never applied unless JS is present to undo it. */
-.js [data-reveal]{opacity:0;transform:translateY(var(--reveal-y));
+/* The rise is joined by a slight scale and a 2px defocus, which is what makes
+   an arriving block read as coming into focus rather than sliding. --reveal-y
+   and --reveal-step are untouched, so every element on the site still travels
+   the same distance on the same beat as before. */
+.js [data-reveal]{opacity:0;transform:translateY(var(--reveal-y)) scale(.985);
+  filter:blur(2px);
   transition:opacity var(--dur-4) var(--ease-out),
-    transform var(--dur-4) var(--ease-out)}
-.js [data-reveal].is-in{opacity:1;transform:none}
+    transform var(--dur-4) var(--ease-out),
+    filter var(--dur-4) var(--ease-out)}
+.js [data-reveal].is-in{opacity:1;transform:none;filter:none}
 @media (prefers-reduced-motion:reduce){
-  .js [data-reveal]{opacity:1;transform:none;transition:none}
+  .js [data-reveal]{opacity:1;transform:none;filter:none;transition:none}
 }
 
 /* --------------------------------------------------- heading anchors ----- */
@@ -580,10 +657,7 @@ a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
   border-top:var(--border-hair)}
 .pager a{display:flex;flex-direction:column;gap:var(--sp-1);
   padding:var(--sp-4) var(--sp-5);border:var(--border);border-radius:var(--r-md);
-  background:var(--card);text-decoration:none;
-  transition:border-color var(--dur-2) var(--ease-out),
-    background var(--dur-2) var(--ease-out)}
-.pager a:hover{border-color:var(--accent-line);background:var(--raise)}
+  background:var(--card);text-decoration:none}
 .pager .dir{font-size:var(--fs-100);text-transform:uppercase;
   letter-spacing:var(--tr-caps);color:var(--faint)}
 .pager .to{color:var(--strong);font-weight:var(--fw-medium)}
@@ -692,7 +766,8 @@ a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
   .topbar,.side,.docs-side,.toc-rail,.skip,.navtoggle,.pager,.footer-bar,
   .copy,.palette,.scrim,.search-btn,[data-theme-toggle]{display:none !important}
   /* Never print a blank block because an animation had not run yet. */
-  .js [data-reveal]{opacity:1 !important;transform:none !important}
+  .js [data-reveal]{opacity:1 !important;transform:none !important;
+    filter:none !important}
   .defer-paint{content-visibility:visible !important}
   .app,.mid{display:block}
   :root{--ground:#fff;--surface:#fff;--card:#fff;--ink:#111;--strong:#000;
