@@ -104,6 +104,71 @@ def build_graph() -> Path | None:
     return out
 
 
+# Guides live in docs/ rather than under web/, deliberately: they are read
+# directly on GitHub and release/*/FLASH.md links into them by path. The build
+# treats that directory as another source tree instead of moving them.
+DOCS = ROOT / "docs"
+
+
+def build_docs() -> list[Path]:
+    """Render docs/*.md into dist/docs/ with a sidebar and an index."""
+    if not DOCS.is_dir():
+        print("build: no docs/ directory, skipping the guides")
+        return []
+    sys.path.insert(0, str(WEB / "site"))
+    import markdown                                            # noqa: PLC0415
+
+    pages = sorted(DOCS.glob("*.md"))
+    if not pages:
+        return []
+    out_dir = DIST / "docs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tpl = (WEB / "site" / "docs.tpl.html").read_text()
+
+    def title_of(md: Path) -> str:
+        for line in md.read_text().splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+        return md.stem.replace("-", " ")
+
+    titles = {md: title_of(md) for md in pages}
+
+    def tree_for(current: str) -> str:
+        here = ' class="on"' if not current else ""
+        rows = [f'<a href="index.html"{here}>All guides</a>']
+        for md in pages:
+            on = ' class="on"' if md.stem == current else ""
+            rows.append(f'<a href="{md.stem}.html"{on}>{titles[md]}</a>')
+        return "".join(rows)
+
+    written = []
+    for md in pages:
+        body, _toc = markdown.render(md.read_text())
+        page = (tpl.replace("@@TITLE@@", titles[md])
+                   .replace("@@SLUG@@", md.stem)
+                   .replace("@@TREE@@", tree_for(md.stem))
+                   .replace("@@BODY@@", body))
+        dest = out_dir / f"{md.stem}.html"
+        dest.write_text(page, encoding="utf-8")
+        written.append(dest)
+
+    cards = "".join(
+        f'<li><a href="{md.stem}.html"><span class="row-name">{titles[md]}</span>'
+        f'<span class="row-desc">{md.stem}</span></a></li>' for md in pages)
+    index = (tpl.replace("@@TITLE@@", "Guides")
+                .replace("@@SLUG@@", "index")
+                .replace("@@TREE@@", tree_for(""))
+                .replace("@@BODY@@",
+                         "<h1>Guides</h1><p>Bring-up, porting and bench notes "
+                         "for the boards this firmware runs on.</p>"
+                         '<ul class="rows mono">' + cards + "</ul>"))
+    dest = out_dir / "index.html"
+    dest.write_text(index, encoding="utf-8")
+    written.append(dest)
+    print(f"build: {len(pages)} guide(s) -> docs/")
+    return written
+
+
 def copy_trees() -> list[Path]:
     written: list[Path] = []
     for src, rel in TREES.items():
@@ -112,7 +177,8 @@ def copy_trees() -> list[Path]:
         for path in sorted(src.rglob("*")):
             if not path.is_file() or path.suffix in NOT_PUBLISHED:
                 continue
-            if path.name.startswith("_ref-"):
+            # Build inputs that live beside the pages they produce.
+            if path.name.startswith("_ref-") or path.name.endswith(".tpl.html"):
                 continue
             out = DIST / rel / path.relative_to(src)
             out.parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +228,7 @@ def main() -> int:
     clean()
     have_twin = build_twin_wasm()
     written = copy_trees()
+    written += build_docs()
     graph_page = build_graph()
     if graph_page:
         written.append(graph_page)
