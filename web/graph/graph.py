@@ -326,16 +326,7 @@ document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="topbar">
-  <a class="wordmark" href="../index.html">UltraWideLock</a>
-  <div class="spacer"></div>
-  <nav class="navlinks">
-    <a class="navlink" href="../twin/index.html">Twin</a>
-    <a class="navlink" href="../flash/index.html">Flash</a>
-    <a class="navlink" href="https://github.com/ultrawidelock/ultrawidelock">Source</a>
-  </nav>
-  <button class="icon-btn" data-theme-toggle aria-pressed="false" title="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
-</header>
+@@NAV@@
 <main id="main" class="page">
   <div class="section-h"><h2>Subsystem graph</h2><span class="rule"></span></div>
   <p class="lede">{count} subsystems and {edges} dependencies, read out of the source
@@ -343,10 +334,10 @@ document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   {overview}
   <div class="shell" id="shell">
     <div class="tools">
-      <button type="button" data-z="out">&#8722;</button>
-      <button type="button" data-z="fit">Fit</button>
-      <button type="button" data-z="in">+</button>
-      <button type="button" data-z="full">&#10530;</button>
+      <button type="button" data-z="out" aria-label="Zoom out">&#8722;</button>
+      <button type="button" data-z="fit" aria-label="Fit the graph to the frame">Fit</button>
+      <button type="button" data-z="in" aria-label="Zoom in">+</button>
+      <button type="button" data-z="full" aria-label="Toggle full screen">&#10530;</button>
     </div>
     <div class="pan" id="pan">{svg}</div>
   </div>
@@ -358,7 +349,7 @@ document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   because they reference everything and hide the layering. Line weight is the number of
   references; hover a node or a line for detail. Built from <code>{commit}</code>.</small></p>
 </main>
-<script src="../assets/design/theme-toggle.js"></script>
+@@FOOTER@@
 <script>
 (function(){
   var shell=document.getElementById('shell'),pan=document.getElementById('pan'),

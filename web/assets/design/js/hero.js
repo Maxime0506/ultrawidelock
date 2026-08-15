@@ -53,16 +53,24 @@
   var RELAY_ADD_M = 1.20;
 
   /* ---- geometry -------------------------------------------------------- */
-  var LOCK_X = 84, MIN_X = 196, MAX_X = 636;
+  /* The lock is the origin of the scale, because the lock is what the
+     distance is measured from. The ruler in the SVG is drawn to these exact
+     numbers: 0 m at x=84, 3 m at x=648, so 188 user units per metre and a
+     tick every half metre. Change one and change the other. */
+  var LOCK_X = 96, MAX_X = 888;
   var MIN_M = 0.10, MAX_M = 3.00;
+  var PX_PER_M = (MAX_X - LOCK_X) / MAX_M;          /* 264 */
+  var MIN_X = LOCK_X + MIN_M * PX_PER_M;            /* 122.4 */
 
   var el = {
     phone: document.getElementById("hs-phone"),
     rail: document.getElementById("hs-rail"),
     dim: document.getElementById("hs-dim"),
     dimTick: document.getElementById("hs-dim-tick"),
+    dimCap: document.getElementById("hs-dim-cap"),
     relay: document.getElementById("hs-relay"),
     lanes: document.getElementById("hs-lanes"),
+    laneLines: document.querySelectorAll(".hs-lane-line"),
     metres: document.getElementById("hs-m"),
     ticks: document.getElementById("hs-ticks"),
     nanos: document.getElementById("hs-ns"),
@@ -74,12 +82,8 @@
 
   var relayOn = false;
 
-  function xToM(x) {
-    return MIN_M + (x - MIN_X) / (MAX_X - MIN_X) * (MAX_M - MIN_M);
-  }
-  function mToX(m) {
-    return MIN_X + (m - MIN_M) / (MAX_M - MIN_M) * (MAX_X - MIN_X);
-  }
+  function xToM(x) { return (x - LOCK_X) / PX_PER_M; }
+  function mToX(m) { return LOCK_X + m * PX_PER_M; }
   function fmt(n, dp) { return n.toFixed(dp); }
 
   /* ---- render ---------------------------------------------------------- */
@@ -97,9 +101,16 @@
     var seenX = Math.min(mToX(seenM), MAX_X + 46);
     el.dim.setAttribute("x2", seenX.toFixed(1));
     el.dimTick.setAttribute("transform", "translate(" + seenX.toFixed(1) + ",0)");
+    el.dimCap.setAttribute("x", ((LOCK_X + seenX) / 2).toFixed(1));
+    el.dimCap.textContent = fmt(seenM, 2) + " m";
 
     /* Pulses travel the real gap, so the animation is the geometry. */
     el.lanes.style.setProperty("--travel", (x - LOCK_X).toFixed(1) + "px");
+    /* The lanes end where the phone is. Drawn to a fixed width they implied
+       the exchange continued past the device it was talking to. */
+    for (var i = 0; i < el.laneLines.length; i++) {
+      el.laneLines[i].setAttribute("x2", x.toFixed(1));
+    }
 
     if (el.relay) {
       el.relay.style.display = relayOn ? "" : "none";
@@ -110,7 +121,7 @@
     }
 
     var ticks = Math.round(seenM * 1000 / MM_PER_TICK);
-    var ns = seenM / FW.C_M_S * 1e9;
+    var ns = seenM / C_M_S * 1e9;
 
     el.metres.textContent = fmt(seenM, 2);
     el.ticks.textContent = ticks.toLocaleString("en");

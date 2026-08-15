@@ -1,0 +1,80 @@
+/* ============================================================================
+   UltraWideLock — docs.css
+   The rendered guides. Requires the tokens and components.css, which already
+   own .app, .side, .tree, .doclink, .mid, .toc-rail, .palette and .res.
+   ========================================================================= */
+
+.docs-app{display:grid;grid-template-columns:var(--side) minmax(0,1fr);
+  min-height:100vh}
+.docs-side{position:sticky;top:0;align-self:start;height:100vh;
+  display:flex;flex-direction:column;
+  background:var(--surface);border-right:var(--border-hair)}
+.docs-main{min-width:0;display:flex;flex-direction:column}
+
+/* The crumb bar sits under the topbar and above the article, carrying the
+   position the sidebar cannot show once it has scrolled. */
+.docs-crumb{display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-3) var(--sp-8);border-bottom:var(--border-hair);
+  font-family:var(--font-mono);font-size:var(--fs-200);color:var(--muted)}
+.docs-crumb a{color:var(--muted);text-decoration:none}
+.docs-crumb a:hover{color:var(--accent-ink)}
+.docs-crumb .sep{color:var(--line-strong)}
+.docs-crumb b{color:var(--strong);font-weight:var(--fw-medium)}
+
+.docs-mid{display:grid;
+  grid-template-columns:minmax(0,var(--measure)) var(--toc);
+  column-gap:var(--sp-12);
+  padding:var(--sp-8) var(--sp-8) var(--sp-20);
+  margin:0 auto;width:100%;
+  max-width:calc(var(--measure) + var(--toc) + var(--sp-12) + var(--sp-16))}
+
+/* ------------------------------------------------------------- sidebar --- */
+.side-head{display:flex;flex-direction:column;gap:var(--sp-3);
+  padding:var(--sp-4);border-bottom:var(--border-hair)}
+.side-toggle{display:none}
+.tree{flex:1;overflow-y:auto;padding:var(--sp-3) var(--sp-3) var(--sp-10);
+  display:flex;flex-direction:column;gap:1px;
+  scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.tree .doclink{padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);
+  line-height:var(--lh-snug)}
+
+/* ----------------------------------------------------------- toc levels -- */
+.toc-link{display:block}
+.toc-link.lv3{padding-left:var(--sp-3);font-size:var(--fs-200);
+  color:var(--faint)}
+.toc-link.lv3:hover{color:var(--muted)}
+.toc-link.on{color:var(--accent-ink);font-weight:var(--fw-medium)}
+
+/* ---------------------------------------------------------------- prose -- */
+/* markdown.py emits bare h1..h6, p, ul/ol, tables in .tablewrap, fenced
+   blocks in .prewrap and blockquotes as .callout-note. .doc in components.css
+   styles all of those; only the guide-specific bits are here. */
+.doc{min-width:0;max-width:var(--measure)}
+.doc > .eyebrow:first-child{margin-top:0}
+.doc h2{scroll-margin-top:calc(var(--topbar-h) + var(--sp-6))}
+.doc h3{scroll-margin-top:calc(var(--topbar-h) + var(--sp-6))}
+.doc img{border:var(--border);border-radius:var(--r-md)}
+.doc blockquote{margin:0 0 var(--sp-5);padding-left:var(--sp-5);
+  border-left:var(--bw-rule) solid var(--line-strong);color:var(--muted)}
+/* Guides are dense with two- and three-column tables of pins and registers.
+   Numbers line up or they are not comparable. */
+.doc td,.doc th{font-variant-numeric:tabular-nums}
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width:64rem){
+  .docs-app{grid-template-columns:minmax(0,1fr)}
+  .docs-side{position:static;height:auto;border-right:0;
+    border-bottom:var(--border-hair)}
+  .side-toggle{display:inline-flex;width:100%;justify-content:space-between}
+  /* Collapsed by default on a phone: the reader came for the article, not
+     for an eighteen-item index above it. The old rule hid the sidebar
+     outright below this width, which left no way to reach another guide. */
+  .tree{max-height:0;overflow:hidden;padding-top:0;padding-bottom:0;
+    transition:max-height var(--dur-3) var(--ease-out)}
+  .tree.on{max-height:70vh;overflow-y:auto;
+    padding-top:var(--sp-3);padding-bottom:var(--sp-6)}
+  .docs-mid{grid-template-columns:minmax(0,1fr);
+    padding:var(--sp-6) var(--sp-5) var(--sp-16)}
+  .toc-rail{display:none}
+  .docs-crumb{padding:var(--sp-3) var(--sp-5)}
+}

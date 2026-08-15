@@ -52,9 +52,12 @@
    viewport, so below --bp-nav the links become a sheet under the bar and
    .navtoggle opens it. The toggle is display:none on wide screens, which is
    also what keeps it out of the tab order there. */
-.navtoggle{display:none}
+/* Both selectors carry .icon-btn deliberately: the plain `.navtoggle` loses to
+   `.icon-btn{display:inline-grid}` further down this file on source order, and
+   the toggle then shows at every width. */
+.icon-btn.navtoggle{display:none}
 @media (max-width:52rem){
-  .navtoggle{display:inline-grid}
+  .icon-btn.navtoggle{display:inline-grid}
   .topbar .navlinks{
     position:absolute;top:100%;left:0;right:0;
     flex-direction:column;align-items:stretch;gap:0;
@@ -603,6 +606,10 @@ a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
   line-height:var(--lh-normal)}
 .figcap b{color:var(--muted);font-weight:var(--fw-medium)}
 
+/* Secondary text that a narrow screen has no room for. Hidden, not shrunk:
+   nothing marked with this is the only way to learn something. */
+@media (max-width:52rem){.hide-narrow{display:none}}
+
 /* -------------------------------------------------------- performance ---- */
 /* Below-fold sections skip layout and paint until they approach the viewport.
    contain-intrinsic-size keeps the scrollbar honest before they are rendered;
@@ -625,8 +632,11 @@ a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
 
 /* ------------------------------------------------------------- print ----- */
 @media print{
-  .topbar,.side,.toc-rail,.skip,.navtoggle,.pager,.footer-bar,
+  .topbar,.side,.docs-side,.toc-rail,.skip,.navtoggle,.pager,.footer-bar,
   .copy,.palette,.scrim,.search-btn,[data-theme-toggle]{display:none !important}
+  /* Never print a blank block because an animation had not run yet. */
+  .js [data-reveal]{opacity:1 !important;transform:none !important}
+  .defer-paint{content-visibility:visible !important}
   .app,.mid{display:block}
   :root{--ground:#fff;--surface:#fff;--card:#fff;--ink:#111;--strong:#000;
     --muted:#333;--faint:#555;--line:#bbb;--hairline:#ddd}

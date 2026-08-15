@@ -1,70 +1,49 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>@@TITLE@@ — UltraWideLock</title>
-<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<link rel="stylesheet" href="../assets/design/styles.css">
-<style>
-  .app{display:grid;grid-template-columns:16rem minmax(0,1fr);min-height:100vh}
-  .side{border-right:1px solid var(--line);background:var(--surface);
-    padding:var(--sp-4) 0;position:sticky;top:0;height:100vh;overflow-y:auto}
-  .side-head{padding:0 var(--sp-4) var(--sp-3);border-bottom:1px solid var(--hairline);
-    margin-bottom:var(--sp-3)}
-  .tree a{display:block;padding:.32rem var(--sp-4);color:var(--muted);
-    font-size:var(--fs-300);text-decoration:none;border-left:2px solid transparent}
-  .tree a:hover{color:var(--strong);background:var(--raise)}
-  .tree a.on{color:var(--accent-ink);border-left-color:var(--accent);
-    background:var(--accent-tint)}
-  .content{min-width:0}
-  .doc{max-width:52rem;padding:var(--sp-6) var(--sp-8) var(--sp-16)}
-  .doc h1{font-size:var(--fs-900);color:var(--strong);margin:0 0 var(--sp-5)}
-  .doc h2{font-size:var(--fs-800);color:var(--strong);margin:var(--sp-10) 0 var(--sp-3);
-    padding-bottom:var(--sp-2);border-bottom:1px solid var(--hairline)}
-  .doc h3{font-size:var(--fs-700);color:var(--strong);margin:var(--sp-8) 0 var(--sp-2)}
-  .doc h4,.doc h5,.doc h6{font-size:var(--fs-600);color:var(--strong);
-    margin:var(--sp-6) 0 var(--sp-2)}
-  .doc p{margin:var(--sp-3) 0;line-height:1.75}
-  .doc li{margin:.3rem 0;line-height:1.7}
-  .doc a{color:var(--accent-ink)}
-  .doc a:hover{color:var(--accent-hover)}
-  .doc code{background:var(--raise);border-radius:var(--r-xs);padding:.1em .36em;
-    font-family:var(--font-mono);font-size:.88em;color:var(--strong)}
-  .doc .prewrap code{background:none;padding:0;font-size:var(--fs-300)}
-  .doc table{font-size:var(--fs-300)}
-  .crumb{display:flex;gap:.5rem;align-items:center;padding:var(--sp-3) var(--sp-8);
-    border-bottom:1px solid var(--hairline);font-size:var(--fs-200);color:var(--muted);
-    font-family:var(--font-mono)}
-  .crumb a{color:var(--muted);text-decoration:none}
-  .crumb a:hover{color:var(--accent-ink)}
-  @media (max-width:56rem){
-    .app{grid-template-columns:1fr}
-    .side{position:static;height:auto;border-right:0;
-      border-bottom:1px solid var(--line)}
-    .doc{padding:var(--sp-5) var(--sp-4) var(--sp-12)}
-  }
-</style>
+@@HEAD@@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="app">
-<aside class="side">
+<div class="docs-app">
+
+<aside class="docs-side">
   <div class="side-head">
-    <a class="wordmark" href="../index.html">UltraWideLock</a>
+    <a class="brand" href="../index.html"><b>UltraWideLock</b><span class="tag">v0.3.0</span></a>
+    <button class="search-btn" type="button" data-search-open aria-haspopup="dialog">
+      Search the guides <kbd>/</kbd></button>
+    <button class="btn btn-sm side-toggle" type="button" data-side-toggle
+            aria-expanded="false" aria-controls="tree">Guides<span aria-hidden="true">&#9662;</span></button>
   </div>
-  <nav class="tree" aria-label="Documentation">@@TREE@@</nav>
+  <nav class="tree" id="tree" aria-label="Guides">@@TREE@@</nav>
 </aside>
-<div class="content">
-  <nav class="crumb" aria-label="Breadcrumb">
-    <a href="../index.html">home</a><span>/</span>
-    <a href="index.html">docs</a><span>/</span><span>@@SLUG@@</span>
-  </nav>
-  <article class="doc" id="main">
+
+<div class="docs-main">
+@@NAV@@
+  <nav class="docs-crumb" aria-label="Breadcrumb">@@CRUMB@@</nav>
+  <div class="docs-mid">
+    <article class="doc" id="main">
 @@BODY@@
-  </article>
+@@PAGER@@
+    </article>
+@@TOC@@
+  </div>
+@@FOOTER@@
 </div>
 </div>
-<script src="../assets/design/theme-toggle.js"></script>
+
+<div class="scrim" data-palette-scrim hidden></div>
+<div class="palette" id="palette" role="dialog" aria-modal="true"
+     aria-label="Search the guides" data-index="search.json" hidden>
+  <input type="search" id="pal-q" placeholder="Search guides and sections&hellip;"
+         autocomplete="off" autocorrect="off" spellcheck="false"
+         aria-label="Search the guides">
+  <div class="results" id="pal-results" role="listbox" aria-label="Results"></div>
+  <div class="pal-foot">
+    <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> move</span>
+    <span><kbd>&crarr;</kbd> open</span>
+    <span><kbd>esc</kbd> close</span>
+  </div>
+</div>
 </body>
 </html>

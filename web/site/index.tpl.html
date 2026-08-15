@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+@@HEAD@@
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+@@NAV@@
+
+<main id="main">
+
+<!-- ==================================================================== hero
+     The page opens with the measurement, not a description of it. Everything
+     in the scope is computed from the firmware's own constants by hero.js,
+     which is why the tick count and the bound are worth reading. -->
+<section class="hero">
+  <div class="hero-copy">
+    <div>
+      <span class="eyebrow">UWB &middot; NFC &middot; Matter</span>
+      <h1>A lock that measures the distance instead of trusting it.</h1>
+    </div>
+    <p class="lede">UltraWideLock implements Aliro, the CSA's door-lock credential
+    standard: BLE, NFC over ECP, and UWB ranging. Distance comes from time of flight
+    under a rotating STS session, so a relay cannot shorten it. One nRF52833 runs the
+    reader, the radio and a Matter node at once.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#install">Get started</a>
+      <a class="btn" href="docs/index.html">Read the guides</a>
+      <a class="btn" href="twin/index.html">Open the digital twin</a>
+    </div>
+  </div>
+
+  <div class="scope-band">
+    <div class="scope-in">
+      <div class="scope-head">
+        <span>DS-TWR round</span><span class="sp"></span>
+        <span class="hide-narrow">drag the phone &middot; or use the slider</span>
+      </div>
+
+      <div class="scope-frame">
+      <svg id="hero-scope" viewBox="0 0 960 268" data-state="grant"
+           role="img" aria-labelledby="hs-t hs-d">
+        <title id="hs-t">A double-sided two-way ranging round</title>
+        <desc id="hs-d">A lock on the left and a phone on a distance scale, with
+        the three ranging messages below: poll from the lock, response from the
+        phone, and final from the lock. The measured distance, its tick count and
+        the unlock decision are given as text beneath the diagram.</desc>
+
+        <!-- ruler -->
+        <g class="hs-rule-g">
+          <line class="hs-rule" x1="96" y1="46" x2="888" y2="46"/>
+          <g class="hs-tick">
+            <line x1="96"  y1="36" x2="96"  y2="46"/>
+            <line x1="228" y1="41" x2="228" y2="46"/>
+            <line x1="360" y1="36" x2="360" y2="46"/>
+            <line x1="492" y1="41" x2="492" y2="46"/>
+            <line x1="624" y1="36" x2="624" y2="46"/>
+            <line x1="756" y1="41" x2="756" y2="46"/>
+            <line x1="888" y1="36" x2="888" y2="46"/>
+          </g>
+          <text class="hs-num" x="96"  y="28" text-anchor="middle">0</text>
+          <text class="hs-num" x="360" y="28" text-anchor="middle">1</text>
+          <text class="hs-num" x="624" y="28" text-anchor="middle">2</text>
+          <text class="hs-num" x="888" y="28" text-anchor="middle">3 m</text>
+        </g>
+
+        <!-- the decision, drawn as a decision rather than a gridline -->
+        <g class="hs-bound">
+          <line x1="360" y1="36" x2="360" y2="136"/>
+          <text x="368" y="60">unlock bound &middot; 1.00 m</text>
+        </g>
+
+        <!-- lock -->
+        <g class="hs-lock">
+          <rect class="body" x="84" y="68" width="24" height="36" rx="3"/>
+          <rect x="92" y="75" width="8" height="8" rx="2"/>
+          <text class="hs-cap" x="96" y="120" text-anchor="middle">lock</text>
+        </g>
+
+        <!-- phone, moved by hero.js -->
+        <g id="hs-phone" class="hs-phone">
+          <rect class="body" x="-9" y="72" width="18" height="28" rx="4"/>
+          <rect class="screen" x="-6" y="76" width="12" height="17" rx="2"/>
+          <text class="hs-cap" x="0" y="120" text-anchor="middle">phone</text>
+        </g>
+
+        <!-- a relay, only while armed -->
+        <g id="hs-relay" class="hs-relay" style="display:none">
+          <circle cx="0" cy="86" r="9"/>
+          <text x="0" y="64" text-anchor="middle">relay</text>
+        </g>
+
+        <!-- what the lock believes it measured -->
+        <line class="hs-dim" id="hs-dim" x1="96" y1="136" x2="312" y2="136"/>
+        <g id="hs-dim-tick"><line class="hs-dim" x1="0" y1="130" x2="0" y2="142"/></g>
+        <line class="hs-dim" x1="96" y1="130" x2="96" y2="142"/>
+        <text class="hs-dim-cap" id="hs-dim-cap" x="204" y="158"
+              text-anchor="middle">0.82 m</text>
+
+        <!-- ---------------- the protocol ---------------- -->
+        <line class="hs-rule" x1="0" y1="166" x2="960" y2="166" opacity=".5"/>
+        <g id="hs-lanes">
+          <line class="hs-rail" x1="96" y1="176" x2="96" y2="256"/>
+          <g id="hs-rail"><line class="hs-rail" x1="0" y1="176" x2="0" y2="256"/></g>
+
+          <text class="hs-lane-cap" x="88" y="191" text-anchor="end">poll</text>
+          <line class="hs-lane-line" x1="96" y1="188" x2="888" y2="188"/>
+          <g class="hs-p1"><rect class="hs-pulse" x="92" y="186" width="14" height="4" rx="2"/></g>
+
+          <text class="hs-lane-cap" x="88" y="221" text-anchor="end">response</text>
+          <line class="hs-lane-line" x1="96" y1="218" x2="888" y2="218"/>
+          <g class="hs-p2"><rect class="hs-pulse" x="92" y="216" width="14" height="4" rx="2"/></g>
+
+          <text class="hs-lane-cap" x="88" y="251" text-anchor="end">final</text>
+          <line class="hs-lane-line" x1="96" y1="248" x2="888" y2="248"/>
+          <g class="hs-p3"><rect class="hs-pulse" x="92" y="246" width="14" height="4" rx="2"/></g>
+        </g>
+
+        <rect id="hs-hit" x="0" y="0" width="960" height="268" fill="transparent"/>
+      </svg>
+      </div>
+
+      <div class="scope-ctl">
+        <label for="hs-range">Distance</label>
+        <input type="range" id="hs-range" min="122" max="888" step="1" value="312"
+               aria-label="Distance from the lock to the phone">
+        <button type="button" class="btn btn-sm" id="hs-relay-btn"
+                aria-pressed="false">Arm a relay</button>
+        <div class="scope-read">
+          <span class="r"><span class="k">measured</span>
+            <span class="v"><span id="hs-m">0.82</span><small>m</small></span></span>
+          <span class="r"><span class="k">ticks</span>
+            <span class="v"><span id="hs-ticks">154</span></span></span>
+          <span class="r"><span class="k">time of flight</span>
+            <span class="v"><span id="hs-ns">2.73</span><small>ns</small></span></span>
+          <span class="scope-verdict" id="hs-verdict" aria-live="polite">unlock</span>
+        </div>
+      </div>
+      <p class="scope-note" id="hs-true" hidden></p>
+      <p class="scope-foot">One timestamp tick is 15.65&nbsp;ps, which light crosses in
+      <b>4.692&nbsp;mm</b>. The bound is <code>ULTRAWIDELOCK_UNLOCK_RANGE_CM</code>.
+      A relay can add delay and nothing else, which is why arming one moves the
+      measurement away from the door rather than toward it.</p>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="stat-b"><b>4.692 mm</b><span>per ranging tick</span></div>
+    <div class="stat-b"><b>7,375</b><span>host tests, no hardware</span></div>
+    <div class="stat-b"><b>0</b><span>cloud dependencies</span></div>
+  </div>
+</section>
+
+<!-- ================================================================= install -->
+<section class="page railed defer-paint" id="install" style="padding-top:var(--sp-16)">
+  <div class="section-h"><span class="n">01</span><h2>Install</h2><span class="rule"></span></div>
+  <p class="lede" style="margin-bottom:var(--sp-6)" data-reveal="0">A C compiler and
+  <code>python3</code> run the whole host suite. Nothing phones home.</p>
+
+  <div class="prewrap" data-reveal="1">
+    <div class="cap"><span>shell</span><span style="margin-left:auto">no hardware</span></div>
+<pre><code>git clone <span class="tok-string">https://github.com/ultrawidelock/ultrawidelock.git</span>
+<span class="tok-func">cd</span> ultrawidelock
+make check                  <span class="tok-comment"># 7 suites, about 2 minutes</span></code></pre>
+  </div>
+
+  <p data-reveal="2">With a Qorvo DWM3001CDK plugged in, five commands take you from
+  clone to a lock on the bench:</p>
+  <div class="prewrap" data-reveal="3">
+    <div class="cap"><span>shell</span><span style="margin-left:auto">DWM3001CDK</span></div>
+<pre><code>make dfu-key                <span class="tok-comment"># once per clone   · image-signing key</span>
+make bootstrap              <span class="tok-comment"># once per machine · NCS v3.3.0</span>
+make build                  <span class="tok-comment"># -&gt; build/cdk-matter</span>
+make flash                  <span class="tok-comment"># over the on-board J-Link</span>
+make monitor                <span class="tok-comment"># console, over RTT</span></code></pre>
+  </div>
+  <p data-reveal="4">No board on hand? The <a href="flash/index.html">web flasher</a>
+  writes a prebuilt ESP32 image over WebSerial, straight from the browser.</p>
+</section>
+
+<!-- ============================================================ how it opens -->
+<section class="page railed defer-paint" style="padding-top:var(--sp-12)">
+  <div class="section-h"><span class="n">02</span><h2>How a door opens</h2><span class="rule"></span></div>
+  <p class="lede" style="margin-bottom:var(--sp-6)" data-reveal="0">Five steps, in the
+  order they happen. The bolt moves on the last one.</p>
+  <ol class="ladder" data-reveal="1">
+    <li><span class="n">1</span><span class="what">BLE</span>
+      <span class="how">the phone finds the credential service <code>0xFFF2</code></span></li>
+    <li><span class="n">2</span><span class="what">auth</span>
+      <span class="how">AUTH0, AUTH1, EXCHANGE — both ends now hold the URSK</span></li>
+    <li><span class="n">3</span><span class="what">UWB</span>
+      <span class="how">key ladder to STS, then the DS-TWR round above</span></li>
+    <li><span class="n">4</span><span class="what">gate</span>
+      <span class="how">range consistency agrees, and the bolt moves</span></li>
+    <li><span class="n">5</span><span class="what">Matter</span>
+      <span class="how">lock state over Thread, into Apple Home</span></li>
+  </ol>
+  <div class="callout callout-note" data-reveal="2"><span class="ico">note</span><div>
+    <p>Local only. No app, no account, no cloud round trip. The credential is verified
+    on the lock itself, so there is no remote verifier to compromise.</p>
+  </div></div>
+</section>
+
+<!-- ================================================================== budget -->
+<section class="page railed defer-paint" style="padding-top:var(--sp-16)">
+  <div class="section-h"><span class="n">03</span><h2>All of it on one nRF52833</h2><span class="rule"></span></div>
+  <div class="split">
+    <div data-reveal="0">
+      <p>512&nbsp;KB of flash and 128&nbsp;KB of RAM carry the reader, the DW3110 radio,
+      an OpenThread MTD and a hand-written Matter node at the same time. The Matter node
+      is written by hand rather than built on CHIP, which is what makes it fit.</p>
+      <ul class="rows mono">
+        <li><span class="rowline"><span class="row-name">reader</span><span class="row-desc">AUTH0 / AUTH1 / EXCHANGE, key ladder, STS, DS-TWR</span></span></li>
+        <li><span class="rowline"><span class="row-name">matter</span><span class="row-desc">hand-written node, not CHIP</span></span></li>
+        <li><span class="rowline"><span class="row-name">thread</span><span class="row-desc">OpenThread MTD, joins a real network</span></span></li>
+        <li><span class="rowline"><span class="row-name">classifier</span><span class="row-desc">line-of-sight vs obstructed, 776 B of flash</span></span></li>
+      </ul>
+    </div>
+    <div data-reveal="1">
+      <div class="meter">
+        <div class="meter-h"><span class="meter-k">Flash</span>
+          <span class="meter-pct">87.5%</span>
+          <span class="meter-v">379,332 / 433,664 B</span></div>
+        <div class="meter-track"><span class="meter-fill tight" style="width:87.5%"></span></div>
+      </div>
+      <div class="meter">
+        <div class="meter-h"><span class="meter-k">RAM</span>
+          <span class="meter-pct">84.7%</span>
+          <span class="meter-v">111,012 / 131,072 B</span></div>
+        <div class="meter-track"><span class="meter-fill tight" style="width:84.7%"></span></div>
+      </div>
+      <p class="meter-note">Both bars are amber because both are tight. That is the
+      point of the number, not a warning about it.</p>
+      <div class="tablewrap" style="margin-top:var(--sp-6)">
+        <table class="data">
+          <tbody>
+            <tr><th>Toolchain</th><td>NCS v3.3.0, Zephyr 4.3.99</td></tr>
+            <tr><th>Signing</th><td>ECDSA-P256, verified by MCUboot</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout-warn"><span class="ico">warn</span><div>
+        <p>Repository defaults are bench defaults. Keys and identities in the tree are
+        for development. Do not secure valuables with it.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== classifier -->
+<section class="page railed defer-paint" style="padding-top:var(--sp-16)">
+  <div class="section-h"><span class="n">04</span><h2>Is the door in the way?</h2><span class="rule"></span></div>
+  <div class="split">
+    <div data-reveal="0">
+      <p>Distance alone cannot tell a phone in your hand from a phone through a wall.
+      Both can measure one metre. What separates them is the <em>shape</em> of the
+      arrival: a direct path lands as one sharp edge, while a path through a door
+      arrives late, spread and weaker.</p>
+      <p>A decision tree reads the DW3000's own receive diagnostics and answers, in
+      776 bytes of flash with no interpreter and no allocation.</p>
+      <div class="tablewrap">
+        <table class="data">
+          <tbody>
+            <tr><th>Model</th><td>depth-2 decision tree, generated by emlearn</td></tr>
+            <tr><th>Cost</th><td>776 B flash, 0 B RAM, 28 B stack</td></tr>
+            <tr><th>Input</th><td>five CIA registers plus the measured range</td></tr>
+            <tr><th>Gate</th><td>the host suite certifies the C matches the trained model</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <figure class="figure" data-reveal="1">
+      <svg viewBox="0 0 420 210" role="img" aria-labelledby="cir-t cir-d">
+        <title id="cir-t">Two channel impulse responses compared</title>
+        <desc id="cir-d">A direct path arrives as a single narrow peak at the leading
+        edge. An obstructed path arrives later, lower and spread across several
+        samples, which is what the classifier reads.</desc>
+        <line x1="30" y1="170" x2="404" y2="170" stroke="var(--scope-axis)" stroke-width="1"/>
+        <line x1="30" y1="20" x2="30" y2="170" stroke="var(--scope-axis)" stroke-width="1"/>
+        <text x="30" y="192" fill="var(--faint)" font-family="var(--font-mono)"
+              font-size="10" letter-spacing=".07em">TIME &#8594;</text>
+        <text x="8" y="26" fill="var(--faint)" font-family="var(--font-mono)"
+              font-size="10" transform="rotate(-90 8 26)">AMPLITUDE</text>
+        <!-- direct: one sharp leading edge -->
+        <path d="M30 170 L96 170 L104 40 L112 150 L124 166 L150 170 L404 170"
+              fill="none" stroke="var(--path-first)" stroke-width="2"
+              stroke-linejoin="round"/>
+        <!-- obstructed: late, lower, spread -->
+        <path d="M30 170 L150 170 L164 118 L178 96 L196 108 L212 92 L232 124
+                 L252 150 L282 164 L320 170 L404 170"
+              fill="none" stroke="var(--path-late)" stroke-width="2"
+              stroke-linejoin="round"/>
+        <g font-family="var(--font-mono)" font-size="10" letter-spacing=".06em">
+          <text x="118" y="44" fill="var(--path-first-ink)">first path</text>
+          <text x="214" y="80" fill="var(--path-late)">late, spread</text>
+        </g>
+      </svg>
+      <figcaption class="figcap"><b>What the CIA registers see.</b> The mint trace is a
+      hand holding a phone. The amber trace is the same one-metre reading measured
+      through a door. The range agrees; the arrival does not.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================================================================= targets -->
+<section class="page railed defer-paint" style="padding-top:var(--sp-16)">
+  <div class="section-h"><span class="n">05</span><h2>Hardware targets</h2><span class="rule"></span></div>
+  <div class="tablewrap" data-reveal="0">
+    <table class="data">
+      <thead><tr><th>Application</th><th>Hardware</th><th>Connectivity</th></tr></thead>
+      <tbody>
+        <tr><td><code>dwm3001cdk-lock</code></td><td>DWM3001CDK, nRF52833 + DW3110</td><td>UWB, Matter over Thread</td></tr>
+        <tr><td><code>dwm3001cdk-lock-freertos</code></td><td>the same board, no Zephyr</td><td>UWB, Matter over Thread</td></tr>
+        <tr><td><code>nrf5340dk-lock</code></td><td>nRF5340 DK, DWM3000EVB, NFC12A1</td><td>UWB and NFC, Matter over Thread</td></tr>
+        <tr><td><code>esp32-matter-lock</code></td><td>ESP32-S3 / C5 / C6 with DWM3000EVB</td><td>UWB, Matter over Wi-Fi</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =================================================================== tools -->
+<section class="page railed defer-paint" style="padding-top:var(--sp-16)">
+  <div class="section-h"><span class="n">06</span><h2>Try it without hardware</h2><span class="rule"></span></div>
+  <div class="cardgrid">
+    <a class="card" href="twin/index.html" data-reveal="0">
+      <div class="card-h"><span class="status status-live">runs the firmware</span></div>
+      <b class="card-t">Digital twin</b>
+      <p>The ranging stack itself, compiled to WASM and running in the page. Walk a
+      phantom phone at the lock, add noise, spoof a relay, and single-step a real
+      DS-TWR round.</p>
+      <div class="range-viz" style="margin-top:var(--sp-4);min-height:8rem" aria-hidden="true">
+        <span class="rv-ring"></span><span class="rv-ring"></span><span class="rv-ring"></span>
+        <span class="rv-line"></span>
+        <span class="rv-shot"></span><span class="rv-echo"></span>
+        <span class="rv-anchor"></span><span class="rv-tag"></span>
+      </div>
+    </a>
+    <a class="card" href="flash/index.html" data-reveal="1">
+      <div class="card-h"><span class="status">WebSerial</span></div>
+      <b class="card-t">Web flasher</b>
+      <p>Plug an ESP32-S3, C5 or C6 into USB and install a merged image from this page.
+      No ESP-IDF, no command line. The page detects which chip you plugged in.</p>
+      <div class="progress progress-lg" style="margin-top:var(--sp-4)"><span style="width:62%"></span></div>
+      <div class="progress-row" style="margin-top:var(--sp-2)"><span>writing app partition</span><span class="pct">62%</span></div>
+    </a>
+  </div>
+</section>
+
+<!-- =========================================================== specification -->
+<section class="page railed defer-paint" style="padding:var(--sp-16) var(--sp-8) var(--sp-20)">
+  <div class="section-h"><span class="n">07</span><h2>Specification</h2><span class="rule"></span></div>
+  <div class="tablewrap" data-reveal="0">
+    <table class="data">
+      <tbody>
+        <tr><th>UWB</th><td>DS-TWR under an STS session, channels 5 and 9</td></tr>
+        <tr><th>Resolution</th><td>one tick is about 15.65 ps, roughly 4.692 mm</td></tr>
+        <tr><th>BLE</th><td>credential service 0xFFF2, AUTH0 / AUTH1 / EXCHANGE</td></tr>
+        <tr><th>NFC</th><td>ECP, on the nRF5340 DK target</td></tr>
+        <tr><th>Matter</th><td>hand-written node over Thread, or over Wi-Fi on ESP32</td></tr>
+        <tr><th>Updates</th><td>signed delta over BLE, applied from inside MCUboot</td></tr>
+        <tr><th>Ports</th><td>Zephyr, ESP-IDF, and a Zephyr-free FreeRTOS port</td></tr>
+        <tr><th>License</th><td>ISC. The vendored Qorvo UWB driver is LicenseRef-QORVO-2</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="cta" style="margin-top:var(--sp-8)" data-reveal="1">
+    <a class="btn btn-primary" href="https://github.com/ultrawidelock/ultrawidelock" data-ext>Read the source</a>
+    <a class="btn" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/LICENSE" data-ext>ISC license</a>
+    <a class="btn btn-ghost" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/PORTING.md" data-ext>Port it to a board</a>
+  </div>
+</section>
+</main>
+@@FOOTER@@
+<script src="assets/design/hero.js" defer></script>
+</body>
+</html>

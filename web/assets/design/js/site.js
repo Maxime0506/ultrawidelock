@@ -40,6 +40,19 @@
     }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
 
     items.forEach(function (el) { io.observe(el); });
+
+    /* Failsafe. The reveal is a nicety; the text is the point. If anything
+     * stops the observer firing -- a browser quirk, a print, a headless
+     * capture, an in-page jump that lands past a block -- everything still
+     * hidden after this becomes visible anyway. A page that hides its own
+     * content on a technicality is worse than a page with no animation. */
+    setTimeout(function () {
+      items.forEach(function (el) { el.classList.add("is-in"); });
+    }, 2500);
+
+    window.addEventListener("beforeprint", function () {
+      items.forEach(function (el) { el.classList.add("is-in"); });
+    });
   }
 
   /* ----------------------------------------------------------- mobile nav -- */
@@ -66,6 +79,20 @@
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") close();
+    });
+  }
+
+  /* --------------------------------------------------------- docs sidebar -- */
+  /* Below the sidebar's breakpoint the guide index collapses behind a button.
+   * It used to be `display:none` outright at that width, which left a phone
+   * reader with no way to reach any other guide. */
+  function sideNav() {
+    var btn = $("[data-side-toggle]");
+    var tree = $("#tree");
+    if (!btn || !tree) return;
+    btn.addEventListener("click", function () {
+      var open = tree.classList.toggle("on");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
     });
   }
 
@@ -316,6 +343,7 @@
   function init() {
     reveal();
     mobileNav();
+    sideNav();
     copyButtons();
     tabs();
     tocSpy();
