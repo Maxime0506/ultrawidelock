@@ -41,6 +41,9 @@ CLAUDE.md
 .claude/
 .worktreeinclude
 
+# codex
+.codex/
+
 # internal working notes / plans (not part of the project)
 internal/
 
