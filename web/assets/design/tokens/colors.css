@@ -114,6 +114,38 @@
   }
 }
 
+/* --- semantics ------------------------------------------------------------
+   Declared once, outside every theme block, because each one only aliases
+   primitives that are themed above. Adding a meaning here costs one line
+   instead of three, and the three can never drift apart.
+
+   The two signals are the classifier the firmware actually ships: mint is the
+   first path (direct, line-of-sight, trusted), amber is the late path
+   (obstructed, or a relay's added delay). Anywhere the site distinguishes a
+   good measurement from a suspect one it uses this pair, so the colours carry
+   the same meaning on the landing hero, in the twin and in the guides. */
+:root{
+  --path-first:var(--accent);
+  --path-first-ink:var(--accent-ink);
+  --path-first-line:var(--accent-line);
+  --path-first-tint:var(--accent-tint);
+
+  --path-late:var(--warn);
+  --path-late-line:var(--warn-line);
+  --path-late-tint:var(--warn-tint);
+
+  --refused:var(--danger);
+  --refused-line:var(--danger-line);
+  --refused-tint:var(--danger-tint);
+
+  /* Instrument surfaces: the dark field a trace is drawn on, and its grid.
+     --sunken is already the deepest surface in both themes, which is exactly
+     what a scope face wants. */
+  --scope:var(--sunken);
+  --scope-grid:var(--hairline);
+  --scope-axis:var(--line);
+}
+
 :root[data-theme="light"]{
   color-scheme:light;
 

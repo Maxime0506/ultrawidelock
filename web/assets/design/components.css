@@ -48,6 +48,30 @@
 .navlink[aria-current]::after{content:"";display:block;height:var(--bw-2);
   margin-top:var(--sp-1);background:var(--accent);border-radius:var(--r-pill)}
 
+/* Mobile nav. Five links plus a wordmark and a toggle do not fit a 360px
+   viewport, so below --bp-nav the links become a sheet under the bar and
+   .navtoggle opens it. The toggle is display:none on wide screens, which is
+   also what keeps it out of the tab order there. */
+.navtoggle{display:none}
+@media (max-width:52rem){
+  .navtoggle{display:inline-grid}
+  .topbar .navlinks{
+    position:absolute;top:100%;left:0;right:0;
+    flex-direction:column;align-items:stretch;gap:0;
+    padding:var(--sp-2);
+    background:var(--surface);border-bottom:var(--border);
+    box-shadow:var(--shadow-2);
+    /* Collapsed by default. Animating max-height rather than height keeps
+       this to CSS with no measurement step. */
+    max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+    transition:max-height var(--dur-3) var(--ease-out),
+      opacity var(--dur-2) var(--ease-out)}
+  .topbar .navlinks.on{max-height:22rem;opacity:1;pointer-events:auto}
+  .navlink{padding:var(--sp-3);font-size:var(--fs-500)}
+  .navlink[aria-current]::after{display:none}
+  .navlink[aria-current]{background:var(--accent-tint);color:var(--accent-ink)}
+}
+
 .icon-btn{display:inline-grid;place-items:center;width:2rem;height:2rem;
   border:var(--border);border-radius:var(--r-sm);background:transparent;
   color:var(--muted);cursor:pointer;
@@ -205,13 +229,21 @@ a.card:hover,.feats a:hover{border-color:var(--accent-line);
 
 .rows{list-style:none;padding:0;margin:0 0 var(--sp-8);border-top:var(--border-hair)}
 .rows li{border-bottom:var(--border-hair)}
-.rows a{display:flex;gap:var(--sp-4);align-items:baseline;
+/* A row is either a link or a plain .rowline; both lay out identically. */
+.rows a,.rows .rowline{display:flex;gap:var(--sp-4);align-items:baseline;
   padding:var(--sp-3) var(--sp-2);text-decoration:none;
   transition:background var(--dur-1) var(--ease-out)}
 .rows a:hover{background:var(--raise)}
+/* The name column is a fixed gutter so the descriptions line up into a second
+   column. Below --bp-rows there is no room for two columns, so the row stacks
+   and the gutter is dropped rather than squeezing the description to nothing. */
 .row-name{color:var(--strong);font-weight:var(--fw-medium);flex:none;min-width:12rem}
 .rows.mono .row-name{font-family:var(--font-mono);font-size:var(--fs-300)}
 .row-desc{color:var(--muted);font-size:var(--fs-400)}
+@media (max-width:40rem){
+  .rows a,.rows .rowline{flex-direction:column;gap:var(--sp-1)}
+  .row-name{min-width:0}
+}
 
 /* ---------------------------------------------------------- code blocks -- */
 .prewrap{position:relative;margin:0 0 var(--sp-6)}
@@ -494,3 +526,119 @@ table.data tbody tr:hover{background:var(--raise)}
   display:flex;gap:var(--sp-2);flex-wrap:wrap}
 .range-viz .rv-read{position:absolute;right:var(--sp-4);top:var(--sp-4);z-index:3;
   display:flex;gap:var(--sp-2)}
+
+/* ------------------------------------------------------- scroll reveal --- */
+/* One rise distance and one stagger for the whole site, so nothing arrives
+   with its own idea of how far "up" is. site.js adds .is-in; the no-JS and
+   reduced-motion cases are handled by the two guards below, which is why the
+   initial state is never applied unless JS is present to undo it. */
+.js [data-reveal]{opacity:0;transform:translateY(var(--reveal-y));
+  transition:opacity var(--dur-4) var(--ease-out),
+    transform var(--dur-4) var(--ease-out)}
+.js [data-reveal].is-in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .js [data-reveal]{opacity:1;transform:none;transition:none}
+}
+
+/* --------------------------------------------------- heading anchors ----- */
+.anchor{margin-left:var(--sp-2);color:var(--faint);text-decoration:none;
+  font-family:var(--font-mono);font-weight:var(--fw-regular);
+  opacity:0;transition:opacity var(--dur-2) var(--ease-out)}
+:is(h1,h2,h3,h4,h5,h6):hover .anchor,.anchor:focus-visible{opacity:1}
+.anchor:hover{color:var(--accent-ink)}
+/* Sticky headers would otherwise eat the heading an in-page link jumps to. */
+:is(h1,h2,h3,h4,h5,h6)[id]{scroll-margin-top:calc(var(--topbar-h) + var(--sp-6))}
+
+/* --------------------------------------------------- external links ------ */
+/* Marked by build-time markup, not by an [href^="http"] selector, so an
+   in-page anchor to an absolute URL on our own host is not mislabelled. */
+a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
+  margin-left:.32em;vertical-align:.06em;
+  border-top:var(--bw-1) solid currentColor;
+  border-right:var(--bw-1) solid currentColor;
+  transform:rotate(45deg) translateY(.1em);opacity:.55}
+
+/* ------------------------------------------------------------- pager ----- */
+.pager{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));
+  gap:var(--sp-3);margin:var(--sp-16) 0 0;padding-top:var(--sp-6);
+  border-top:var(--border-hair)}
+.pager a{display:flex;flex-direction:column;gap:var(--sp-1);
+  padding:var(--sp-4) var(--sp-5);border:var(--border);border-radius:var(--r-md);
+  background:var(--card);text-decoration:none;
+  transition:border-color var(--dur-2) var(--ease-out),
+    background var(--dur-2) var(--ease-out)}
+.pager a:hover{border-color:var(--accent-line);background:var(--raise)}
+.pager .dir{font-size:var(--fs-100);text-transform:uppercase;
+  letter-spacing:var(--tr-caps);color:var(--faint)}
+.pager .to{color:var(--strong);font-weight:var(--fw-medium)}
+.pager .next{text-align:right}
+
+/* ------------------------------------------------------------ meters ----- */
+/* A part against a whole, labelled with both absolute values. Not a chart:
+   two numbers do not earn axes. The fill's far end is rounded and its near end
+   is square, so the bar visibly starts at the baseline rather than floating. */
+.meter{display:block;margin:0 0 var(--sp-5)}
+.meter-h{display:flex;align-items:baseline;gap:var(--sp-3);margin-bottom:var(--sp-2)}
+.meter-k{font-size:var(--fs-100);text-transform:uppercase;
+  letter-spacing:var(--tr-caps);color:var(--faint)}
+.meter-v{margin-left:auto;font-family:var(--font-mono);font-size:var(--fs-300);
+  color:var(--strong);font-variant-numeric:tabular-nums}
+.meter-pct{font-family:var(--font-mono);font-size:var(--fs-200);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.meter-track{position:relative;height:var(--sp-3);border-radius:var(--r-sm);
+  background:var(--sunken);border:var(--border-hair);overflow:hidden}
+.meter-fill{display:block;height:100%;width:0;
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--path-first);
+  transition:width var(--dur-5) var(--ease-out)}
+/* Past this share of the budget the bar is reporting a constraint, not a
+   measurement, and says so in the late-path colour. */
+.meter-fill.tight{background:var(--path-late)}
+.meter-note{margin-top:var(--sp-2);font-size:var(--fs-200);color:var(--faint)}
+
+/* ------------------------------------------------------------ figures ---- */
+.figure{margin:0 0 var(--sp-8)}
+.figure svg{display:block;width:100%;height:auto}
+.figcap{margin-top:var(--sp-3);font-size:var(--fs-200);color:var(--faint);
+  line-height:var(--lh-normal)}
+.figcap b{color:var(--muted);font-weight:var(--fw-medium)}
+
+/* -------------------------------------------------------- performance ---- */
+/* Below-fold sections skip layout and paint until they approach the viewport.
+   contain-intrinsic-size keeps the scrollbar honest before they are rendered;
+   without it the page height jumps as each section is realised. */
+@supports (content-visibility:auto){
+  .defer-paint{content-visibility:auto;contain-intrinsic-size:auto 32rem}
+}
+
+/* --------------------------------------------------------- responsive ---- */
+@media (max-width:40rem){
+  .stats{gap:var(--sp-6) var(--sp-8)}
+  .page{padding:0 var(--sp-5)}
+  .hero-band{padding:var(--sp-10) var(--sp-5) var(--sp-8)}
+  .section-h{margin:var(--sp-12) 0 var(--sp-5)}
+}
+@media (max-width:34rem){
+  .footer-in{grid-template-columns:1fr}
+  .footer{padding:var(--sp-10) var(--sp-5) var(--sp-8)}
+}
+
+/* ------------------------------------------------------------- print ----- */
+@media print{
+  .topbar,.side,.toc-rail,.skip,.navtoggle,.pager,.footer-bar,
+  .copy,.palette,.scrim,.search-btn,[data-theme-toggle]{display:none !important}
+  .app,.mid{display:block}
+  :root{--ground:#fff;--surface:#fff;--card:#fff;--ink:#111;--strong:#000;
+    --muted:#333;--faint:#555;--line:#bbb;--hairline:#ddd}
+  body{background:#fff;color:#111;font-size:11pt}
+  .doc{max-width:none;padding:0}
+  a{text-decoration:underline}
+  /* A printed page cannot be clicked, so links carry their target. Internal
+     ones would print as a relative path with no host, which helps nobody. */
+  .doc a[href^="http"]::after{content:" <" attr(href) ">";
+    font-size:9pt;color:#555;word-break:break-all}
+  .prewrap pre,pre.code{white-space:pre-wrap;word-break:break-word;
+    border:1px solid #bbb;background:#fafafa}
+  :is(h1,h2,h3,h4){break-after:avoid}
+  .prewrap,.tablewrap,.callout,figure,.figure{break-inside:avoid}
+}

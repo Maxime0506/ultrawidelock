@@ -46,6 +46,19 @@ deep teal, Space Grotesk and JetBrains Mono, dark canonical with a light theme
 that holds AA. Token and class names are unchanged from that source, so it can
 be re-vendored by copying files over.
 
-Fonts currently come from Google Fonts through an `@import` in
-`tokens/typography.css`. That reaches a third party on every page load, which is
-worth replacing with self-hosted WOFF2 before this site is public.
+Two signals, not one accent. Mint is the first path — direct, line-of-sight,
+trusted. Amber is the late path — obstructed, or a relay's added delay. That is
+the classifier the firmware actually ships, so the pair means the same thing on
+the landing hero, in the twin and in the guides. The aliases are
+`--path-first` and `--path-late` in `tokens/colors.css`.
+
+Fonts are self-hosted WOFF2 in `fonts/`, declared by `tokens/typography.css`.
+Nothing here reaches a third party. The one external subresource on the whole
+site is `esp-web-tools` on the flasher page, pinned to an exact version with an
+SRI hash and constrained by that page's CSP; the reasoning is in the comment
+above the script tag.
+
+The source files are split for authoring and concatenated into a single
+`styles.css` at build time. Do not add an `@import` between them: each one is a
+serial round trip the browser cannot discover until the parent sheet has
+already arrived.
