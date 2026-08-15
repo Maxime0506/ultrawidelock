@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+<!-- UltraWideLock mark: one DS-TWR ranging round, drawn to scale.
+     The anchor emits, the first-path echo decays outward along a ticked
+     measuring track, and the unlock bound is the tick promoted to a
+     decision line. Geometry scales the favicon grammar (dot r : arc r
+     = 3.2 : 8 : 13.6, stroke .6875 x dot r, decay .72/.38/.20); every
+     colour is a DESIGN.md token: ground #061012, accent #2ee6b8,
+     hairline/line rgba(198,232,218,...), accent-glow ring at .35. -->
+<title>UltraWideLock</title>
+<defs>
+  <radialGradient id="bloom">
+    <stop offset="0" stop-color="#2ee6b8" stop-opacity=".40"/>
+    <stop offset=".45" stop-color="#2ee6b8" stop-opacity=".14"/>
+    <stop offset="1" stop-color="#2ee6b8" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+
+<rect width="500" height="500" fill="#061012"/>
+
+<!-- key-art atmosphere: spent rounds, almost gone -->
+<g fill="none" stroke="#c6e8da" stroke-opacity=".05" stroke-width="1.5">
+  <circle cx="140" cy="250" r="330"/>
+  <circle cx="140" cy="250" r="410"/>
+  <circle cx="140" cy="250" r="490"/>
+</g>
+
+<!-- the measuring track and its ruler ticks, marching out from the anchor -->
+<path d="M0 250H500" stroke="#c6e8da" stroke-opacity=".09" stroke-width="2"/>
+<g stroke="#c6e8da" stroke-opacity=".145" stroke-width="2">
+  <path d="M190 250v18"/>
+  <path d="M240 250v18"/>
+  <path d="M290 250v18"/>
+  <path d="M340 250v18"/>
+  <path d="M390 250v18"/>
+</g>
+
+<!-- source of signal: tight mint bloom under the anchor -->
+<circle cx="140" cy="256" r="118" fill="url(#bloom)"/>
+
+<!-- first-path echo, decaying -->
+<g fill="none" stroke-width="30" stroke-linecap="round">
+  <path d="M217.8 172.2A110 110 0 0 1 217.8 327.8" stroke="rgba(46,230,184,.72)"/>
+  <path d="M272.2 117.8A187 187 0 0 1 272.2 382.2" stroke="rgba(46,230,184,.38)"/>
+  <path d="M326.7 63.3A264 264 0 0 1 326.7 436.7" stroke="rgba(46,230,184,.20)"/>
+</g>
+
+<!-- the unlock bound: the sixth tick, promoted to a decision line -->
+<path d="M440 214v72" stroke="#2ee6b8" stroke-opacity=".9" stroke-width="5" stroke-linecap="round"/>
+
+<!-- the anchor, wearing the wordmark's accent-glow ring -->
+<circle cx="140" cy="250" r="48.5" fill="none" stroke="#2ee6b8" stroke-opacity=".35" stroke-width="3"/>
+<circle cx="140" cy="250" r="44" fill="#2ee6b8"/>
+</svg>
