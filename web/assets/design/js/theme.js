@@ -18,6 +18,7 @@
   var KEY = "uwl-theme";
   var root = document.documentElement;
   var media = window.matchMedia("(prefers-color-scheme: light)");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   function stored() {
     try { return localStorage.getItem(KEY); } catch (e) { return null; }
@@ -52,12 +53,75 @@
     announce(theme);
   }
 
+  /* The swap, ranged rather than cut. A circle grows from the button that was
+   * pressed: the incoming theme is revealed inside it, the outgoing one is
+   * erased one feather-width behind its edge, and in the gap between the two
+   * neither snapshot is opaque, so the accent underneath reads as a single
+   * travelling ring. The geometry lives here because only JS knows where the
+   * button is; the animation itself is CSS (see components.css).
+   *
+   * Every reason to not do this ends in the same instant swap as before:
+   * no View Transitions API, a reader who asked for reduced motion (the
+   * global duration cap in reset.css cannot reach the ::view-transition
+   * pseudo tree, so this has to be refused in JS, not damped in CSS), a
+   * keyboard activation with no element to grow from, or the call throwing.
+   */
+  var running = 0;
+
+  function clearTransitionVars() {
+    root.removeAttribute("data-uwl-vt");
+    ["x", "y", "max", "f"].forEach(function (n) {
+      root.style.removeProperty("--uwl-vt-" + n);
+    });
+  }
+
+  function swap(theme, origin) {
+    var swapNow = function () { apply(theme, true); };
+    if (!document.startViewTransition || reduced.matches || !origin) {
+      swapNow();
+      return;
+    }
+
+    var box = origin.getBoundingClientRect();
+    var x = box.left + box.width / 2;
+    var y = box.top + box.height / 2;
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    /* The far corner: the circle is done only once it has passed it. */
+    var reach = Math.sqrt(Math.pow(Math.max(x, w - x), 2) +
+                          Math.pow(Math.max(y, h - y), 2));
+    var feather = Math.min(110, Math.max(56, reach * 0.045));
+
+    root.style.setProperty("--uwl-vt-x", x + "px");
+    root.style.setProperty("--uwl-vt-y", y + "px");
+    root.style.setProperty("--uwl-vt-f", feather + "px");
+    /* One feather past the corner, so the incoming theme ends fully opaque
+     * and the ring leaves the viewport instead of parking on its edge. */
+    root.style.setProperty("--uwl-vt-max", (reach + feather) + "px");
+    root.setAttribute("data-uwl-vt", "");
+
+    var t;
+    try {
+      t = document.startViewTransition(swapNow);
+    } catch (e) {
+      clearTransitionVars();
+      swapNow();
+      return;
+    }
+
+    /* A second click skips the first transition; only the last one owning the
+     * attribute may take it away, or the survivor loses its animation. */
+    var mine = ++running;
+    var done = function () { if (mine === running) clearTransitionVars(); };
+    t.finished.then(done, done);
+  }
+
   function init() {
     announce(current());
 
     document.querySelectorAll("[data-theme-toggle]").forEach(function (b) {
       b.addEventListener("click", function () {
-        apply(current() === "light" ? "dark" : "light", true);
+        swap(current() === "light" ? "dark" : "light", b);
       });
     });
 
