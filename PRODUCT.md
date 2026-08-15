@@ -96,15 +96,18 @@ moved off it. Do not reformat those tables.
 
 Graph data:
 
-- `web/graph/subsystems.json` (4 KB, committed) always yields the flat SVG
-  graph. `graphify-out/graph.json` (11 MB, not committed, produced by a tool
-  that is not in this repository) yields the 3D file level graph. 7,969 nodes
-  and 18,457 edges reduce to 17 subsystems and 49 edges.
-- The committed file is refreshed by `make docs-graph-refresh`, never as a side
-  effect of a build. It records the commit it was extracted at, so a build that
-  rewrote it dirtied every worktree and conflicted on that line between
-  branches.
-- The flat page is the default, not a degraded mode. The Graph nav link is
+- `web/graph/files.json` (680 KB, committed) yields the 3D file level graph,
+  393 files and 703 links. `web/graph/subsystems.json` (4 KB, committed) yields
+  the flat SVG graph, 17 subsystems and 49 edges. Both are reductions of
+  `graphify-out/graph.json` (11 MB, not committed, 7,969 nodes and 18,457
+  edges, produced by a tool that is not in this repository).
+- Both committed files are refreshed together by `make docs-graph-refresh`,
+  never as a side effect of a build. The 4 KB one records the commit it was
+  extracted at, so a build that rewrote it dirtied every worktree and
+  conflicted on that line between branches.
+- The 3D page is the default, including in CI. It falls back to the flat SVG
+  when `web/vendor/3d-force-graph.min.js` is absent, which is a fallback and
+  not a degraded mode: the flat page is always correct. The Graph nav link is
   emitted only when the graph was actually built.
 
 Network surface:

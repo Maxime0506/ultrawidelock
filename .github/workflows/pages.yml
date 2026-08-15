@@ -98,6 +98,18 @@ jobs:
               || echo "::notice::$name is not among the latest release's assets"
           done
 
+      # The 3D graph's data is committed (web/graph/files.json); its renderer is
+      # not -- 1.3 MB of three.js is a third-party bundle and stays out of the
+      # tree. Fetching it here is what makes the published graph the flyable one
+      # rather than the flat SVG fallback, which is what this site shipped for
+      # as long as CI had neither half.
+      #
+      # `make docs-graph3d` is the same target a contributor runs locally, so
+      # the URL and the pin live in one place. curl -f means a bad fetch fails
+      # this step instead of quietly publishing the flat page again.
+      - name: 3D graph renderer
+        run: make docs-graph3d
+
       # --check fails the build on a dead internal link. Same gate as
       # `make docs-check`, which is what runs locally.
       - name: render the site

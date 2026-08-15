@@ -12,11 +12,11 @@
 #
 # Four optional inputs, each degrading rather than failing:
 #   emcc                                  the twin's simulator
-#   graphify-out/graph.json               file-level graph data; without it the
-#                                         page still builds, from the committed
-#                                         web/graph/subsystems.json
+#   graphify-out/graph.json               fresher file-level graph data; without
+#                                         it both graph pages still build, from
+#                                         the committed web/graph/subsystems.json
+#                                         and web/graph/files.json
 #   web/vendor/3d-force-graph.min.js      3D rather than the flat SVG graph
-#                                         (needs the graphify data too)
 #   build/esp32-matter-lock-*/*.bin       the flasher's images; without them
 #                                         the page says so instead of offering
 #                                         a button that downloads nothing
@@ -61,9 +61,11 @@ docs: docs-deps
 docs-check:
 	@python3 $(REPO_ROOT)/web/build.py --check
 
-## docs-graph-refresh: rewrite web/graph/subsystems.json from graphify-out/
-##   The committed 4 KB distillate is the only graph data a fresh clone or CI
-##   has, so it has to be refreshed by hand and committed. This is deliberately
+## docs-graph-refresh: rewrite the committed graph data from graphify-out/
+##   Two files, both written by this target: the 4 KB web/graph/subsystems.json
+##   the flat page draws, and the 680 KB web/graph/files.json the 3D page flies
+##   through. They are the only graph data a fresh clone or CI has, so they have
+##   to be refreshed by hand and committed. This is deliberately
 ##   not part of `docs`: rewriting it on every build left a dirty tree in each
 ##   worktree that had graphify data, and its first line is the commit the
 ##   graph was extracted at, so two branches that both built conflicted there
@@ -140,31 +142,26 @@ docs-deps:
 	fi; \
 	exit 0
 
-## docs-graph3d: vendor the 3D graph renderer  ·  then `graphify update .`
-##   The flat subsystem graph needs nothing: it builds from the committed
-##   web/graph/subsystems.json on any fresh clone. The orbiting file-level
-##   graph needs two things that are deliberately not in the tree, and this
-##   fetches the one of them that is fetchable:
+## docs-graph3d: vendor the 3D graph renderer
+##   The one thing the 3D graph needs that is deliberately not in the tree:
 ##
 ##     web/vendor/3d-force-graph.min.js   1.3 MB of three.js and d3-force-3d.
 ##                                        A third-party bundle; gitignored.
-##     graphify-out/graph.json            node-level data, 11 MB. Produced by
-##                                        `graphify update .`, which is not in
-##                                        this repository either.
 ##
-##   With only one of the two present the build says which is missing and
-##   renders the flat graph, which is always correct and never a dead link.
+##   Its data is committed as web/graph/files.json, so this is all a fresh
+##   clone needs. The pages workflow runs this target for the same reason.
+##   Without the renderer the build says so and falls back to the flat graph,
+##   which is always correct and never a dead link.
+##
+##   `graphify update .` is still worth running before a refresh: it rewrites
+##   graphify-out/graph.json, which is where both committed files come from.
 GRAPH3D_URL ?= https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js
 docs-graph3d:
 	@mkdir -p $(REPO_ROOT)/web/vendor
 	@curl -sSLf -o $(REPO_ROOT)/web/vendor/3d-force-graph.min.js '$(GRAPH3D_URL)'
 	@printf '  vendored web/vendor/3d-force-graph.min.js (%s KB)\n' \
 	  "$$(( $$(wc -c <$(REPO_ROOT)/web/vendor/3d-force-graph.min.js) / 1024 ))"
-	@if [ -f '$(REPO_ROOT)/graphify-out/graph.json' ]; then \
-	  printf '  graphify data present — `make docs` now builds the 3D graph\n'; \
-	else \
-	  printf '  next: graphify update .   (without it the flat graph still builds)\n'; \
-	fi
+	@printf '  `make docs` now builds the 3D graph from web/graph/files.json\n'
 
 ## docs-serve: build, then serve it on http://localhost:8080  ·  DOCS_PORT= to change
 ##   file:// cannot work: the fonts, the twin's WASM and the 3D renderer are

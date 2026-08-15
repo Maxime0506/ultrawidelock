@@ -65,19 +65,25 @@ has moved off it. Do not reformat those tables.
 
 ## The graph's data
 
-The subsystem graph has two data sources, and which one you have decides which
+The subsystem graph has three data sources, and which ones you have decide which
 version of the page you get.
 
 | Source | Size | In git | Gives you |
 |---|---|---|---|
 | `graph/subsystems.json` | 4 KB | yes | the flat SVG graph, always |
-| `graphify-out/graph.json` | 11 MB | no | the 3D file-level graph, with `vendor/` |
+| `graph/files.json` | 680 KB | yes | the 3D file-level graph, with `vendor/` |
+| `graphify-out/graph.json` | 11 MB | no | the same 3D page, from fresher data |
 
 `graphify update .` writes the big one. It is 7,969 nodes and 18,457 edges, and
-this page reduces all of that to 17 subsystems and 49 edges — so the repository
-carries the 4 KB reduction and leaves the 11 MB where graphify put it.
+this page reduces all of that to 393 files with their symbols and 703 links, or
+to 17 subsystems and 49 edges — so the repository carries both reductions and
+leaves the 11 MB where graphify put it.
 
-Refreshing the distillate is a deliberate step, `make docs-graph-refresh`, and
+Carrying `files.json` is what makes the published site the flyable page. Before
+it, CI had neither the graphify data nor the renderer, so github.io shipped the
+flat SVG on every deploy while every developer machine showed the 3D one.
+
+Refreshing the distillates is a deliberate step, `make docs-graph-refresh`, and
 never a side effect of an ordinary build. Its first line is the commit the graph
 was extracted at, so a build that rewrote it left a dirty tree in every worktree
 that had graphify data, and any two branches that had both built then conflicted
@@ -85,14 +91,18 @@ on that line. Run the refresh, read the diff, commit it on its own: one sorted
 line per subsystem, one per edge, and a reviewer can see that a subsystem gained
 four files or that a new dependency appeared.
 
-That is deliberately not the `twin.js` mistake. This file is small, sorted,
-line-per-entry and regenerates deterministically; `twin.js` was 36 KB of
-minified emscripten on one line. Committing it is what lets the graph page
-build from a fresh clone and in CI, which is the second rule below.
+That is deliberately not the `twin.js` mistake. Both files are sorted,
+line-per-entry and regenerate deterministically; `twin.js` was 36 KB of
+minified emscripten on one line. `files.json` is 680 KB, which is large for a
+committed artifact and is the price of the published page being the real one —
+it is one field per line, so a diff still reads. Committing them is what lets
+the graph page build from a fresh clone and in CI, which is the second rule
+below.
 
-The 3D page needs both the full graph and a renderer that is fetched, not
-committed. Neither is a build requirement and the flat page is the default, not
-a degraded mode.
+The 3D page still needs a renderer that is fetched, not committed:
+`make docs-graph3d` locally, one step in `.github/workflows/pages.yml` for the
+deploy. Without it the flat page builds, which is a fallback and not a degraded
+mode.
 
 ## Two rules
 

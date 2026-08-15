@@ -417,24 +417,34 @@ def graph_source() -> Path | None:
     """
     sys.path.insert(0, str(WEB / "graph"))
     import graph as graph_mod                                   # noqa: PLC0415
+    import graph3d                                              # noqa: PLC0415
     import json as _json                                        # noqa: PLC0415
 
     full = ROOT / "graphify-out" / "graph.json"
     if full.is_file():
         data = _json.loads(full.read_text())
         distillate = graph_mod.DISTILLATE.relative_to(ROOT)
+        payload = graph3d.PAYLOAD.relative_to(ROOT)
+        # Both committed files come from this one graph, so one refresh writes
+        # both: a run that updated the subsystems and left the file-level page
+        # a release behind would be the more confusing half-state.
+        built = graph3d.build(data, ROOT)
         if REFRESH_GRAPH:
-            if graph_mod.write_distillate(data):
-                print(f"build: refreshed {distillate} "
-                      "from graphify-out/ (commit it)")
-            else:
-                print(f"build: {distillate} already matches graphify-out/")
-        elif not graph_mod.distillate_is_current(data):
+            for name, changed in ((distillate, graph_mod.write_distillate(data)),
+                                  (payload, graph3d.write_payload(built))):
+                print(f"build: refreshed {name} from graphify-out/ (commit it)"
+                      if changed else
+                      f"build: {name} already matches graphify-out/")
+        else:
             # Says it out loud rather than writing: this build renders from the
             # full graph, so a stale committed file is invisible here and shows
             # up only on a fresh clone or in CI.
-            print(f"build: {distillate} is behind graphify-out/ "
-                  "(make docs-graph-refresh)")
+            for name, current in ((distillate,
+                                   graph_mod.distillate_is_current(data)),
+                                  (payload, graph3d.payload_is_current(built))):
+                if not current:
+                    print(f"build: {name} is behind graphify-out/ "
+                          "(make docs-graph-refresh)")
         return full
     if graph_mod.DISTILLATE.is_file():
         return graph_mod.DISTILLATE
@@ -453,23 +463,27 @@ def build_graph() -> Path | None:
     out = DIST / "graph" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # The 3D page needs two things the repository does not carry: the vendored
-    # renderer, and the full node-level graph. Either one missing falls back to
-    # the flat SVG, which is the version that ships from a clean clone and from
-    # CI. The flat page is not a degraded mode -- it is the default, and the
-    # only one whose data is committed.
+    # The 3D page needs node-level data and the vendored renderer. The data is
+    # committed as web/graph/files.json, so graphify's absence no longer decides
+    # this; the renderer is 1.3 MB of three.js, still fetched rather than
+    # committed, by `make docs-graph3d` locally and by the pages workflow in CI.
+    # Without it the flat SVG still builds, which is the fallback and not the
+    # published default any more.
     lib = WEB / "vendor" / "3d-force-graph.min.js"
     import graph as graph_mod                                    # noqa: PLC0415
-    node_level = source != graph_mod.DISTILLATE
+    import graph3d                                               # noqa: PLC0415
+    node_level = (source if source != graph_mod.DISTILLATE
+                  else graph3d.PAYLOAD if graph3d.PAYLOAD.is_file() else None)
 
-    if lib.is_file() and node_level:
-        import graph3d                                           # noqa: PLC0415
-        out.write_text(graph3d.render(source, ROOT), encoding="utf-8")
+    if lib.is_file() and node_level is not None:
+        out.write_text(graph3d.render(node_level, ROOT), encoding="utf-8")
         shutil.copy2(lib, out.parent / lib.name)
-        print(f"build: 3D graph -> {out.relative_to(DIST)}")
+        print(f"build: 3D graph from {node_level.name} -> "
+              f"{out.relative_to(DIST)}")
     else:
         out.write_text(graph_mod.render(source), encoding="utf-8")
-        why = ("3d-force-graph not vendored, `make docs-graph3d`" if node_level
+        why = ("3d-force-graph not vendored, `make docs-graph3d`"
+               if node_level is not None
                else "no node-level graph data, `graphify update .`")
         print(f"build: flat graph from {source.name} ({why})")
     return out

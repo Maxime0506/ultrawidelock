@@ -19,9 +19,13 @@ palette and its links:
 Blurbs come from each file's own header comment, which is better than what the
 markdown carried: it is the text the author wrote next to the code.
 
+The payload build() produces is committed as files.json, so this page is what
+the site ships from a fresh clone and from CI, not only from a machine that has
+run graphify. See PAYLOAD.
+
 3d-force-graph (MIT) is vendored under web/vendor/, which is gitignored. With
-no vendor copy the page is skipped and the site builds without it, the same
-way the twin is skipped without emscripten.
+no vendor copy the build falls back to the flat SVG graph, the same way the
+twin degrades without emscripten.
 """
 
 from __future__ import annotations
@@ -35,6 +39,15 @@ CORE_TOP = ("modules", "ports", "apps")
 VENDORED = ("dwt_uwb_driver", "detools")
 LIB = "3d-force-graph.min.js"
 REPO = "https://github.com/ultrawidelock/ultrawidelock/blob/main/"
+
+# The committed payload: build()'s output, ~600 KB for 393 files, their links
+# and their symbols. graphify's own graph.json is 11 MB and gitignored, so a
+# fresh clone and CI have nothing node-level to render from and the graph page
+# fell back to the flat SVG there -- which is what the published website was.
+# Carrying the reduction is the same bargain web/graph/subsystems.json already
+# makes, one size up: written only by `make docs-graph-refresh`, never as a
+# side effect of a build, and diffable because it is indented and key-sorted.
+PAYLOAD = Path(__file__).with_name("files.json")
 
 # Slot palette. The design system's syntax colours, which are a categorical
 # spread already tuned for a dark surface -- and the stage here is always dark,
@@ -92,8 +105,7 @@ def group_of(source_file: str) -> str:
     return "/".join(parts[:2]) if len(parts) > 1 else parts[0]
 
 
-def build(graph_json: Path, root: Path) -> dict:
-    graph = json.loads(graph_json.read_text())
+def build(graph: dict, root: Path) -> dict:
     owner = {n["id"]: n.get("source_file", "") for n in graph["nodes"]}
 
     files = sorted({sf for sf in owner.values() if keep(sf)})
@@ -161,8 +173,47 @@ def symbols(graph: dict, files: set[str]) -> dict:
     return out
 
 
-def render(graph_json: Path, root: Path) -> str:
-    data = build(graph_json, root)
+def load(source: Path, root: Path) -> dict:
+    """Accept either a full graphify graph or the committed payload.
+
+    The payload is already this page's data, so it is passed straight through;
+    a graphify graph is reduced to it. "slots" tells them apart -- build() adds
+    it and graphify never emits it.
+    """
+    data = json.loads(source.read_text())
+    if "slots" not in data:
+        return build(data, root)
+    # The palette is code, not data: a colour edit here should show on the next
+    # build rather than waiting for someone to re-extract the graph.
+    return data | {"colors": COLORS}
+
+
+def payload_is_current(data: dict) -> bool:
+    """Whether the committed payload already says what this data says."""
+    return (PAYLOAD.is_file()
+            and PAYLOAD.read_text(encoding="utf-8") == _payload_text(data))
+
+
+def write_payload(data: dict) -> bool:
+    """Write the payload, returning whether it changed."""
+    if payload_is_current(data):
+        return False
+    PAYLOAD.write_text(_payload_text(data), encoding="utf-8")
+    return True
+
+
+def _payload_text(data: dict) -> str:
+    """The payload's exact on-disk bytes. One definition, so that the staleness
+    check and the write can never disagree about formatting. Indented and
+    key-sorted: 600 KB is only reviewable one field per line, and sorting keeps
+    an unrelated re-extraction from reordering the whole file. COLORS is left
+    out because load() supplies it from this module."""
+    keep_keys = {k: v for k, v in data.items() if k != "colors"}
+    return json.dumps(keep_keys, indent=1, sort_keys=True) + "\n"
+
+
+def render(source: Path, root: Path) -> str:
+    data = load(source, root)
     tpl = Path(__file__).with_name("graph3d.tpl.html").read_text()
     return (tpl.replace("@@DATA@@", _embed(data))
                .replace("@@LIB@@", LIB))
