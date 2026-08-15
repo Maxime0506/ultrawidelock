@@ -1,17 +1,16 @@
 # Hardware validation
 
 Automated CI gates the host-side logic (KAT suite, coverage floor, sanitizers, fuzz,
-CBMC, the ESP32 port suite), and a dispatch of
-[`firmware-builds.yml`](../.github/workflows/firmware-builds.yml) compile-gates all
-three targets' firmware. What it cannot
+CBMC, the ESP32 port suite), and `make fw-check` compile-gates the Zephyr
+firmware. There is no CI in this repository; both are run locally. What they cannot
 exercise is the product itself, which runs against a live iPhone. This checklist is
 the manual gate: run
 every applicable item before cutting a release, and record the results table in the
-release notes (see [`RELEASING.md`](RELEASING.md)).
+release notes.
 
 Three hardware paths have recorded bench evidence: the DWM3001CDK, the nRF5340 DK
 using the legacy Nordic binary with its default ST25R300/RFAL reader, and ESP32-S3.
-The in-tree Aliro stack is now the nRF default, but it does not inherit the legacy
+The in-tree credential stack is now the nRF default, but it does not inherit the legacy
 binary's result. It must pass the nRF checklist before release. A release covering
 only one target runs that target's rows and records the others as `n/a`.
 
@@ -93,7 +92,7 @@ exercised by design and by host test but has never met a real power cut.
 | HV-1 | `make test` on the release commit | Exit 0, all host KATs pass |
 | HV-2 | `make rebuild` (pristine) | Exit 0, image links and fits flash |
 | HV-3 | Flash a `make selftest` build, boot with no phone present | Boot self-test reports pass on the console |
-| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `Aliro source stack enabled` appears with no errors, BLE advertising starts |
+| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `credential source stack enabled` appears with no errors, BLE advertising starts |
 | HV-5 | Tap the phone on the NFC reader (Express Mode, screen off) | Lock actuates to unlocked; console logs the granted access |
 | HV-6 | Relock, then approach from well outside ranging distance, phone pocketed | Lock unlocks on approach with no phone interaction |
 | HV-7 | Walk away from the lock | Lock relocks after passing the hysteresis margin, and does not oscillate at the boundary |
@@ -116,7 +115,7 @@ No NFC tap path exists on this target, so there is no equivalent of HV-5.
 
 | ID | Procedure | Pass criterion |
 |---|---|---|
-| EV-1 | `make test-port` on the release commit | Exit 0, all host suites pass |
+| EV-1 | `make check` on the release commit | Exit 0, all host suites pass |
 | EV-2 | `make rebuild` in `apps/esp32-matter-lock` | Exit 0; `verify_port.sh` reports the link seam intact and the app fits its partition |
 | EV-3 | `make flash-erase`, then boot | Clean boot, onboarding codes printed, no watchdog resets |
 | EV-4 | Commission into a home with the printed code | Commissioning completes; `status` shows the fabric |
@@ -132,16 +131,16 @@ No NFC tap path exists on this target, so there is no equivalent of HV-5.
 | EV-14 | Unlock, then stand still at the door for 10 s | No `relock.sent`, bolt does not cycle. iOS pauses ranging when still; a relock here is the regression |
 | EV-15 | Unlock, then leave briskly | `relock.sent` appears **before** `session.end`, and the phone shows locked as you go |
 | EV-16 | Re-approach after EV-15 | No `relock.sent` between `ph.apc` and the grant, i.e. the Wallet does not flash locked then unlocked |
-| EV-17 | Score any capture that reached UWB-active with `tools/aliro_lab.py` | The `order` check passes. `ph.m1` before `ph.m2` and `ph.m3` before `ph.m4rx`: setup stamps follow message identity, not arrival order |
+| EV-17 | Score any capture that reached UWB-active. The bench scoring script this used is not in this repository | The `order` check passes. `ph.m1` before `ph.m2` and `ph.m3` before `ph.m4rx`: setup stamps follow message identity, not arrival order |
 | EV-18 | Read the `ranging setup:` line of that report | Reads `rrx SUPPL id=0, rrx IRS, rtx M1, rrx M2, rtx M3, rrx M4`. A bare `rrx id=` with no protocol means pre-fix firmware |
 
 EV-7 is the row that matters most and the one most easily faked: the bolt moving is not
 a pass. The Wallet animation is the pass criterion, because that is what proves the
 reader told the phone it granted access rather than just actuating locally.
 
-EV-12 to EV-16 gate the RSSI power gate and the relock policy; see
-[`power-profile.md`](power-profile.md) for what each measurement means and for the
-thresholds they depend on. EV-14 and EV-16 are regression rows: both behaviours were
+EV-12 to EV-16 gate the RSSI power gate and the relock policy. The guide that
+explained each measurement and its thresholds documented bench tooling that is no
+longer in this repository, so it is not included here. EV-14 and EV-16 are regression rows: both behaviours were
 shipped broken once and are invisible unless specifically looked for.
 
 EV-17 and EV-18 are the third such row. The ranging-setup latency stamps used to be

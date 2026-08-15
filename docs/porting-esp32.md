@@ -134,7 +134,7 @@ The UWB engine (`modules/ultrawidelock_uwb`) already compiles as pure C on host 
 |---|---|---|
 | 1 — engine on ESP-IDF | Compile the engine behind an OS seam, write a DW3000 backend, range against a second board with a canned URSK. | **Done.** The compat layer let `modules/ultrawidelock_uwb/src` and `deps/dw3000` compile unchanged, and the `--wrap` link-time interposer the seam used at the time behaved as on any GNU ld. (That interposer is gone: the seam is now the compile-time one in `uwb_seam.h`, which is why the section above no longer mentions the linker.) The one surprise was hardware, not software: an EVB power-select jumper hid the radio for days. |
 | 2 — BLE transport | Reimplement GATT + L2CAP CoC on NimBLE. Estimated the dominant rewrite. | **Done, and easier than planned.** `ports/esp32/components/ultrawidelock_ble`. Advertising, the SPSM/version characteristics, and the CoC came up quickly. |
-| 3 — reader logic and the ranging key | Port the reference's reader logic and storage; the derived key enters the engine at the existing seam. | **Done, and far larger than planned.** The reference does not derive the key in portable code at all — a closed ARM-only library does. This phase became a from-scratch reimplementation of the credential authentication, key schedule, secure channels, and wire codec, plus a provisioning seam. See [`porting-esp32-phase3.md`](porting-esp32-phase3.md). |
+| 3 — reader logic and the ranging key | Port the reference's reader logic and storage; the derived key enters the engine at the existing seam. | **Done, and far larger than planned.** The reference does not derive the key in portable code at all — a closed ARM-only library does. This phase became a from-scratch reimplementation of the credential authentication, key schedule, secure channels, and wire codec, plus a provisioning seam. |
 | 4 — Matter provisioning | esp-matter door lock over Wi-Fi with the Aliro cluster and delegate, so the lock self-commissions and provisions a key into the wallet. | **Done.** `apps/esp32-matter-lock`. The Tier-A bet paid off: the cluster and delegate came across with modest change. The reader attaches to esp-matter's NimBLE host rather than starting its own. |
 | 4.5 — real-time ranging | Not in the plan. | **Done, and unplanned.** Making the DS-TWR responder hold a 2 ms slot on ESP32 was its own campaign. Nothing here was a logic bug; the shared engine was already correct. |
 | 5 — NFC tap | Integrate a first-party Aliro-over-NFC stack rather than reimplementing RFAL. | **Not attempted.** No NFC reader was sourced. The ESP32 target is approach-unlock only. |
@@ -162,9 +162,9 @@ The UWB engine (`modules/ultrawidelock_uwb`) already compiles as pure C on host 
 - **Confirmed, then made moot.** `--wrap` on `xtensa-esp32s3-elf-ld` did behave as on any GNU
   ld. The risk no longer exists in the form it was written: the seam moved to compile time
   (`uwb_seam.h`), so no linker feature is involved. What guards it now is
-  `make seam`, the `uwb-seam` gate in `make verify`, which runs on every host
+  `make seam`, the `uwb-seam` gate in `make check`, which runs on every host
   sweep and on CI. `verify_port.sh` also checks the seam, but only in a developer shell with
-  ESP-IDF sourced — `make verify` sets `ULTRAWIDELOCK_NO_TARGET_BUILD=1` and CI's runner has no ESP-IDF,
+  ESP-IDF sourced — `make check` sets `ULTRAWIDELOCK_NO_TARGET_BUILD=1` and CI's runner has no ESP-IDF,
   so do not count it as the thing standing behind this.
 - **Confirmed on S3, with a caveat.** BLE and UWB coexist on one S3, but not for free:
   the ranging task is pinned to core 1 and the console to core 0, and the transaction

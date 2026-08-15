@@ -4,7 +4,7 @@ How the UWB engine moves to a new chipset, what it costs, and how to prove a por
 change the code the validated target runs.
 
 The primary target is the DWM3001CDK on NCS v3.3.0, built from
-[`firmware/`](../firmware): reader, Matter node and Thread MTD in one nRF52833 image,
+[`firmware/`](../apps/dwm3001cdk-lock): reader, Matter node and Thread MTD in one nRF52833 image,
 hardware-validated to an approach unlock and a live Apple Home tile. The nRF5340 DK in
 [`apps/nrf5340dk-lock/`](../apps/nrf5340dk-lock/) is the NFC target and the one this chapter's
 regression check uses, because it carries the largest build; its Nordic-binary path is
@@ -135,7 +135,7 @@ supplies the last two from `port/ultrawidelock_seam_stubs.c`.
 This replaced an earlier `-Wl,--wrap=dwt_*` link-time interposer, and the reason matters for a
 port: the seam is now plain C, so it needs no linker feature at all and a non-GNU toolchain is
 no longer a porting problem. What the linker used to guarantee structurally is now enforced by
-`make seam` (the `uwb-seam` gate in `make verify`), which scans the tracked
+`make seam` (the `uwb-seam` gate in `make check`), which scans the tracked
 sources for a call that reaches past the seam and carries a `--self-test` proving it can fail.
 That guarantee is worth keeping mechanical: a site that bypasses the seam is silent on the
 bench, because the radio still arms and ranging still runs, and only the unlock never happens.
@@ -161,7 +161,7 @@ diff /tmp/before.txt /tmp/after.txt                # must be empty for a pure re
 
 Repeat for the vendored DW3000 objects under
 `build/nrf5340dk/matter-aliro-door-lock-app/modules/ultrawidelock_dw3000/` if `deps/dw3000` was touched, and run
-`make test` (the host KAT suite, no toolchain or hardware needed) plus `make test-port`.
+`make check` (every host suite, no toolchain or hardware needed).
 
 A byte-identical size table proves codegen is unchanged; it does not prove the port works.
 Only a bench run against a phone does that.

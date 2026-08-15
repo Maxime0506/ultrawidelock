@@ -145,7 +145,7 @@ REMOVE_ITEM _zephyr_libraries aliro
 # took the count from 1,176 lines to these.
 Aliro 1\.0
 Aliro Specification
-the Aliro Door Lock cluster
+[Tt]he Aliro Door Lock cluster
 Aliro (BLE|UWB) (advertisement|transaction|door-lock|credential)
 Aliro (service|advertising) (data|support|with)
 Aliro key (in|provisioned in) Wallet
@@ -172,3 +172,32 @@ Aliro_1\.0_specification\.pdf
 esp-aliro
 Nordic Aliro library
 Aliro key during Matter commissioning
+
+# The add-on's C++ entry points, quoted in bring-up guides as log or API text.
+AliroStart\(\)
+AliroInit
+Failed to start Aliro
+legacy Nordic Aliro binary
+app-side `src/aliro/`
+
+# The Matter Data Model's own door-lock vocabulary, as the porting notes cite it.
+(Matter )?Aliro cluster
+BLE\+UWB Aliro flow
+
+# The specification, named as the specification: what it mandates, what it
+# defines on the wire, what it does not cover, and Apple's certification page.
+Aliro support
+Aliro features
+Aliro `0xFFF2`
+Aliro 0xFFF2 service
+Aliro auth commands
+Aliro-over-NFC
+Aliro-certified platforms
+Aliro's time-based credential
+Aliro makes NFC the mandatory transport
+does not mention Aliro
+the published Aliro
+It means Aliro
+and Aliro only
+route the Aliro
+Full Aliro UWB

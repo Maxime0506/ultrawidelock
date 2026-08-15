@@ -94,7 +94,7 @@ Tag while no real time source existed. With the Matter-timesync seeding merged
 seeded clock. Stock firmware never hits this: its clock
 is either fresh (before the first reboot) or invalid (after), never
 valid-but-stale. The ESP32 port derives the same tag from its live clock
-(SNTP-fed; `ultrawidelock_ble.c` + `aliro_advtag.c`), re-derives at half the 900 s
+(SNTP-fed; `ultrawidelock_ble.c` + `ultrawidelock_advtag.c`), re-derives at half the 900 s
 window, immediately on a time step, and falls back to the "expiry unavailable"
 form whenever the clock is not yet valid.
 

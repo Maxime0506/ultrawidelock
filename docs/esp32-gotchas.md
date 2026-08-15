@@ -50,7 +50,7 @@ message. Override with `FORCE=1` only after confirming no other session owns the
 (commit `8ce132a`)
 
 **VERIFIED addendum.** `lsof -t "$port"` silently missed a live `idf.py monitor` on one
-Mac, so the guard passed and a `make app-flash` spent a full build before esptool died
+Mac, so the guard passed and a `make esp-app-flash` spent a full build before esptool died
 on `[Errno 35] Could not exclusively lock port`. The cause was never reproduced, so the
 guard no longer relies on naming the holder: when `lsof` finds nothing it also tries to
 take the exclusive `flock` that esptool needs, and refuses if that fails. `FORCE=1`
@@ -95,7 +95,7 @@ next app's partition table, and the board sits in a reset loop reporting
 ### 1.6 Host tests are the target's proof
 The crypto core (`ultrawidelock_hash.c`) compiles **host == target** so host KATs pin target
 behaviour. Run `tests/ports/esp32/run.sh` before believing any crypto change. A
-compact AES-256-GCM host double (`aliro_prim_host.c`) lets the KATs run without PSA.
+compact AES-256-GCM host double (`ultrawidelock_prim_host.c`) lets the KATs run without PSA.
 Build success is not proof: the wire/crypto bugs below all built cleanly. The shared
 `modules/ultrawidelock_uwb` logic has a second host harness, `tests/host/run.sh` (`make test`),
 which compiles the shared sources **without** `ESP_PLATFORM`: that is
@@ -115,13 +115,13 @@ dead, check the **board power-select jumper first** — it is not a software pro
 **VERIFIED (regression) → BENCH-GATED (fix).** The standalone reader app (`examples/esp32/reader`) probes the
 DW3000 at boot (`app_responder_start()` in `main.c`). The `matter-lock` app dropped
 that, so the first DW3000 touch happened at M4 — inside the NimBLE host callback
-(`ultrawidelock_ranging_feed → engine → ultrawidelock_uwb_start_aliro → dwt_probe`). There `dwt_probe`
+(`ultrawidelock_ranging_feed → engine → ultrawidelock_uwb_start_cred → dwt_probe`). There `dwt_probe`
 returns `-1` (radio init `-5`): no prior bring-up + a shallow callback stack. Symptoms:
 `dwt_probe failed: -1`, then on reconnect `spi_bus_initialize: SPI bus already
 initialized`.
 
-- **Fix:** bring the radio up once in the clean reader-startup task. `aliro_ranging_init`
-  does a throwaway `ultrawidelock_uwb_start_aliro` (zero URSK) + `ultrawidelock_uwb_stop`; `uwb_min`'s
+- **Fix:** bring the radio up once in the clean reader-startup task. `ultrawidelock_ranging_init`
+  does a throwaway `ultrawidelock_uwb_start_cred` (zero URSK) + `ultrawidelock_uwb_stop`; `uwb_min`'s
   `g_radio_ready` latches, so M4's `ccc_prepoll_listen` skips the probe and only
   re-applies the negotiated channel.
 - **Corollary bug:** `dw3000_spi_init` re-added SPI devices on a second call (leaking the
@@ -216,7 +216,7 @@ project's reading of it, which is what cost the debugging time.
 **VERIFIED.** The AUTH1 tag only decrypts once the session salt is exact:
 - salt field 1 = **`reader_group_identifier_key.x` = pub(signingKey).x** — this is the
   reader's *signing* public key X, **not** the device ephemeral key (that was the bug).
-  Derived via `aliro_ec_p256_pub_from_priv`; refreshed on identity load and on both
+  Derived via `ultrawidelock_ec_p256_pub_from_priv`; refreshed on identity load and on both
   Matter provisioning paths.
 - salt item 4 = **interface byte**: `0xC3` when the transaction runs over the BLE
   transport, `0x5E` when it runs over NFC.
@@ -295,7 +295,7 @@ credential-auth (AP) secure channel. They use their own AES-256-GCM channel:
 `[proto][id][(len_plain + 16)_be16][ciphertext || 16-byte tag]`, and the GCM **AAD is the
 4-byte header with the *plaintext* length** `[proto][id][len_plain_be16]`, **not** the
 wire length. Getting the AAD length field wrong is the single highest-risk mistake here;
-it fails the tag with no other signal. Implemented in `aliro_msg_seal` / `aliro_msg_open`.
+it fails the tag with no other signal. Implemented in `ultrawidelock_msg_seal` / `ultrawidelock_msg_open`.
 
 ### 5.3 The missing step: Reader-Status-Access-Protocol-Completed
 **VERIFIED against the reference binary.** After EXCHANGE success the reader **must** send
@@ -467,7 +467,7 @@ session drops. Re-unlock within one session now works too (the old code debounce
 disconnect). Not a ranging fault; a lock-policy design choice.
 
 ### 6.9 ESP vs nRF: the logic is shared and proven; ESP is the real-time port
-The whole Aliro/CCC/DS-TWR stack in `modules/ultrawidelock_uwb` is compiled by **both** the nRF5340
+The whole credential/CCC/DS-TWR stack in `modules/ultrawidelock_uwb` is compiled by **both** the nRF5340
 Qorvo reference app and this ESP port. When ESP misbehaved, the bug was never in that shared logic
 (the nRF proves it) — it was ESP's slower SPI + jitterier callback dispatch. Two
 consequences worth remembering: (a) lean on the nRF reference to confirm intent before
@@ -563,7 +563,7 @@ pub.X. (commit `ca937e2`)
 ### 8.2 DEV identity is dev-open + loud, not a bypass
 With a DEV identity and no trust anchors, the reader accepts the presented credential
 **and logs a warning**; it is an interim seam for real issuer-chain validation, not a
-silent allow. Bench commands: `ultrawidelock-prov` (show id / trust / last cred), `aliro-trust`
+silent allow. Bench commands: `ultrawidelock-prov` (show id / trust / last cred), `ultrawidelock-trust`
 (persist the last-presented credential key). Phase-4 Matter `SetAliroReaderConfig` writes
 the same blob.
 

@@ -94,13 +94,13 @@ of debugging once. Check the jumper first.
 
 ```bash
 cd examples/esp32/reader
-make set-target TARGET=esp32c6   # or esp32s3 / esp32c5
+make esp-set-target TARGET=esp32c6   # or esp32s3 / esp32c5
 make build
 make flash
 make monitor
 ```
 
-`make set-target` runs `idf.py set-target` once per checkout. ESP-IDF is expected at
+`make esp-set-target` runs `idf.py set-target` once per checkout. ESP-IDF is expected at
 `~/esp/esp-idf`; override with `IDF_EXPORT=`. The port is
 auto-detected and SEGGER/J-Link ports are refused; `make ports` lists what is attached
 and how each is classified.

@@ -253,7 +253,7 @@ ours as usual, slot 3 (`Response_1`) reserved and deliberately silent.
 The count has to change in two places at once, because both feed the `RangingConfiguration`
 SaltedHash the phone independently recomputes: the M3 `Number Responder Nodes` attribute and
 byte 12 of the `RangingConfiguration` blob in §6. If they disagree, every derived STS, dURSK
-and dUDSK diverges and nothing decodes at all. `aliro_round_config.h` now defines both from
+and dUDSK diverges and nothing decodes at all. `ultrawidelock_round_config.h` now defines both from
 one macro (`ULTRAWIDELOCK_NUM_RESPONDERS`, default 1) so they cannot desync.
 
 Two frames move when `N_Resp` goes from 1 to 2, and they arrive on independent receive paths:
@@ -394,8 +394,8 @@ reset over the sync pin) as the primitive that defines the epoch. Two items rema
 
 On instruments: a BLE sniffer alone yields everything through section 6 (discovery, the
 versions, the message IDs, suspend/resume) with no UWB gear. The clear-text half of that is
-decoded for you by the Wireshark dissector in [wireshark.md](wireshark.md)
-(`tools/aliro.lua`): the `0xFFF2` advert of this section and the Procedure-0 time sync of
+decoded by a Wireshark dissector, which is no longer in this repository: the
+`0xFFF2` advert of this section and the Procedure-0 time sync of
 section 5. Resolving section 7 needs a
 UWB capture, or the radio's own per-frame diagnostics, which is what separates "setup
 negotiated but the STS is mismatched" from "STS lines up but there is no RF link." The

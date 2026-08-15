@@ -1,7 +1,7 @@
 # nRF5340 bring-up
 
-Parts on the bench to a healthy first boot; toolchain install is in
-[set-up.md](set-up.md).
+Parts on the bench to a healthy first boot; toolchain install is the Quick start
+in the [repository README](../README.md).
 
 ## Parts
 

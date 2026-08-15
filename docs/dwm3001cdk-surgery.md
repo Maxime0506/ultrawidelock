@@ -10,7 +10,7 @@ one is narrower and deeper: the nRF52833 has **128 KB of RAM**, and almost every
 below is either that constraint or a consequence of writing the Matter node by hand
 rather than linking CHIP.
 
-Code lives under [`firmware`](../firmware), the portable Matter node in
+Code lives under [`firmware`](../apps/dwm3001cdk-lock), the portable Matter node in
 `modules/ultrawidelock_matter`, and the reader in `modules/ultrawidelock_cred` (shared byte-for-byte with
 the ESP32 port — see §9.2).
 

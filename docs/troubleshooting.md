@@ -71,8 +71,7 @@ see, hold **SW2 through reset** instead.
 **The board refuses an over-the-air patch.** A delta is computed against the
 exact bytes the board is running, and only the build host keeps that record. A
 push from a phone is invisible to it, so `make fota-done` after every phone push
-is what keeps the record true. `make ota-smp-list` prints what the board reports
-running, which is the cheapest way to see the mismatch.
+is what keeps the record true, and the cheapest way to see a mismatch.
 
 **Nothing happens when you press SW2 during an update.** D10, the blue LED,
 blinks at 2 Hz while the update window is open, and it follows the window rather
@@ -102,7 +101,7 @@ names the directory bootstrap looks in, and `ULTRAWIDELOCK_TOOLCHAIN=env` uses w
 already on `PATH` instead.
 
 **`make bootstrap` says nrfutil is not on PATH.** It is what installs the toolchain, so
-bootstrap stops there rather than after the 6.5 GB fetch. `make tools-install` gets it on
+bootstrap stops there rather than after the 6.5 GB fetch. `make tools` gets it on
 macOS; elsewhere it is a
 [download from Nordic](https://www.nordicsemi.com/Products/Development-tools/nrf-util).
 
@@ -221,10 +220,10 @@ drive relock from proximity with hysteresis.
 
 ## Tests and CI gates
 
-**`make verify` says a gate COULD NOT RUN and exits nonzero.** That is deliberate, not a
+**`make check` says a gate COULD NOT RUN and exits nonzero.** That is deliberate, not a
 warning: the gate's tool is not installed, and CI will run it whatever this machine has,
-so "could not check" reads as "not verified". `make tools-install` fills the gap. To
-accept it for one run instead, scope it out by name: `SKIP="cbmc docs" make verify`.
+so "could not check" reads as "not verified". `make tools` fills the gap. To
+accept it for one run instead, scope it out by name: `SKIP="cbmc docs" make check`.
 
 **A gate passed here and failed on the PR.** Two usual causes. A version-pinned tool
 (`clang-format`, `clang-tidy`, `zizmor`, `reuse`) disagreeing with CI's pin: `make tools`
@@ -232,8 +231,8 @@ flags a row that is off the pin. Or a gate that silently ran weaker here: withou
 `markdown` python package the flash-HTML drift check skips, which `make tools` also
 reports.
 
-**`make verify` is slow, or a failure is hard to read.** It runs in parallel lanes, so
-rows arrive out of order and two lanes can fail in one sweep. `SERIAL=1 make verify` runs
+**`make check` is slow, or a failure is hard to read.** It runs in parallel lanes, so
+rows arrive out of order and two lanes can fail in one sweep. `SERIAL=1 make check` runs
 one gate at a time in table order. To re-run a single gate, scope the rest out with
 `SKIP=`.
 
@@ -245,12 +244,7 @@ candidate checks and explicitly leaves the unavailable seven to CI. Do not confi
 `make check` directly for that sandbox; it is the full developer sweep and
 correctly treats those missing capabilities as failures.
 
-**`make test-verify` fails after a workflow change.** It gates the mapping between CI
-jobs and local gates. A new job in `.github/workflows/` has to be accounted for, either
-a gate that reproduces it locally, or a written reason it cannot be one. The failure
-names the job.
-
-**`make docs` refuses to run.** It stops when `HEAD` is behind `origin/main`, because
+**`python3 web/build.py` refuses to run.** It stops when `HEAD` is behind `origin/main`, because
 regenerating from a stale tree writes stale pages. `git fetch origin && git merge
 origin/main` first.
 

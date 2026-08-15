@@ -38,7 +38,7 @@ would build the wrong image and then diff the board against it.
 
 ## Kconfig overlays (DWM3001CDK)
 
-They live beside the application in [`../firmware`](../firmware) and are
+They live beside the application in [`../apps/dwm3001cdk-lock`](../apps/dwm3001cdk-lock) and are
 selected by the options above:
 
 - `overlay-thread.conf`: always applied by `make build`. The Matter node,
@@ -147,10 +147,10 @@ per-device secrets.
 `unlock`, `codes`, `range`, `factoryreset`, `ultrawidelock <prov|trust|clear>`.
 
 **ESP32 reader** (`make esp-monitor APP=reader`): `status`, `range`,
-`aliro-start` / `aliro-stop` (demo responder, no phone needed), `ultrawidelock-prov`,
-`aliro-trust`.
+`ultrawidelock-start` / `ultrawidelock-stop` (demo responder, no phone needed), `ultrawidelock-prov`,
+`ultrawidelock-trust`.
 
-`ultrawidelock trust` / `aliro-trust` persist the last-seen credential to NVS;
+`ultrawidelock trust` / `ultrawidelock-trust` persist the last-seen credential to NVS;
 `factoryreset` and `esp-flash-erase` drop it.
 
 ## Capture safety
@@ -160,7 +160,8 @@ states, message metadata, device or credential identifiers, and a truncated URSK
 fingerprint. It does not log the raw URSK, but the trace is still a bring-up
 artifact: do not ship it in production firmware or publish a capture without
 review. In the current tree, selecting this option stops before the firmware
-build because `integrations/nrfconnect-door-lock/aliro-ble-trace.patch` is absent.
+build: the required vendor trace patch is not in this repository, which is
+what `make help` reports against `ULTRAWIDELOCK_TRACE=1`.
 
 Flight-recorder data is more sensitive. Raw serial logs containing `[FREC]`
 records and binary `.frc` files include the full ephemeral URSK. Keep them
