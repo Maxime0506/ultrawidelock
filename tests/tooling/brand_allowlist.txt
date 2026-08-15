@@ -126,3 +126,11 @@ REMOVE_ITEM _zephyr_libraries aliro
 # <aliro/ above covers the other thirteen; it is spelled with the delimiter, so
 # it never covered this one, which is how the rename got it.
 "aliro/platform/
+
+# --- The CSA specification, named as the CSA's ---------------------------------
+# The README says which standard this firmware implements. That is the word
+# naming a CSA document, the same class as the citations above, and not a label
+# for any code here. Kept to this one spelling on purpose: "implements Aliro"
+# describes the specification, where "the Aliro reader" would be claiming the
+# name for ours.
+implements Aliro, the CSA's door-lock credential standard
