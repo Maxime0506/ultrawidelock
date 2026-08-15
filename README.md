@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="assets/hero.gif" width="760" alt="A Wallet home key unlocking the lock on approach, recorded on real hardware"/>
-
-<h1>UltraWideLock</h1>
+<img src="assets/card.png" width="880" alt="UltraWideLock: an Apple UWB digital key lock that an iPhone or Apple Watch unlocks on approach over UWB or on tap over NFC"/>
 
 **Portable firmware for NFC and UWB smart locks.**
 
-<sub>Real hardware. A real Wallet key. A real walk-up unlock.</sub>
+<img src="assets/badges.svg" width="880" alt="v0.3.0 · ISC license · Zephyr, ESP-IDF and FreeRTOS ports · 7,375 host tests"/>
+
+<img src="assets/divider.svg" width="880" alt=""/>
 
 </div>
 
@@ -77,6 +77,14 @@ target grouped by board.
 ```
 
 Local only. No app, no account, no cloud round trip.
+
+<div align="center">
+
+<img src="assets/hero.gif" width="880" alt="A Wallet home key unlocking the lock on approach, recorded on real hardware"/>
+
+<sub>Real hardware. A real Wallet key. A real walk-up unlock.</sub>
+
+</div>
 
 ## The board
 
@@ -225,6 +233,10 @@ Contributions are welcome; start with [`CONTRIBUTING.md`](CONTRIBUTING.md).
 Coding agents should start with [`AGENTS.md`](AGENTS.md), which carries the
 architecture invariants, task routing, and exact verification commands without
 duplicating separate instructions for individual agent products.
+
+<div align="center">
+<img src="assets/divider.svg" width="880" alt=""/>
+</div>
 
 ## License
 
