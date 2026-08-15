@@ -12,13 +12,83 @@ Stdlib Python only. No node, no bundler, nothing to install.
 
 | Path | What it is |
 |---|---|
-| `build.py` | the whole generator, and the link gate |
-| `site/` | landing and docs page sources |
+| `build.py` | the whole generator: page shell, asset bundle, link gate, drift gates |
+| `site/` | landing and docs page templates, the Markdown renderer |
 | `flasher/` | WebSerial flasher for the ESP32 lock |
 | `twin/` | the walk-up digital twin, firmware logic compiled to WASM |
 | `graph/` | subsystem graph, generated from the source tree |
-| `assets/design/` | vendored design system: tokens, components, theme toggle |
+| `assets/design/` | vendored design system: tokens, components, scripts |
 | `dist/` | **generated, gitignored, disposable** |
+
+## The shell
+
+Every page's `<head>`, topbar and footer come from `build.py`, not from the page
+source. Before that they existed in four hand-written versions that had already
+drifted apart: the landing page had a theme toggle, the docs template had none,
+the twin persisted its choice under a different `localStorage` key so it never
+inherited the site's, and the 3D graph had no toggle at all.
+
+Pages opt in with markers the build substitutes:
+
+| Marker | Gets |
+|---|---|
+| `@@HEAD@@` | meta, canonical, Open Graph, favicon, font preloads, stylesheet |
+| `@@NAV@@` | the site topbar, with `aria-current` on the page you are on |
+| `@@TOOLBAR:crumb@@` | the narrower bar the twin, flasher and graph share |
+| `@@FOOTER@@` | the footer, and the deferred `site.js` |
+| `@@SITEJS@@` | just the script, for full-viewport pages that have no footer |
+
+Links are relative and the depth is computed per page, so the site works
+unchanged at a domain root or under a project subpath.
+
+The Graph link is emitted only when the graph was actually built. It needs
+graphify, which is not in this repository, so linking it unconditionally
+published a nav item that 404'd on every build without `graphify-out/` — and
+the link gate deliberately excuses that path, so nothing caught it.
+
+## Gates
+
+`--check` fails the build on any of these. They are wired in because all three
+existed already and nothing ran them, which meant all three had quietly rotted
+into scripts that could not have passed.
+
+| Gate | Checks |
+|---|---|
+| link gate | every relative `href`/`src` in the output resolves |
+| `twin/check_constants.py` | the twin's `FW` table still matches the C it cites |
+| `site/check_hero_constants.py` | the landing hero's tick rate and unlock bound ditto |
+| `flasher/check_codes.py` | the setup code, QR payload and its provenance hash |
+
+The two constant gates share one convention: `NAME: value, // path:line`. The
+format is load-bearing — a gate re-reads each cited line and fails if the value
+has moved off it. Do not reformat those tables.
+
+## The graph's data
+
+The subsystem graph has two data sources, and which one you have decides which
+version of the page you get.
+
+| Source | Size | In git | Gives you |
+|---|---|---|---|
+| `graph/subsystems.json` | 4 KB | yes | the flat SVG graph, always |
+| `graphify-out/graph.json` | 11 MB | no | the 3D file-level graph, with `vendor/` |
+
+`graphify update .` writes the big one. It is 7,969 nodes and 18,457 edges, and
+this page reduces all of that to 17 subsystems and 49 edges — so the repository
+carries the 4 KB reduction and leaves the 11 MB where graphify put it. Building
+with the full graph present rewrites the distillate as a side effect, so it
+stays current and its diff is reviewable: one sorted line per subsystem, one per
+edge, and a reviewer can see that a subsystem gained four files or that a new
+dependency appeared.
+
+That is deliberately not the `twin.js` mistake. This file is small, sorted,
+line-per-entry and regenerates deterministically; `twin.js` was 36 KB of
+minified emscripten on one line. Committing it is what lets the graph page
+build from a fresh clone and in CI, which is the second rule below.
+
+The 3D page needs both the full graph and a renderer that is fetched, not
+committed. Neither is a build requirement and the flat page is the default, not
+a degraded mode.
 
 ## Two rules
 

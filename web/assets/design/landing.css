@@ -82,7 +82,11 @@
 .hs-grid line{stroke:var(--scope-grid);stroke-width:1}
 .hs-rule{stroke:var(--scope-axis);stroke-width:1}
 .hs-tick{stroke:var(--line-strong);stroke-width:1}
-.hs-cap{fill:var(--faint);font-family:var(--font-mono);font-size:11px;
+/* --muted, not --faint. These name the things in the diagram, so they are
+   labels rather than decoration -- and --faint on the light theme's scope
+   surface measures 4.22:1, which is under the 4.5 small text needs. --muted
+   is 5.53:1 there. */
+.hs-cap{fill:var(--muted);font-family:var(--font-mono);font-size:11px;
   letter-spacing:.06em;text-transform:uppercase}
 .hs-num{fill:var(--muted);font-family:var(--font-mono);font-size:11px;
   font-variant-numeric:tabular-nums}
@@ -109,7 +113,7 @@
   letter-spacing:.06em;text-transform:uppercase}
 
 .hs-lane-line{stroke:var(--scope-axis);stroke-width:1;stroke-dasharray:1 5}
-.hs-lane-cap{fill:var(--faint);font-family:var(--font-mono);font-size:10px;
+.hs-lane-cap{fill:var(--muted);font-family:var(--font-mono);font-size:10px;
   letter-spacing:.08em;text-transform:uppercase}
 .hs-pulse{fill:var(--trace)}
 

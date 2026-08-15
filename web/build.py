@@ -385,39 +385,65 @@ def build_twin_wasm() -> bool:
     return True
 
 
-def build_graph() -> Path | None:
-    """Render the subsystem graph, when graphify has produced data to render.
+def graph_source() -> Path | None:
+    """Where the subsystem graph's data comes from, freshest first.
 
-    graphify is not in this repository and graphify-out/ is gitignored, so the
-    graph is an enrichment and never a build requirement. Refresh it with:
+    graphify's own output is 11 MB of 7,969 nodes, machine-local and gitignored,
+    and this page reduces all of it to 17 subsystems and 49 edges. So the
+    repository carries the 3 KB reduction instead: the graph page then builds
+    from a fresh clone, in CI, and on a machine that has never heard of
+    graphify -- which is the whole point of this build's second rule.
 
-        graphify . --update --code-only
+    When the full graph is present it wins, and the distillate is rewritten from
+    it as a side effect, so it stays current and its diff is reviewable.
     """
-    source = ROOT / "graphify-out" / "graph.json"
-    if not source.is_file():
-        print("build: graphify-out/graph.json absent, skipping the graph "
-              "(graphify . --update --code-only)")
+    sys.path.insert(0, str(WEB / "graph"))
+    import graph as graph_mod                                   # noqa: PLC0415
+    import json as _json                                        # noqa: PLC0415
+
+    full = ROOT / "graphify-out" / "graph.json"
+    if full.is_file():
+        data = _json.loads(full.read_text())
+        if graph_mod.write_distillate(data):
+            print(f"build: refreshed {graph_mod.DISTILLATE.relative_to(ROOT)} "
+                  "from graphify-out/ (commit it)")
+        return full
+    if graph_mod.DISTILLATE.is_file():
+        return graph_mod.DISTILLATE
+    print("build: no graph data, skipping the graph "
+          "(graphify update .)")
+    return None
+
+
+def build_graph() -> Path | None:
+    """Render the subsystem graph."""
+    source = graph_source()
+    if source is None:
         return None
     sys.path.insert(0, str(WEB / "graph"))
 
     out = DIST / "graph" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # The 3D page is the graph. It needs the vendored renderer, which is
-    # gitignored, so the flat SVG stands in when that is absent rather than
-    # leaving a dead link.
+    # The 3D page needs two things the repository does not carry: the vendored
+    # renderer, and the full node-level graph. Either one missing falls back to
+    # the flat SVG, which is the version that ships from a clean clone and from
+    # CI. The flat page is not a degraded mode -- it is the default, and the
+    # only one whose data is committed.
     lib = WEB / "vendor" / "3d-force-graph.min.js"
-    if lib.is_file():
-        import graph3d                                          # noqa: PLC0415
+    import graph as graph_mod                                    # noqa: PLC0415
+    node_level = source != graph_mod.DISTILLATE
+
+    if lib.is_file() and node_level:
+        import graph3d                                           # noqa: PLC0415
         out.write_text(graph3d.render(source, ROOT), encoding="utf-8")
         shutil.copy2(lib, out.parent / lib.name)
         print(f"build: 3D graph -> {out.relative_to(DIST)}")
     else:
-        import graph as graph_mod                                # noqa: PLC0415
         out.write_text(graph_mod.render(source), encoding="utf-8")
-        print("build: 3d-force-graph not vendored, using the flat graph "
-              "(curl -sSL -o web/vendor/3d-force-graph.min.js "
-              "https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js)")
+        why = ("3d-force-graph not vendored" if node_level
+               else "no node-level graph data")
+        print(f"build: flat graph from {source.name} ({why})")
     return out
 
 
@@ -877,8 +903,9 @@ def main() -> int:
 
     clean()
     # Decided before any page is rendered, because the nav has to know whether
-    # to carry a Graph link at all.
-    HAVE_GRAPH = (ROOT / "graphify-out" / "graph.json").is_file()
+    # to carry a Graph link at all. Either data source will do.
+    HAVE_GRAPH = ((ROOT / "graphify-out" / "graph.json").is_file()
+                  or (WEB / "graph" / "subsystems.json").is_file())
 
     have_twin = build_twin_wasm()
     written = copy_trees()
