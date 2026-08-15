@@ -1763,7 +1763,7 @@ void test_matter_im_events(void)
 		T_OK("and the numbers never repeat", info.events[1].number > info.events[0].number);
 	}
 
-	t_group("a walk-up is Aliro-sourced and belongs to no fabric");
+	t_group("a walk-up is credential-sourced and belongs to no fabric");
 	{
 		fill_info(&info);
 		matter_clusters_init(&srv, &info);
@@ -1771,7 +1771,8 @@ void test_matter_im_events(void)
 		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_UNLOCK,
 						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
 		T_EQ("recorded", (long)matter_clusters_event_count(&info), 1L);
-		T_EQ("source Aliro", (long)info.events[0].source, (long)MATTER_DL_OP_SOURCE_ALIRO);
+		T_EQ("the credential source", (long)info.events[0].source,
+		     (long)MATTER_DL_OP_SOURCE_ALIRO);
 		T_EQ("no fabric", (long)info.events[0].fabric_index, 0L);
 
 		/* A node id offered without a fabric is dropped rather than

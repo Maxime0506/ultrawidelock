@@ -367,7 +367,9 @@ struct matter_user {
 /*
  * OperationSourceEnum (door-lock-cluster.xml:882-895). Only the three this node
  * can honestly report: a controller command is Remote, a credential walk-up is
- * Aliro, and Unspecified is what a state change with no known cause gets.
+ * the credential source at value 10, and Unspecified is what a state change
+ * with no known cause gets. The enum item's own spelling is the CSA's, which is
+ * why the identifier below keeps it.
  */
 #define MATTER_DL_OP_SOURCE_UNSPECIFIED 0u
 #define MATTER_DL_OP_SOURCE_REMOTE      7u

@@ -1843,8 +1843,8 @@ static void on_ultrawidelock_lock_state(bool unlocked)
 	s_info.lock_state = want;
 	/*
 	 * A walk-up belongs to no fabric and to no node: the credential exchange
-	 * is the reader's own and no controller asked for it. Source Aliro is
-	 * exactly what the enum has that value for.
+	 * is the reader's own and no controller asked for it. The credential
+	 * source is exactly what the spec's enum has that value for.
 	 */
 	matter_clusters_record_lock_operation(&s_info,
 					      unlocked ? MATTER_DL_LOCK_OP_UNLOCK
