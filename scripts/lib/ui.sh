@@ -422,18 +422,59 @@ _ui_flush() {
 
 # ---- lifecycle --------------------------------------------------------------
 
+# ui_kill_tree <pid> -- end a process and everything below it, children first so
+# nothing is reparented to init and left running.
+#
+# This is not belt-and-braces, it is the whole reason ^C works. A step runs as a
+# background job so the loop above can poll it, and POSIX has a background job
+# in a non-interactive shell ignore SIGINT -- which it then passes on to the
+# compiler or the solver it execs. So the ^C that reaches make and this script
+# does not reach the work: without this, interrupting `make cbmc` returned the
+# prompt while the proof carried on burning a core with no parent left to
+# collect it.
+ui_kill_tree() {
+	local kid
+	# Every failure here is expected and none of it may propagate: pgrep exits
+	# non-zero when a process has no children, and kill exits non-zero when the
+	# target died on its own a moment ago. Callers run under `set -e` and call
+	# this from a trap, where an unguarded failure does not just skip a kill --
+	# it abandons the rest of the trap. That is exactly how an earlier version
+	# of this walked one suite of eight and left the other seven running.
+	for kid in $(pgrep -P "$1" 2>/dev/null || true); do
+		ui_kill_tree "$kid" || true
+	done
+	kill -TERM "$1" 2>/dev/null || true
+	return 0
+}
+
+# The line ^C leaves behind: which step it landed in, and how long the run had
+# been going. Printed before the killing, so the feedback is immediate.
+_ui_interrupted() {
+	local total msg
+	total=$(($(date +%s) - _ui_t0))
+	msg="interrupted"
+	if [ -n "$_ui_label" ]; then
+		msg="$msg during $_ui_label"
+		if [ "$_ui_total" -gt 0 ]; then
+			msg="$msg ($_ui_i/$_ui_total)"
+		fi
+	fi
+	_ui_clear
+	printf '\n  %s%s%s %s %s %s\n\n' \
+		"$_ui_r" "$_ui_bad" "$_ui_z" "$msg" "$_ui_dot" "$(_ui_dur "$total")" >&2
+	return 0
+}
+
 _ui_cleanup() {
 	[ "$_ui_started" = 1 ] || return 0
 	_ui_started=0
 	if [ "$_ui_mode" = fancy ]; then
 		printf '\r\033[2K\033[?25h' >&2
 	fi
-	# ^C at a terminal reaches the whole foreground process group, so the
-	# compiler under the bar has already had it. An explicit kill of this shell
-	# has not, and leaves the step's wrapper behind writing into a file about to
-	# be deleted; end it here.
+	# The running step, and everything under it. See ui_kill_tree for why the
+	# signal that got us here did not do this already.
 	if [ -n "$_ui_pid" ]; then
-		kill "$_ui_pid" 2>/dev/null
+		ui_kill_tree "$_ui_pid"
 		_ui_pid=
 	fi
 	[ -n "$_ui_tmp" ] && rm -f "$_ui_tmp" 2>/dev/null
@@ -463,8 +504,10 @@ ui_attach() {
 	_ui_started=1
 	_ui_cols="$(_ui_width)"
 	trap '_ui_cleanup' EXIT
-	trap '_ui_cleanup; trap - INT; kill -INT $$' INT
-	trap '_ui_cleanup; trap - TERM; kill -TERM $$' TERM
+	# Say what was interrupted, end the step's process tree, then die the way
+	# the shell would have, so ^C still reports 130 to make and to the caller.
+	trap '_ui_interrupted; _ui_cleanup; trap - INT; kill -INT $$' INT
+	trap '_ui_interrupted; _ui_cleanup; trap - TERM; kill -TERM $$' TERM
 	# bash runs a trap between commands, and the paint loop is nothing but short
 	# commands, so a window resized mid-build is picked up within a frame.
 	trap '_ui_cols="$(_ui_width)"' WINCH
@@ -674,6 +717,13 @@ ui_run_try() {
 			_ui_pid="$pid"
 			exec 9<"$_ui_tmp"
 			_ui_pending=
+			# One frame before the loop, not after the first sleep.
+			# The step's name is then on screen from the moment it
+			# starts, and -- since the loop below runs only while the
+			# child is alive -- it is the only frame a step quicker
+			# than a tick would otherwise get: none at all, which made
+			# what the display shows depend on the scheduler.
+			_ui_paint
 			# One thread doing both jobs: drain what the child wrote,
 			# repaint, sleep. A background painter would race this
 			# loop for the cursor.
@@ -794,6 +844,22 @@ _ui_fixture() { # <case>, run in its own process by _ui_self_test
 		ui_run "beta" true
 		ui_end
 		;;
+	killtree) # a live tree, then a dead pid, from a caller under set -e
+		sleep 30 &
+		local live=$!
+		ui_kill_tree "$live"
+		sleep 0.3
+		if kill -0 "$live" 2>/dev/null; then
+			printf 'live-survived\n'
+		else
+			printf 'live-killed\n'
+		fi
+		# The pid is gone now. Under `set -e` an unguarded kill here takes
+		# the caller with it, which is the failure this fixture exists for:
+		# in a signal handler it means every later cleanup step is skipped.
+		ui_kill_tree "$live"
+		printf 'still-running\n'
+		;;
 	esac
 }
 
@@ -812,8 +878,12 @@ _ui_self_test() {
 		rc=0
 		env "$@" bash "$self" --fixture "$c" >"$tmp_out" 2>"$tmp_err" || rc=$?
 	}
+	# "  FAIL <what>" is the row shape the rest of the repo's harnesses print,
+	# which is what scripts/test-runner.sh counts and replays. Saying it any
+	# other way is how a failure here reached `make check` as a red suite with
+	# an empty explanation under it.
 	fail() {
-		printf '  self-test FAILED: %s\n' "$1" >&2
+		printf '  FAIL %s\n' "$1" >&2
 		fails=$((fails + 1))
 	}
 
@@ -954,11 +1024,21 @@ _ui_self_test() {
 		fail "no plan, plain warm: the cache was not the plan"
 	rm -rf "$cacheroot"
 
+	# 19. ui_kill_tree ends a live tree, and survives a pid that is already gone
+	#     without taking its caller's `set -e` down with it. ^C reaches this
+	#     library through a trap, and a trap that aborts halfway leaves the
+	#     compilers it was about to end still running.
+	run killtree "ULTRAWIDELOCK_UI=0" TERM=xterm
+	[ "$rc" = 0 ] || fail "kill tree: a dead pid aborted the caller (exit $rc)"
+	grep -q 'live-killed' "$tmp_out" || fail "kill tree: the live process survived"
+	grep -q 'still-running' "$tmp_out" ||
+		fail "kill tree: killing a dead pid ended the script"
+
 	if [ "$fails" -ne 0 ]; then
 		printf '\n  ui: FAIL (%d checks failed)\n' "$fails" >&2
 		return 1
 	fi
-	printf '  ui: PASS (18 checks - output fidelity, exit codes, degraded terminals)\n'
+	printf '  ui: PASS (19 checks - output fidelity, exit codes, degraded terminals)\n'
 }
 
 case "${BASH_SOURCE[0]}" in

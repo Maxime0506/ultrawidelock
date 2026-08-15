@@ -175,9 +175,35 @@ done
 # ui.sh installs its own EXIT trap in ui_attach, so the temp files are swept
 # here rather than in a second one that would replace it.
 ui_attach
-trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"' EXIT
-trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - INT; kill -INT $$' INT
-trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - TERM; kill -TERM $$' TERM
+
+# The suites run as background jobs, which POSIX has ignore SIGINT in a
+# non-interactive shell -- so ^C reaches this script and not the seven compilers
+# under it. Each one's process tree is ended explicitly, or interrupting
+# `make check` returns the prompt and leaves the machine busy for two minutes.
+kill_suites() {
+	local i s
+	for ((i = 0; i < ${#PIDS[@]}; i++)); do
+		ui_kill_tree "${PIDS[i]}" || true
+	done
+	# A second sweep by command line. The walk above reads the process table
+	# one fork at a time, so a suite that was between forks when it was read
+	# can leave a child behind, reparented and unreachable from its pid. What
+	# that child cannot escape is being the exact command this script started.
+	# Each match is killed as a tree of its own: a bare pkill would take the
+	# suite script out from over its compiler and orphan the expensive half.
+	local p
+	for s in $SEL; do
+		for p in $(pgrep -f "$(suite_cmd "$s")" 2>/dev/null || true); do
+			ui_kill_tree "$p" || true
+		done
+	done
+	return 0
+}
+trap 'kill_suites; _ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"' EXIT
+# ${left:-} because ^C can land before the poll loop has set it, and this trap
+# runs under `set -u`.
+trap 'ui_clear; printf "\n  interrupted with %s of %s suites still running\n\n" "${left:-?}" "${n:-?}" >&2; kill_suites; _ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - INT; kill -INT $$' INT
+trap 'kill_suites; _ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - TERM; kill -TERM $$' TERM
 
 printf '\n  ultrawidelock · host-side test suites\n'
 if [[ "${SERIAL:-0}" == "1" ]]; then
