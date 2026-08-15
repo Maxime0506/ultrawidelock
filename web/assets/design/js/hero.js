@@ -82,6 +82,30 @@
 
   var relayOn = false;
 
+  /* ---- the grant ------------------------------------------------------- */
+  /* Crossing inside the bound is the one event here worth marking, so it is
+     the only thing that animates on demand. This function's entire job is a
+     class on the block that encloses both the diagram and the readout; the
+     stamp, the ring and the dimension flash are CSS on that class, so the
+     crossing still costs no per-frame JavaScript.
+     Seeded from the markup's own data-state, so the page does not celebrate
+     its own first paint: an arrival has to be arrived at. */
+  var band = svg.closest(".scope-in");
+  var lastState = svg.getAttribute("data-state");
+
+  function markState(state) {
+    if (state === lastState) return;
+    lastState = state;
+    if (!band) return;
+    band.classList.remove("granted");
+    if (state !== "grant") return;
+    /* Reading a layout value flushes the removal, so a second crossing
+       restarts the animations instead of continuing the first. Once per
+       crossing, never during one. */
+    void band.offsetWidth;
+    band.classList.add("granted");
+  }
+
   function xToM(x) { return (x - LOCK_X) / PX_PER_M; }
   function mToX(m) { return LOCK_X + m * PX_PER_M; }
   function fmt(n, dp) { return n.toFixed(dp); }
@@ -128,8 +152,9 @@
     el.nanos.textContent = fmt(ns, 2);
 
     var granted = seenM <= BOUND_M;
-    el.scope.setAttribute("data-state",
-      relayOn ? "relay" : granted ? "grant" : "hold");
+    var state = relayOn ? "relay" : granted ? "grant" : "hold";
+    el.scope.setAttribute("data-state", state);
+    markState(state);
 
     if (relayOn) {
       el.verdict.textContent = "refused · added delay";

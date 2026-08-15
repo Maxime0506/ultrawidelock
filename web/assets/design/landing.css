@@ -151,6 +151,48 @@
     transform:translateX(calc(var(--travel) * .5))}
 }
 
+/* ------------------------------------------------------------- the grant -- */
+/* Crossing inside the bound is the one event on this page worth marking, so
+   it is the only thing here that animates on demand. `.granted` is added to
+   .scope-in by hero.js at the crossing and removed at every other state, which
+   is all the JavaScript involved: the three effects below are CSS, on
+   transform and opacity only, so the crossing costs no per-frame work.
+   Nothing loops. "hold" and "relay" get none of it -- being refused is not an
+   occasion. */
+
+/* One ring, off the lock body. It starts at r=12.5 (scale .33 of 38), the
+   body's own half-width, so it leaves the lock rather than appearing around
+   it, and it stops at 38 -- clear of the ruler above and the dimension line
+   below, so it never crosses a mark that means something. non-scaling-stroke
+   keeps it a 1px hairline the whole way out instead of thickening as it
+   grows. */
+.hs-ring{fill:none;stroke:var(--path-first-line);stroke-width:1;opacity:0;
+  pointer-events:none;transform-box:view-box;transform-origin:96px 86px}
+.granted .hs-ring{animation:hs-ring var(--dur-5) var(--ease-decel)}
+@keyframes hs-ring{
+  0%{transform:scale(.33);opacity:.85}
+  70%{opacity:.3}
+  100%{transform:scale(1);opacity:0}}
+
+/* The verdict arrives and settles. --ease-spring overshoots, so 1.06 -> 1
+   lands slightly under and comes back: a stamp, not a bounce. */
+.granted .scope-verdict{animation:hs-stamp var(--dur-3) var(--ease-spring)}
+@keyframes hs-stamp{from{transform:scale(1.06)}to{transform:scale(1)}}
+
+/* The dimension line ignites. In "grant" the whole dimension is already
+   --path-first, so bringing it up from a quarter opacity flashes it in the
+   first-path colour without a second colour or a paint-property animation. */
+.granted .hs-dim,.granted .hs-dim-cap{
+  animation:hs-dim-flash var(--dur-5) var(--ease-decel)}
+@keyframes hs-dim-flash{0%{opacity:.25} 22%,100%{opacity:1}}
+
+/* Reduced motion keeps the verdict and drops the celebration: the trace, the
+   dimension and the pill still change colour, and nothing moves. */
+@media (prefers-reduced-motion:reduce){
+  .granted .hs-ring{display:none}
+  .granted .scope-verdict,.granted .hs-dim,.granted .hs-dim-cap{animation:none}
+}
+
 /* ------------------------------------------------------- scope controls -- */
 .scope-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-4);
   margin-top:var(--sp-4);padding-top:var(--sp-4);
@@ -170,6 +212,19 @@
   letter-spacing:var(--tr-caps);color:var(--muted)}
 .scope-read .v{font-size:var(--fs-700);color:var(--strong);line-height:1}
 .scope-read .v small{font-size:var(--fs-200);color:var(--muted);margin-left:.2em}
+/* The verdict pill is the one consumer of --trace outside the SVG, and the
+   variables are declared on #hero-scope, which is its sibling rather than its
+   ancestor -- so the pill was falling back to no border and inherited text.
+   The scope's data-state stays the single driver; :has() just carries it out
+   to the enclosing block. Where :has() is unsupported the pill lands on the
+   same neutral it already had. */
+.scope-in:has(#hero-scope[data-state]){
+  --trace:var(--path-first);--trace-line:var(--path-first-line)}
+.scope-in:has(#hero-scope[data-state="hold"]){
+  --trace:var(--muted);--trace-line:var(--line-strong)}
+.scope-in:has(#hero-scope[data-state="relay"]){
+  --trace:var(--path-late);--trace-line:var(--path-late-line)}
+
 .scope-verdict{display:inline-flex;align-items:center;gap:var(--sp-2);
   padding:var(--sp-2) var(--sp-4);border-radius:var(--r-pill);
   border:var(--bw-1) solid var(--trace-line);background:var(--card);
