@@ -29,6 +29,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
+. "$ROOT/scripts/lib/ui.sh"
 
 OUT="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/host/coverage"
 BIN="$OUT/host_test_cov"
@@ -38,12 +39,38 @@ rm -f "$OUT"/*.profraw # stale profiles from removed suites break the merge
 # Apple toolchains front the LLVM tools with xcrun; Linux has them on PATH bare.
 llvm_tool() { if command -v xcrun >/dev/null 2>&1; then xcrun "$@"; else "$@"; fi; }
 
+# Every instrumented compile is a step of scripts/lib/ui.sh, which is why the
+# compilers are wrapped rather than called directly. There are forty-odd of them
+# and no plan is passed to ui_begin: the step names are the -o targets, and the
+# previous run's cache supplies both the count and the weights. The first run on
+# a fresh checkout counts steps without a percentage, and every run after that
+# has one.
+_cov_label() { # the -o target, as a name a reader recognises
+	local prev= a out=
+	for a in "$@"; do
+		[ "$prev" = "-o" ] && out="$a"
+		prev="$a"
+	done
+	[ -n "$out" ] || {
+		printf 'compile'
+		return 0
+	}
+	out="$(basename "$out")"
+	out="${out%.o}"
+	out="${out#cov_}"
+	out="${out%_cov}"
+	printf '%s' "$out"
+}
+
 # The instrumentation flags are clang-only: macOS cc is clang, Linux CI sets CC=clang.
 # -w: coverage is not a lint gate (run.sh / the Zephyr build are). Errors still fail.
-cov_cc() {
+_cov_cc() {
 	"${CC:-cc}" -std=c11 -O0 -g -w \
 		-fprofile-instr-generate -fcoverage-mapping "$@"
 }
+cov_cc() { ui_run "$(_cov_label "$@")" _cov_cc "$@"; }
+
+ui_begin "coverage"
 
 # --- suite 1: the ultrawidelock_uwb host KAT suite (same sources as run.sh) -----------
 # -lm for the same reason run.sh needs it: test_ultrawidelock_door.c calls cos/sqrt, which
@@ -331,10 +358,11 @@ NFC_DEF=(-DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_NFC_PN532
 	-DULTRAWIDELOCK_PORT_HOST)
 NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
 	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/ultrawidelock_port/include")
-cov_cxx() {
+_cov_cxx() {
 	"${CXX:-c++}" -std=c++17 -O0 -g -w \
 		-fprofile-instr-generate -fcoverage-mapping "$@"
 }
+cov_cxx() { ui_run "$(_cov_label "$@")" _cov_cxx "$@"; }
 cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc_cov.o"
 cov_cc -c -I"$ROOT/modules/ultrawidelock_nfc/include" -I"$ROOT/modules/ultrawidelock_nfc/src" \
 	"$ROOT/modules/ultrawidelock_nfc/src/pn532.c" \
@@ -411,7 +439,8 @@ cov_cxx "$OUT/test_ultrawidelock_stack_cov.o" "$OUT/stackfake_cov.o" "$OUT/test_
 	-o "$OUT/cov_stack"
 run_suite stack "$OUT/cov_stack"
 
-llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
+_cov_merge() { llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"; }
+ui_run "merge profiles" _cov_merge
 
 # CORE_UNIT_SRCS was written assuming it does not overlap UNIT_SRCS, and that
 # stopped being true once the shared-core units gained host unit tests of their
@@ -438,14 +467,20 @@ done < <(cd "$ROOT" && find modules ports -name '*.h' ! -path '*/test/*' \
 	! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' | LC_ALL=C sort)
 
 # Browsable HTML, restricted to the units under test.
-llvm_tool llvm-cov show "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
-	"${ALL_UNIT_SRCS[@]}" \
-	-format=html -output-dir="$OUT/html" \
-	-show-line-counts-or-regions -show-branches=count >/dev/null
+_cov_html() {
+	llvm_tool llvm-cov show "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
+		"${ALL_UNIT_SRCS[@]}" \
+		-format=html -output-dir="$OUT/html" \
+		-show-line-counts-or-regions -show-branches=count >/dev/null
+}
+ui_run "html report" _cov_html
 
 # Machine-readable summary for the terminal table (and the CI floor).
-llvm_tool llvm-cov export "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
-	-summary-only "${ALL_UNIT_SRCS[@]}" "${HDR_SRCS[@]}" >"$OUT/summary.json"
+_cov_export() {
+	llvm_tool llvm-cov export "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
+		-summary-only "${ALL_UNIT_SRCS[@]}" "${HDR_SRCS[@]}" >"$OUT/summary.json"
+}
+ui_run "summary export" _cov_export
 
 # --- everything of ours that never enters a host build ----------------------
 # Discovered, not hand-listed, so a new source file shows up here on its own.
@@ -490,10 +525,15 @@ nshl="$(cd "$ROOT" && find scripts release tests/tooling apps/nrf5340dk-lock -na
 surf "build + tooling shell ($nsh scripts)" "$nshl" \
 	"tests/tooling covers patch drift"
 
-"$PY" "$ROOT/tests/host/coverage_report.py" \
-	"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"
+# The table itself is the last step, and ui_end's footer goes under it.
+_cov_report() {
+	"$PY" "$ROOT/tests/host/coverage_report.py" \
+		"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"
+}
+ui_run "coverage table" _cov_report
 
 # Surface a failing suite without aborting the coverage report.
 if ! grep -q "RESULT: PASS" "$OUT/run.log"; then
 	echo "    note: suite did not report PASS — see $OUT/run.log"
 fi
+ui_end

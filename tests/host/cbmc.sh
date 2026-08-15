@@ -10,6 +10,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
+. "$ROOT/scripts/lib/ui.sh"
 
 CBMC="${CBMC:-cbmc}"
 CB="$ROOT/tests/host/cbmc"
@@ -51,18 +52,14 @@ harness_unwind() {
 	esac
 }
 
-fail=0
-for name in "${targets[@]}"; do
-	if ! src="$(harness_src "$name")" || ! uw="$(harness_unwind "$name")"; then
-		printf '  unknown harness: %s\n' "$name" >&2
-		fail=1
-		continue
-	fi
+# One harness. Solving is minutes of silence per proof, so each is a step of
+# scripts/lib/ui.sh: the elapsed clock under the bar is the only sign CBMC is
+# working rather than wedged.
+prove() { # <name> <src> <unwind> <log>
+	local name="$1" src="$2" uw="$3" log="$4"
 	printf '  [cbmc] %s (unwind %s)…\n' "$name" "$uw"
 	# Full per-property dump goes to a log; the terminal keeps one line per
 	# harness (plus the proof-size summary). The log is replayed on failure.
-	log="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/host/cbmc/$name.log"
-	mkdir -p "$(dirname "$log")"
 	if "$CBMC" "${COMMON[@]}" --unwind "$uw" "${DEFS[@]}" "${INCS[@]}" "${EXTRA_INCS[@]}" \
 		"$CB/cbmc_$name.c" "$src" >"$log" 2>&1; then
 		printf '  [cbmc] %s: SUCCESSFUL (%s)\n' "$name" \
@@ -70,12 +67,32 @@ for name in "${targets[@]}"; do
 	else
 		cat "$log"
 		printf '  [cbmc] %s: FAILED (full log: %s)\n' "$name" "$log"
-		fail=1
+		return 1
 	fi
+}
+
+ui_begin "cbmc proofs" "${targets[@]}"
+fail=0
+for name in "${targets[@]}"; do
+	if ! src="$(harness_src "$name")" || ! uw="$(harness_unwind "$name")"; then
+		ui_clear
+		printf '  unknown harness: %s\n' "$name" >&2
+		fail=1
+		continue
+	fi
+	log="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/host/cbmc/$name.log"
+	mkdir -p "$(dirname "$log")"
+	# ui_run_try, not ui_run: every harness gets its verdict, and the RESULT
+	# line below is the one that decides the exit status.
+	ui_run_try "$name" prove "$name" "$src" "$uw" "$log" || fail=1
 done
 
+# The footer first, then RESULT: the verdict line is what CI greps for and it
+# stays the last thing on stdout.
 if [ "$fail" -ne 0 ]; then
+	ui_end 1 || true
 	printf '\n  RESULT: FAIL\n'
 	exit 1
 fi
+ui_end
 printf '\n  RESULT: PASS\n'

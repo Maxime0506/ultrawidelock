@@ -9,6 +9,8 @@
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   scope      tests/tooling/uwb_engine_scope_check.sh  no vendor radio API outside the DW3000 engine
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
+#   ui         scripts/lib/ui.sh --self-test    the progress display keeps the
+#                                               output it wraps byte for byte
 #
 # Opt-in, not in the default set:
 #
@@ -34,6 +36,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+. "$ROOT/scripts/lib/ui.sh"
 
 suite_cmd() {
 	case "$1" in
@@ -44,6 +47,7 @@ suite_cmd() {
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	scope) echo "bash tests/tooling/uwb_engine_scope_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
+	ui) echo "bash scripts/lib/ui.sh --self-test" ;;
 	freertos) echo "bash tests/ports/freertos-nrf52833/run.sh" ;;
 	esac
 }
@@ -57,6 +61,7 @@ suite_label() {
 	seam) echo "uwb seam" ;;
 	scope) echo "uwb engine scope" ;;
 	purity) echo "port purity" ;;
+	ui) echo "progress display" ;;
 	freertos) echo "FreeRTOS port" ;;
 	esac
 }
@@ -158,7 +163,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared sdk drift seam scope purity}"
+SEL="${SUITES:-firmware shared sdk drift seam scope purity ui}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do
@@ -167,7 +172,12 @@ for s in $SEL; do
 	METAS[n]="$(mktemp -t oa-suite-meta.XXXXXX)"
 	n=$((n + 1))
 done
-trap 'rm -f "${OUTS[@]}" "${METAS[@]}"' EXIT
+# ui.sh installs its own EXIT trap in ui_attach, so the temp files are swept
+# here rather than in a second one that would replace it.
+ui_attach
+trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"' EXIT
+trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - INT; kill -INT $$' INT
+trap '_ui_cleanup; rm -f "${OUTS[@]}" "${METAS[@]}"; trap - TERM; kill -TERM $$' TERM
 
 printf '\n  ultrawidelock · host-side test suites\n'
 if [[ "${SERIAL:-0}" == "1" ]]; then
@@ -187,6 +197,7 @@ else
 	declare -a REAPED
 	for i in $(seq 0 $((n - 1))); do REAPED[i]=0; done
 	left=$n
+	started=$(date +%s)
 	while [[ "$left" -gt 0 ]]; do
 		for i in $(seq 0 $((n - 1))); do
 			[[ "${REAPED[i]}" == 1 ]] && continue
@@ -199,11 +210,26 @@ else
 			IFS='|' read -r _ passed failed secs rc <"${METAS[i]}"
 			mark="+"
 			if [[ "$rc" != 0 || "$failed" != 0 ]]; then mark="x"; fi
+			ui_clear
 			printf '  %s %-22s %8d %8d %5ss\n' \
 				"$mark" "$(suite_label "${NAMES[i]}")" "$passed" "$failed" "$secs"
 		done
-		if [[ "$left" -gt 0 ]]; then sleep 1; fi
+		if [[ "$left" -gt 0 ]]; then
+			# Even with the rows landing out of order, the first of them is
+			# still however long the quickest suite takes. This line carries
+			# the clock and the names of what is still out, so the gap before
+			# it reads as work rather than as a hang.
+			running=
+			for i in $(seq 0 $((n - 1))); do
+				[[ "${REAPED[i]}" == 1 ]] && continue
+				running="${running:+$running, }${NAMES[i]}"
+			done
+			ui_status "$(((n - left) * 100 / n))" \
+				"$((n - left))/$n done · $(($(date +%s) - started))s · $running"
+			sleep 0.1 2>/dev/null || sleep 1
+		fi
 	done
+	ui_clear
 	# Replay only what needs eyes: the FAIL rows of any failing suite.
 	for i in $(seq 0 $((n - 1))); do
 		IFS='|' read -r _ _ failed _ rc <"${METAS[i]}"
