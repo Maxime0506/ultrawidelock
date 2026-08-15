@@ -68,6 +68,29 @@ def build_twin_wasm() -> bool:
     return True
 
 
+def build_graph() -> Path | None:
+    """Render the subsystem graph, when graphify has produced data to render.
+
+    graphify is not in this repository and graphify-out/ is gitignored, so the
+    graph is an enrichment and never a build requirement. Refresh it with:
+
+        graphify . --update --code-only
+    """
+    source = ROOT / "graphify-out" / "graph.json"
+    if not source.is_file():
+        print("build: graphify-out/graph.json absent, skipping the subsystem graph "
+              "(graphify . --update --code-only)")
+        return None
+    sys.path.insert(0, str(WEB / "graph"))
+    import graph as graph_mod                                  # noqa: PLC0415
+
+    out = DIST / "graph" / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(graph_mod.render(source), encoding="utf-8")
+    print(f"build: subsystem graph -> {out.relative_to(DIST)}")
+    return out
+
+
 def copy_trees() -> list[Path]:
     written: list[Path] = []
     for src, rel in TREES.items():
@@ -88,11 +111,13 @@ def copy_trees() -> list[Path]:
 LINK_RE = re.compile(r'(?:href|src)="([^"#][^"]*)"')
 
 
-def check_links(pages: list[Path], have_twin: bool) -> list[str]:
+def check_links(pages: list[Path], have_twin: bool, have_graph: bool) -> list[str]:
     """Every relative href/src in the output must resolve to a real file.
 
-    twin.js is the one exception, and only when emscripten was absent: the
-    twin page is still worth publishing without its simulator.
+    Two exceptions, each only when the optional tool behind it was absent:
+    twin.js without emscripten, and the graph page without graphify. Both
+    pages are worth publishing regardless, and neither tool is a build
+    requirement, so a missing one must not fail the gate.
     """
     dead: list[str] = []
     for page in pages:
@@ -108,6 +133,8 @@ def check_links(pages: list[Path], have_twin: bool) -> list[str]:
             if not resolved.exists():
                 if not have_twin and resolved.name == "twin.js":
                     continue
+                if not have_graph and resolved.parent.name == "graph":
+                    continue
                 dead.append(f"{page.relative_to(DIST)} -> {target}")
     return dead
 
@@ -121,9 +148,12 @@ def main() -> int:
     clean()
     have_twin = build_twin_wasm()
     written = copy_trees()
+    graph_page = build_graph()
+    if graph_page:
+        written.append(graph_page)
     print(f"build: {len(written)} file(s) -> {DIST.relative_to(ROOT)}")
 
-    dead = check_links(written, have_twin)
+    dead = check_links(written, have_twin, graph_page is not None)
     if dead:
         for entry in dead:
             print(f"build: dead link  {entry}", file=sys.stderr)
