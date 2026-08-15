@@ -46,7 +46,11 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
+# The repository root. This read HERE.parent -- web/ -- so every source path
+# below resolved to web/ports/... and the gate died on a FileNotFoundError
+# rather than reporting drift. Same off-by-one directory as the twin's
+# check_constants.py had, and invisible for the same reason: nothing ran it.
+ROOT = HERE.parents[1]
 HTML = HERE / "index.html"
 
 # --- the constants the payload is built from --------------------------------
@@ -64,7 +68,7 @@ COMMISSIONING_FLOW = 0  # kStandard: the code is on the device, no vendor step
 RENDEZVOUS_BLE = 2  # RendezvousInformationFlag::kBLE, what the app passes
 
 # The in-tree half: app_print_onboarding_codes() decides the transport bit.
-APP_MAIN = ROOT / "ports/esp32/apps/matter-lock/main/app_main.cpp"
+APP_MAIN = ROOT / "apps/esp32-matter-lock/main/app_main.cpp"
 APP_RENDEZVOUS = "RendezvousInformationFlags rendezvous(chip::RendezvousInformationFlag::kBLE)"
 
 # The assumption the whole page rests on: the image has no per-device identity.
@@ -73,7 +77,7 @@ APP_RENDEZVOUS = "RendezvousInformationFlags rendezvous(chip::RendezvousInformat
 # single constant this script reads -- the one drift the layers above cannot
 # see. The defaults files never mention these symbols today (the values come
 # from esp-matter's Kconfig), so the check is for the line appearing at all.
-APP_DEFAULTS = sorted((ROOT / "ports/esp32/apps/matter-lock").glob("sdkconfig.defaults*"))
+APP_DEFAULTS = sorted((ROOT / "apps/esp32-matter-lock").glob("sdkconfig.defaults*"))
 FIXED_IDENTITY_BREAKERS = (
     "CONFIG_ENABLE_ESP32_FACTORY_DATA_PROVIDER=y",
     "CONFIG_SEC_CERT_COMMISSIONABLE_DATA_PROVIDER=y",

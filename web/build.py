@@ -835,6 +835,39 @@ def inject_shell(pages: list[Path]) -> None:
         page.write_text(text, encoding="utf-8")
 
 
+# The gates that keep the pages honest about the firmware. Each is a standalone
+# script that exits nonzero on drift; --check runs all three.
+#
+# They existed and nothing ran them. check_constants.py in particular could
+# never have passed -- it resolved its citations against web/ rather than the
+# repository root, so every file it tried to open was missing -- and because no
+# target invoked it, the twin's PRED_GRACE_MS sat at half the firmware's value
+# without anyone finding out. A gate nobody runs is a comment.
+GATES = (
+    ("twin constants", WEB / "twin" / "check_constants.py"),
+    ("hero constants", WEB / "site" / "check_hero_constants.py"),
+    ("flasher setup codes", WEB / "flasher" / "check_codes.py"),
+)
+
+
+def run_gates() -> list[str]:
+    """Run each drift gate. Returns the names of the ones that failed."""
+    failed = []
+    for name, script in GATES:
+        if not script.is_file():
+            continue
+        result = subprocess.run([sys.executable, str(script)],
+                                capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"build: gate ok  {name}")
+            continue
+        failed.append(name)
+        print(f"build: gate FAILED  {name}", file=sys.stderr)
+        for line in (result.stdout + result.stderr).strip().splitlines():
+            print(f"  {line}", file=sys.stderr)
+    return failed
+
+
 def main() -> int:
     global HAVE_GRAPH
     ap = argparse.ArgumentParser(description=__doc__)
@@ -865,14 +898,18 @@ def main() -> int:
     print(f"build: {len(written)} file(s) -> {DIST.relative_to(ROOT)}")
 
     dead = check_links(written, have_twin, HAVE_GRAPH)
+    for entry in dead:
+        print(f"build: dead link  {entry}", file=sys.stderr)
+    if not args.check:
+        return 0
+
+    failed = run_gates()
     if dead:
-        for entry in dead:
-            print(f"build: dead link  {entry}", file=sys.stderr)
-        if args.check:
-            print(f"build: {len(dead)} dead link(s)", file=sys.stderr)
-            return 1
-    elif args.check:
+        print(f"build: {len(dead)} dead link(s)", file=sys.stderr)
+    else:
         print("build: no dead internal links")
+    if dead or failed:
+        return 1
     return 0
 
 

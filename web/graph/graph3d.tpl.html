@@ -1,9 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The whole surface in 3D — UltraWideLock</title>
+<title>Subsystem graph — UltraWideLock</title>
+<meta name="description" content="Every source file in UltraWideLock as a force-directed graph, grouped by subsystem. Useful for finding the seam between the UWB facade and a port.">
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>document.documentElement.className+=' js';</script>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../assets/design/fonts/space-grotesk.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../assets/design/fonts/jetbrains-mono.woff2">
 <link rel="stylesheet" href="../assets/design/styles.css">
 <style>
 /* The chrome follows the design system; only what it does not define is set
@@ -141,10 +149,12 @@ a{color:inherit;text-decoration:none}
 <body>
 <header class="bar">
 <a class="back" href="../index.html">&#8592; UltraWideLock</a>
-<nav class="crumbs" id="crumbs"><span class="cr" data-i="0">The whole surface</span></nav>
+<nav class="crumbs" id="crumbs" aria-label="Graph depth"><button type="button" class="cr" data-i="0">The whole surface</button></nav>
 <div class="sp"></div>
-<input id="q" type="search" placeholder="Filter files &mdash; &#9166; jumps&hellip;" autocomplete="off">
+<input id="q" type="search" placeholder="Filter files &mdash; &#9166; jumps&hellip;"
+       autocomplete="off" aria-label="Filter files by name">
 <button id="fit" class="fitb" title="Frame everything (F)">Fit</button>
+<button class="icon-btn" data-theme-toggle aria-pressed="false" title="Switch theme" aria-label="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
 </header>
 <div id="stage"></div>
 <canvas id="dust"></canvas>
@@ -180,10 +190,13 @@ a{color:inherit;text-decoration:none}
 <script>
 (function(){
 "use strict";
-var theme=null;
-try{theme=localStorage.getItem("uwl-theme")}catch(e){}
-if(theme==="dark"||(theme!=="light"&&matchMedia("(prefers-color-scheme:dark)").matches))
-  document.documentElement.setAttribute("data-theme","dark");
+/* Theme is applied by the inline bootstrap in <head>, before the stylesheet,
+   and toggled by the shared theme.js. What used to be here only ever set
+   data-theme="dark": a reader who chose light got no attribute set at all and
+   fell through to prefers-color-scheme, so on a dark-preferring OS their
+   choice was silently discarded on every visit. This page also had no toggle
+   to make that choice with -- there is one in the bar now, and it is the same
+   control as on every other page. */
 
 /* one flag, honored by every animated thing below: the float, the entrance,
    the auto-orbit, the halo pulse and the dust all sit behind it */
@@ -651,8 +664,21 @@ var dust=(function(){
 })();
 
 var camDirV=null;
-(function tick(){
-  requestAnimationFrame(tick);
+
+/* The simulation is deliberately never allowed to cool -- cooldownTicks is
+   Infinity, d3AlphaTarget is nonzero and the camera auto-orbits -- so this
+   loop runs WebGL, a force simulation and two dust canvases for as long as the
+   page is open. That is the intended look while someone is watching it. It is
+   not defensible while the tab is in the background, where it was still doing
+   all of it for nobody. Parked on hidden, restarted on return. */
+var tickOn=true;
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){tickOn=false;return;}
+  if(!tickOn){tickOn=true;requestAnimationFrame(tick);}
+});
+
+function tick(){
+  if(tickOn)requestAnimationFrame(tick);
   var now=performance.now();
   if(dressPending)dressAll(now);
   tryFit();
@@ -692,7 +718,8 @@ var camDirV=null;
     el.style.opacity=a;
     el.style.transform="translate("+p.x+"px,"+p.y+"px) translate(-50%,-150%) scale("+s+")";
   });
-})();
+}
+tick();
 
 function select(n,fly){
   sel=n?n.id:null;near={};
@@ -773,11 +800,13 @@ function dive(id){
   stack.push(id);
   setMode();
 }
+/* Buttons, not spans. These change what the graph is showing, so they are
+   controls, and a control a keyboard cannot reach is not one. */
 function renderCrumbs(){
-  var h='<span class="cr" data-i="0">The whole surface</span>';
+  var h='<button type="button" class="cr" data-i="0">The whole surface</button>';
   stack.forEach(function(id,i){
-    h+='<span class="sep">&#8250;</span><span class="cr" data-i="'+(i+1)+'">'+
-      esc(byId[id].name)+"</span>";
+    h+='<span class="sep">&#8250;</span><button type="button" class="cr" data-i="'+(i+1)+'">'+
+      esc(byId[id].name)+"</button>";
   });
   document.getElementById("crumbs").innerHTML=h;
 }
@@ -921,5 +950,6 @@ addEventListener("resize",function(){Graph.width(innerWidth).height(innerHeight)
 if(location.hash==="#debug")window.__g={graph:Graph,ctr:ctr};
 })();
 </script>
+@@SITEJS@@
 </body>
 </html>

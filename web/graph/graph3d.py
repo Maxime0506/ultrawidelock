@@ -122,8 +122,26 @@ def build(graph_json: Path, root: Path) -> dict:
 def render(graph_json: Path, root: Path) -> str:
     data = build(graph_json, root)
     tpl = Path(__file__).with_name("graph3d.tpl.html").read_text()
-    return (tpl.replace("@@DATA@@", json.dumps(data, separators=(",", ":")))
+    return (tpl.replace("@@DATA@@", _embed(data))
                .replace("@@LIB@@", LIB))
+
+
+def _embed(data: dict) -> str:
+    """JSON for a <script type="application/json"> block.
+
+    An HTML parser ends that block at the first literal `</script`, wherever it
+    appears -- inside a JSON string included. The blurbs here are harvested from
+    arbitrary source-file header comments by blurb_for(), so the contents are
+    whatever a contributor wrote in a comment. One comment containing the
+    characters `</script>` would truncate the data, break the page, and leave
+    the remainder of the blurb parsed as HTML.
+
+    Escaping the slash is the standard fix and is invisible to JSON.parse:
+    "<\\/script>" and "</script>" are the same string. `<!--` gets the same
+    treatment for the same reason.
+    """
+    raw = json.dumps(data, separators=(",", ":"))
+    return raw.replace("</", "<\\/").replace("<!--", "<\\!--")
 
 
 if __name__ == "__main__":
