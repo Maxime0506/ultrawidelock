@@ -56,8 +56,16 @@ docs-clean:
 
 ## release-all: build every publishable image, then the site around them
 ##   The three release bundles plus a site whose flasher actually carries
-##   firmware. There is no CI, so this is the whole release procedure: run it,
-##   check the bundles under build/release/, publish, then push.
+##   firmware. Building and publishing a release stays entirely local: run it,
+##   check the bundles under build/release/, push, then attach them with
+##   `gh release create vN.N.N build/release/*/*.bin ...`.
+##
+##   The one exception is the website. .github/workflows/pages.yml renders and
+##   deploys it, because publishing to Pages is the only step a laptop cannot
+##   do. It is workflow_dispatch only -- nothing here happens on a push -- and
+##   it fetches the firmware above from the latest release rather than building
+##   any, so the site is only as current as the last release plus the last time
+##   someone ran it.
 ##
 ##   Needs both toolchains and RELEASE_KEY=<path> for the signed Zephyr image.
 ##   Deliberately not the dev key `make dfu-key` writes.
