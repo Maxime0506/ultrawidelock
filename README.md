@@ -1,4 +1,14 @@
-# UltraWideLock
+<div align="center">
+
+<img src="assets/hero.gif" width="760" alt="A Wallet home key unlocking the lock on approach, recorded on real hardware"/>
+
+<h1>UltraWideLock</h1>
+
+**Portable firmware for NFC and UWB smart locks.**
+
+<sub>Real hardware. A real Wallet key. A real walk-up unlock.</sub>
+
+</div>
 
 UltraWideLock is portable firmware for NFC and UWB smart locks. It implements
 the CSA's door-lock credential protocol — BLE plus NFC (ECP) plus UWB ranging —
@@ -8,6 +18,29 @@ chipsets are connected through thin backends in `ports/`.
 
 The repository includes three complete lock applications and focused examples
 for reader, initiator, and anchor roles.
+
+## How a door opens
+
+```text
+    iPhone / Apple Watch              UltraWideLock on one board
+   ┌────────────────────┐             ┌──────────────────────┐
+   │  Wallet home key   │             │  nRF52833 + DW3110   │
+   └──────────┬─────────┘             └───────────┬──────────┘
+              │                                   │
+   1  BLE     │  credential service 0xFFF2        │
+              │ ─────────────────────────────────▶│
+   2  Auth    │  AUTH0 → AUTH1 → EXCHANGE         │
+              │ ◀────────────────────────────────▶│
+              │  both ends now hold the URSK      │
+   3  UWB     │  key ladder → STS → DS-TWR        │
+              │ ◀────────── ranging ─────────────▶│
+   4  Gate    │  range consistency agrees         │
+              │      ──  U N L O C K  ──          │
+   5  Matter  │  lock state over Thread           └──▶ Apple Home
+              ╵
+```
+
+Local only. No app, no account, no cloud round trip.
 
 ## Use as an SDK
 
@@ -50,6 +83,16 @@ request a compatible series or add this repository with `add_subdirectory`;
 | [`apps/dwm3001cdk-lock/`](apps/dwm3001cdk-lock/) | DWM3001CDK | credential UWB, Matter over Thread |
 | [`apps/nrf5340dk-lock/`](apps/nrf5340dk-lock/) | nRF5340 DK, DWM3000EVB, NFC12A1 | credential UWB and NFC, Matter over Thread |
 | [`apps/esp32-matter-lock/`](apps/esp32-matter-lock/) | ESP32-S3, ESP32-C5, or ESP32-C6 with DWM3000EVB | credential UWB, Matter over Wi-Fi |
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/grid-demo-dark.webp">
+  <source media="(prefers-color-scheme: light)" srcset="assets/grid-demo-light.webp">
+  <img src="assets/grid-demo.webp" width="880" alt="Home Key setup, Approach Direction, provisioning, NFC tap, and lock-state notifications on live hardware"/>
+</picture>
+<br/>
+<sub>Home Key · Approach Direction · provisioning · NFC tap · live lock state</sub>
+</div>
 
 Run `make help` for the complete command list.
 
