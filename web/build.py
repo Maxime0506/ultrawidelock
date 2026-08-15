@@ -30,15 +30,17 @@ WEB = Path(__file__).resolve().parent
 ROOT = WEB.parent
 DIST = WEB / "dist"
 
-# Copied verbatim into the output. Source directory -> published path.
+# Copied verbatim into the output. Source directory -> published path,
+# where "" is the site root.
 TREES = {
+    WEB / "site": "",
     WEB / "assets" / "design": "assets/design",
     WEB / "flasher": "flash",
     WEB / "twin": "twin",
 }
 
 # Files inside those trees that are build-time or test-time only.
-NOT_PUBLISHED = {".py", ".cjs", ".c"}
+NOT_PUBLISHED = {".py", ".cjs", ".c", ".sh"}
 
 
 def clean() -> None:
