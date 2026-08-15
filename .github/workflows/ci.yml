@@ -63,23 +63,22 @@ jobs:
           # reads history, so the default shallow fetch is enough.
           persist-credentials: false
 
-      # Pure python3, no compiler, about a second. First because a drifted
-      # constant makes every result below untrustworthy rather than merely red.
-      - name: drift
-        run: make drift
-
-      # No emscripten here, unlike pages.yml. Without emcc the twin is absent
-      # and build.py's link pass knows to skip twin.js rather than call it dead,
-      # so the gate still checks every other link and the run stays cheap. The
-      # site that gets published is built with emscripten; this only proves the
-      # links in it resolve.
-      - name: site links
-        run: python3 web/build.py --check
-
-      # The long one, about two minutes locally. Last so the two fast gates have
-      # already reported by the time it matters.
-      - name: host suites
-        run: make check
+      # One target, not a list of steps: `make ci` IS this gate, so a
+      # contributor running it locally runs what their pull request will be
+      # judged by, and neither side can quietly drift from the other. It runs
+      # drift, then the site's link pass, then the host suites, cheapest first.
+      #
+      # It also runs gitleaks when gitleaks is installed. It is not installed
+      # here, deliberately: this job's checkout is shallow and a secret scan
+      # wants the whole history, so the `secrets` job below does that properly.
+      # `make ci` prints a loud skip line rather than silently passing.
+      #
+      # No emscripten either. Without emcc the twin is absent and build.py's
+      # link pass skips twin.js rather than calling it dead, so every other link
+      # is still checked for a fraction of the setup. The published site is
+      # built with emscripten by pages.yml.
+      - name: gates
+        run: make ci
 
   secrets:
     name: secrets (gitleaks)
