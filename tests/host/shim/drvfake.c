@@ -380,7 +380,7 @@ const uint8_t *fira_session_get_ursk(void)
 }
 
 /* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ──────────────────────────── */
-int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
+int ultrawidelock_uwb_start_cred(const struct ultrawidelock_uwb_cred_cfg *cfg)
 {
 	drvfake.start_ultrawidelock_calls++;
 	if (cfg != NULL) {

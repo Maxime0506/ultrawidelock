@@ -165,7 +165,7 @@ set_target_properties(ultrawidelock_uwb_link_check PROPERTIES SUFFIX ".elf")
 # The app-facing responder surface: lifecycle plus the range accessors a lock
 # reads.
 set(ULTRAWIDELOCK_UWB_REACH_FACADE
-  ultrawidelock_uwb_start_ultrawidelock ultrawidelock_uwb_stop ultrawidelock_uwb_prewarm
+  ultrawidelock_uwb_start_cred ultrawidelock_uwb_stop ultrawidelock_uwb_prewarm
   ultrawidelock_uwb_set_range_listener ultrawidelock_uwb_trusted_range_cm
   ultrawidelock_uwb_trusted_range_after_checked_cm ultrawidelock_uwb_last_range_cm
   ultrawidelock_uwb_range_generation

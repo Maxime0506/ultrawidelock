@@ -64,7 +64,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST
 	bool "One-shot UWB init self-test after boot (diagnostic; no iPhone)"
 	depends on ULTRAWIDELOCK_CRED
 	help
-	  Fire ultrawidelock_uwb_start_ultrawidelock() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
+	  Fire ultrawidelock_uwb_start_cred() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
 	  with a canned ranging config, to capture the DW3000 bring-up + Pre-POLL listen
 	  DIAG over RTT WITHOUT commissioning + a live Wallet credential UWB solicitation. This
 	  isolates the HW/radio init from the credential path. Diagnostic only —
@@ -75,7 +75,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS
 	depends on ULTRAWIDELOCK_UWB_SELFTEST
 	default 15000
 	help
-	  Delay before the one-shot ultrawidelock_uwb_start_ultrawidelock(). Keep generous so Thread has
+	  Delay before the one-shot ultrawidelock_uwb_start_cred(). Keep generous so Thread has
 	  rejoined on an already-commissioned device before the deferred 128 MHz
 	  HFCLK boost that the first UWB entry performs.
 

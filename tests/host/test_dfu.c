@@ -73,7 +73,7 @@ const uint8_t ultrawidelock_dfu_pubkey[65] = {
 };
 
 /* dfu_applier.c's init hook, exposed by ULTRAWIDELOCK_INIT_APPLICATION's host branch. */
-extern int (*const ultrawidelock_init_ultrawidelock_dfu_apply)(void);
+extern int (*const ultrawidelock_init_dfu_apply)(void);
 
 #define HEAD_LEN  (ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN)
 #define PATCH_MAX (DFUFAKE_STAGING_SIZE - ULTRAWIDELOCK_DFU_PATCH_OFFSET)
@@ -786,7 +786,7 @@ static void stage_for_apply(const uint8_t *patch, uint32_t patch_len, uint32_t f
 /** Reset the doubles, stage a valid update, and return the applier entry point. */
 static int apply_now(void)
 {
-	return ultrawidelock_init_ultrawidelock_dfu_apply();
+	return ultrawidelock_init_dfu_apply();
 }
 
 #define APPLY_FROM_LEN 4096u

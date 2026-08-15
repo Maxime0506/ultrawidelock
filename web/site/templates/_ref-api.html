@@ -1,0 +1,133 @@
+<!-- @dsCard group="Site Templates" viewport="1280x820" subtitle="API-reference wrapper around the Doxygen embed" name="API reference" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API reference — UltraWideLock</title>
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../../styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="app">
+<aside class="side">
+  <div class="side-head">
+    <a class="brand" href="landing.html"><b>UltraWideLock</b><span class="tag">v0.3.0</span></a>
+    <button class="search-btn" type="button" aria-haspopup="dialog">Search docs <kbd>/</kbd></button>
+  </div>
+  <nav class="tree" aria-label="Documentation">
+    <div class="tree-cap">Start</div>
+    <a class="item" href="docs-page.html">Overview</a>
+    <a class="item" href="docs-page.html">Get started</a>
+    <a class="item" href="docs-page.html">Hardware targets</a>
+    <div class="tree-cap">Subsystems</div>
+    <div class="group">
+      <button class="group-h" aria-expanded="true">UWB <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items">
+        <a class="item-g" href="docs-page.html">secure_ranging.h</a>
+        <a class="item-g" href="docs-page.html">sts_session.h</a>
+        <a class="item-g" href="docs-page.html">rx_diag.h</a>
+      </div>
+    </div>
+    <div class="group collapsed">
+      <button class="group-h" aria-expanded="false">BLE <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items">
+        <a class="item-g" href="docs-page.html">gatt_service.h</a>
+        <a class="item-g" href="docs-page.html">pairing.h</a>
+      </div>
+    </div>
+    <div class="group collapsed">
+      <button class="group-h" aria-expanded="false">NFC <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items"><a class="item-g" href="docs-page.html">nfc_select.h</a></div>
+    </div>
+    <div class="tree-cap">Guides</div>
+    <a class="item" href="docs-page.html">Wiring the radio</a>
+    <a class="item" href="docs-page.html">Provisioning keys</a>
+    <a class="item" href="docs-page.html">Troubleshooting</a>
+    <div class="tree-cap">Reference</div>
+    <a class="item" href="api-reference.html">API (Doxygen)</a>
+  </nav>
+</aside>
+<div class="content">
+<header class="topbar">
+  <a class="wordmark" href="landing.html">UltraWideLock <span class="ver">v0.3.0</span></a>
+  <nav class="crumb" aria-label="Breadcrumb">
+    <span class="sep">/</span><a href="docs-page.html">Docs</a>
+    <span class="sep">/</span><a href="api-reference.html">API</a><span class="sep">/</span><b>sts_session.h</b>
+  </nav>
+  <div class="spacer"></div>
+  <nav class="navlinks">
+    <a class="navlink" href="docs-page.html">Docs</a>
+    <a class="navlink" href="api-reference.html">API</a>
+    <a class="navlink" href="tool-chrome.html">Twin</a>
+    <a class="navlink" href="tool-chrome.html">Flash</a>
+    <a class="navlink" href="https://git.ultrawidelock.com/ultrawidelock/ultrawidelock">Source</a>
+  </nav>
+  <button class="icon-btn" data-theme-toggle aria-pressed="false" title="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
+</header>
+  <div class="mid" style="grid-template-columns:minmax(0,1fr)">
+    <article class="doc" id="main">
+      <span class="eyebrow">Generated reference</span>
+      <h1 class="mono">sts_session.h</h1>
+      <p class="lede">Doxygen output, styled by CSS overlay only. The markup below stands in for the
+      generated document; the real page embeds <code>site/api/</code> unmodified.</p>
+      <div class="callout callout-note"><span class="ico">wrapper</span><div>
+        <p>This template owns the top bar, the sidebar and the frame. Everything inside
+        <code>.api-embed</code> is Doxygen's own HTML and must never be patched &mdash; restyle it through
+        <code>doxygen-overlay.css</code>, wired up with <code>HTML_EXTRA_STYLESHEET</code> in
+        <code>docs/Doxyfile</code>.</p>
+      </div></div>
+
+      <div class="api-embed" style="border:var(--border);border-radius:var(--r-lg);background:var(--card);padding:var(--sp-6);box-shadow:var(--shadow-inset)">
+        <div class="crumb" style="margin-bottom:var(--sp-5)">
+          <a href="#">modules</a><span class="sep">/</span><a href="#">uwb</a><span class="sep">/</span><b>sts_session.h</b>
+        </div>
+        <h2 style="margin-top:0;border:0;padding:0;font-size:var(--fs-700)">Functions</h2>
+        <div class="tablewrap">
+          <table class="data">
+            <tbody>
+              <tr><td style="width:14rem;font-family:var(--font-mono);font-size:var(--fs-300);color:var(--syn-type)">int</td>
+                  <td><code style="color:var(--syn-func)">uwl_sts_session_open</code> (const <span style="color:var(--syn-type)">uwl_sts_session_cfg_t</span> *cfg)
+                  <div style="color:var(--muted);font-size:var(--fs-300);margin-top:var(--sp-1)">Open a keyed ranging session. Returns 0, or <code>-EACCES</code> when key derivation fails.</div></td></tr>
+              <tr><td style="font-family:var(--font-mono);font-size:var(--fs-300);color:var(--syn-type)">void</td>
+                  <td><code style="color:var(--syn-func)">uwl_sts_session_close</code> (void)
+                  <div style="color:var(--muted);font-size:var(--fs-300);margin-top:var(--sp-1)">Zeroise session state and stop the round schedule.</div></td></tr>
+              <tr><td style="font-family:var(--font-mono);font-size:var(--fs-300);color:var(--syn-type)">int</td>
+                  <td><code style="color:var(--syn-func)">uwl_sts_derive</code> (const <span style="color:var(--syn-type)">uwl_transcript_t</span> *tr, <span style="color:var(--syn-type)">uwl_sts_key_t</span> *out)
+                  <div style="color:var(--muted);font-size:var(--fs-300);margin-top:var(--sp-1)">Derive an STS key from a verified BLE handshake transcript.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="mono" style="font-size:var(--fs-500)">uwl_sts_session_open()</h3>
+        <div class="prewrap">
+          <div class="cap"><span>prototype</span></div>
+<pre><code><span class="tok-type">int</span> <span class="tok-func">uwl_sts_session_open</span> (<span class="tok-keyword">const</span> <span class="tok-type">uwl_sts_session_cfg_t</span> * <span class="tok-plain">cfg</span>)</code></pre>
+        </div>
+        <p>Opens a ranging session bound to <em>cfg</em>. The caller retains ownership of the
+        configuration; the key inside it is zeroised on return.</p>
+        <div class="callout callout-warn"><span class="ico">warning</span><div>
+          <p>Not reentrant. One session exists per device.</p>
+        </div></div>
+        <p style="font-family:var(--font-mono);font-size:var(--fs-200);color:var(--faint)">
+          Definition at <a href="https://git.ultrawidelock.com/ultrawidelock/ultrawidelock/blob/main/modules/uwb/src/sts_session.c">modules/uwb/src/sts_session.c:118</a>
+        </p>
+      </div>
+    </article>
+  </div>
+</div>
+</div>
+<div class="scrim" hidden></div>
+<div class="palette" role="dialog" aria-label="Search documentation" hidden>
+  <input type="search" placeholder="Search symbols, guides, files&hellip;" value="sts_ses">
+  <div class="results">
+    <a class="res sel" href="#"><span class="kind">symbol</span><span class="nm">uwl_sts_session_open</span><span class="ctx">uwb/sts_session.h</span></a>
+    <a class="res" href="#"><span class="kind">symbol</span><span class="nm">uwl_sts_session_key_t</span><span class="ctx">uwb/sts_session.h</span></a>
+    <a class="res" href="#"><span class="kind">guide</span><span class="nm">Rotating STS keys per session</span><span class="ctx">Guides / Security</span></a>
+    <a class="res" href="#"><span class="kind">file</span><span class="nm">sts_session.c</span><span class="ctx">modules/uwb/src</span></a>
+  </div>
+  <div class="pal-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> move</span><span><kbd>&crarr;</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+</div>
+<script src="../../theme-toggle.js"></script>
+</body>
+</html>
