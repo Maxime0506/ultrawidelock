@@ -27,57 +27,32 @@
                form-action 'none';
                frame-ancestors 'none'">
 <title>Flash ultrawidelock to an ESP32 from the browser</title>
+<link rel="stylesheet" href="../assets/design/styles.css">
 <style>
-/* Self-contained copy of the site theme (tools/docs_theme.py): this page is
-   staged into site/flash/ but must also render standalone from web-flasher/
-   on a bench, so it embeds the palette instead of linking ../style.css.
+/* The palette comes from the design system now, so this page matches the rest
+   of the site instead of carrying v0.3.0's warm-paper theme. The build stages
+   it into dist/flash/, where ../assets/design/ resolves.
 
-   No webfont @import. This page flashes firmware over WebSerial, so every
-   subresource it pulls is part of that trust chain, and a font is the one with
-   the worst ratio of risk to benefit: it cannot be integrity-checked (the
-   Google Fonts CSS is generated per user-agent, so its bytes differ per
-   request), it tells a third party the IP of everyone who opens the flasher,
-   and --serif below already names Georgia and Times before the generic. The
-   page reads correctly without it. */
+   The original refused a webfont @import on a real argument: this page flashes
+   firmware over WebSerial, so every subresource it pulls joins that trust
+   chain, and Google Fonts could not be integrity-checked because its CSS is
+   generated per user-agent. That objection is answered rather than ignored --
+   the fonts are self-hosted in this repository now, served from the same
+   origin as the page.
+
+   Only the four tokens the design system does not define are declared here,
+   mapped onto ones it does. */
 :root{
-  --ground:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-  --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
-  --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
-  --accent:#c96442; --accent-hover:#a34f31; --accent-fg:#faf9f5;
-  --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
-  --herotint:rgba(201,100,66,.055);
-  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
-}
-@media (prefers-color-scheme:dark){:root{
-  --ground:#1f1e1d; --raise:#302f2c; --card:#262624;
-  --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93;
-  --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-  --accent:#d97757; --accent-hover:#d4a27f; --accent-fg:#141413;
-  --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
-  --herotint:rgba(212,162,127,.05);
-}}
-:root[data-theme="light"]{
-  --ground:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-  --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
-  --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
-  --accent:#c96442; --accent-hover:#a34f31; --accent-fg:#faf9f5;
-  --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
-  --herotint:rgba(201,100,66,.055);
-}
-:root[data-theme="dark"]{
-  --ground:#1f1e1d; --raise:#302f2c; --card:#262624;
-  --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93;
-  --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-  --accent:#d97757; --accent-hover:#d4a27f; --accent-fg:#141413;
-  --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
-  --herotint:rgba(212,162,127,.05);
+  --accent-fg:var(--inverse);
+  --tint:var(--accent-tint);
+  --tint-line:var(--accent-line);
+  --herotint:var(--accent-tint);
+  --serif:var(--font-sans);
 }
 *{box-sizing:border-box}
 html{font-size:17px}
-body{
-  margin:0; background:var(--ground); color:var(--ink);
-  font:1rem/1.78 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font:var(--fs-500)/1.7 var(--font-sans)}
 
 /* Topbar: the site shell's solid bar — wordmark crumb left, GitHub chip right. */
 .topbar{

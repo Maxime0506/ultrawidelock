@@ -29,6 +29,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ultrawidelock — walk-up digital twin</title>
+<link rel="stylesheet" href="../assets/design/styles.css">
 <style>
   /* No webfont @import. The three faces the site loads were pulled from Google
    * Fonts, which meant every visitor to the twin announced their IP and user
@@ -53,57 +54,28 @@
    * are defined per theme and the drawing follows automatically. The four
    * state channels (BLE/UWB/unlock/reject) are kept off the terracotta accent
    * so they stay legible against warm paper and never read as "interactive". */
+  /* The palette comes from the design system, so the twin reads as the same
+   * product as the rest of the site. Only what the design system does not
+   * define is declared here.
+   *
+   * The canvas reads --bg/--panel/--amber and friends through
+   * getComputedStyle, so those adapter names stay: they now point at design
+   * tokens and the drawing follows automatically. The four state channels are
+   * mapped onto the system's semantic colours rather than the accent, which
+   * keeps the original rule that state never reads as "interactive". */
   :root {
-    --ground:#faf9f5; --surface:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-    --ink:#3d3d3a; --strong:#141413; --muted:#5c5b54; --faint:#6b6960;
-    --line:rgba(31,30,29,.14); --hairline:rgba(31,30,29,.07);
-    --accent:#c96442; --accent-ink:#a94c2d; --tint:rgba(201,100,66,.10); --tint-line:rgba(201,100,66,.30);
-    --btn:#b35232; --btn-hover:#9c4221; --btn-ink:#ffffff;
-    --shadow:0 1px 2px rgba(31,30,29,.04),0 12px 32px -20px rgba(31,30,29,.16);
-    --shadow-hover:0 2px 4px rgba(31,30,29,.05),0 18px 40px -22px rgba(31,30,29,.28);
-    --sans:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
-    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --tint:var(--accent-tint); --tint-line:var(--accent-line);
+    --btn:var(--accent); --btn-hover:var(--accent-hover); --btn-ink:var(--inverse);
+    --shadow:var(--shadow-1); --shadow-hover:var(--shadow-2);
+    --sans:var(--font-sans); --mono:var(--font-mono); --serif:var(--font-sans);
     --topbar-h:3.4rem;
-    /* canvas adapter + state channels (state, not accent), tuned for paper */
+    /* canvas adapter + state channels */
     --bg:var(--ground); --panel:var(--surface); --panel2:var(--raise);
-    --amber:#8f6013;  /* UWB / measurement — ochre, yellower than terracotta */
-    --cyan:#2f6f83;   /* BLE — cool teal, clear contrast */
-    --green:#4f7a4a;  /* unlocked / pass — earthy green */
-    --red:#be2f2f;    /* reject / spoof — a redder red than the accent */
-    --door-open:#dfe9d8;
-  }
-  @media (prefers-color-scheme:dark){:root{
-    --ground:#1f1e1d; --surface:#1b1a19; --raise:#302f2c; --card:#262624;
-    --ink:#c2c0b6; --strong:#faf9f5; --muted:#a5a39a; --faint:#9b998f;
-    --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.36);
-    --btn:#d97757; --btn-hover:#e08c6d; --btn-ink:#1f1e1d;
-    --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 34px -16px rgba(0,0,0,.55);
-    --shadow-hover:0 2px 4px rgba(0,0,0,.5),0 20px 44px -18px rgba(0,0,0,.65);
-    --amber:#d7a94a; --cyan:#6fb3c4; --green:#86b56f; --red:#e5645c; --door-open:#2f3a2a;
-  }}
-  :root[data-theme="light"]{
-    --ground:#faf9f5; --surface:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-    --ink:#3d3d3a; --strong:#141413; --muted:#5c5b54; --faint:#6b6960;
-    --line:rgba(31,30,29,.14); --hairline:rgba(31,30,29,.07);
-    --accent:#c96442; --accent-ink:#a94c2d; --tint:rgba(201,100,66,.10); --tint-line:rgba(201,100,66,.30);
-    --btn:#b35232; --btn-hover:#9c4221; --btn-ink:#ffffff;
-    --shadow:0 1px 2px rgba(31,30,29,.04),0 12px 32px -20px rgba(31,30,29,.16);
-    --shadow-hover:0 2px 4px rgba(31,30,29,.05),0 18px 40px -22px rgba(31,30,29,.28);
-    --amber:#8f6013; --cyan:#2f6f83; --green:#4f7a4a; --red:#be2f2f; --door-open:#dfe9d8;
-    color-scheme:light;
-  }
-  :root[data-theme="dark"]{
-    --ground:#1f1e1d; --surface:#1b1a19; --raise:#302f2c; --card:#262624;
-    --ink:#c2c0b6; --strong:#faf9f5; --muted:#a5a39a; --faint:#9b998f;
-    --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.36);
-    --btn:#d97757; --btn-hover:#e08c6d; --btn-ink:#1f1e1d;
-    --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 34px -16px rgba(0,0,0,.55);
-    --shadow-hover:0 2px 4px rgba(0,0,0,.5),0 20px 44px -18px rgba(0,0,0,.65);
-    --amber:#d7a94a; --cyan:#6fb3c4; --green:#86b56f; --red:#e5645c; --door-open:#2f3a2a;
-    color-scheme:dark;
+    --amber:var(--warn);    /* UWB / measurement */
+    --cyan:var(--syn-keyword);  /* BLE */
+    --green:var(--ok);      /* unlocked / pass */
+    --red:var(--danger);    /* reject / spoof */
+    --door-open:var(--ok-tint);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* text-size-adjust: without it iOS Safari "boosts" the footer and panel type
