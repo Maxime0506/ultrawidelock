@@ -44,6 +44,12 @@ CLAUDE.md
 # codex
 .codex/
 
+# the built site. Generated output is never committed here: that is what made
+# docs/ conflict on every merge, on derived lines no resolution could settle.
+web/dist/
+# emscripten output: 37 KB of minified JS on one line. Build it, never commit it.
+web/twin/twin.js
+
 # internal working notes / plans (not part of the project)
 internal/
 
@@ -88,3 +94,6 @@ captures/
 
 # graphify knowledge graph: generated, machine-local
 graphify-out/
+
+# vendored renderers, fetched not committed
+web/vendor/

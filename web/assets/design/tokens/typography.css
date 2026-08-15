@@ -1,0 +1,58 @@
+/* UltraWideLock tokens — typography. Space Grotesk (UI/prose) + JetBrains Mono
+   (identifiers, numerals, wordmark).
+
+   Self-hosted, not Google Fonts. The @import that used to sit here told a
+   third party the IP address of every visitor to a privacy-focused lock
+   project's site, on every page view, and made the page depend on a host we
+   do not control. Each file is the latin subset of the upstream variable
+   font, so one file covers every weight the system asks for: 56 KB in total
+   against 192 KB for the seven static cuts.
+
+   SIL Open Font License 1.1. See fonts/LICENSE. */
+@font-face{
+  font-family:'Space Grotesk';
+  font-style:normal;
+  font-weight:300 700;
+  font-display:swap;
+  src:url('../fonts/space-grotesk.woff2') format('woff2');
+}
+@font-face{
+  font-family:'JetBrains Mono';
+  font-style:normal;
+  font-weight:100 800;
+  font-display:swap;
+  src:url('../fonts/jetbrains-mono.woff2') format('woff2');
+}
+
+:root{
+  --font-sans:"Space Grotesk","Helvetica Neue",Helvetica,"Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+
+  --fs-100:0.6875rem;  /* micro labels, table eyebrows */
+  --fs-200:0.75rem;    /* kbd, pills, captions */
+  --fs-300:0.8125rem;  /* code, dense UI, sidebar */
+  --fs-400:0.9375rem;  /* UI default */
+  --fs-500:1rem;       /* body copy */
+  --fs-600:1.125rem;   /* lede */
+  --fs-700:1.375rem;   /* h3 */
+  --fs-800:1.75rem;    /* h2 */
+  --fs-900:2.375rem;   /* h1 */
+  --fs-1000:3.25rem;   /* landing display */
+  --fs-1100:4.25rem;   /* hero display, wide only */
+
+  --lh-tight:1.06;
+  --lh-snug:1.24;
+  --lh-normal:1.5;
+  --lh-copy:1.68;
+  --lh-code:1.6;
+
+  --fw-regular:400;
+  --fw-medium:500;
+  --fw-bold:700;
+
+  --tr-display:-0.024em;
+  --tr-heading:-0.014em;
+  --tr-body:-0.006em;
+  --tr-mono:0;
+  --tr-caps:0.09em;
+}

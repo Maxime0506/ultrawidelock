@@ -133,4 +133,71 @@ REMOVE_ITEM _zephyr_libraries aliro
 # for any code here. Kept to this one spelling on purpose: "implements Aliro"
 # describes the specification, where "the Aliro reader" would be claiming the
 # name for ours.
-implements Aliro, the CSA's door-lock credential standard
+[Ii]mplements Aliro, the CSA's door-lock credential standard
+
+# --- The guides under docs/, citing the standard and the add-on ---------------
+# The bring-up and porting guides have to name the specification they are
+# implementing and the vendor code they sit on, the same way the source
+# comments above do. Every pattern here names a CSA document, a CSA-defined
+# protocol element, an Apple Wallet credential, the Nordic add-on, or Qorvo's
+# reference application. None of them labels code in this repository: our own
+# identifiers in those guides were renamed rather than excused, which is what
+# took the count from 1,176 lines to these.
+Aliro 1\.0
+Aliro Specification
+[Tt]he Aliro Door Lock cluster
+Aliro (BLE|UWB) (advertisement|transaction|door-lock|credential)
+Aliro (service|advertising) (data|support|with)
+Aliro key (in|provisioned in) Wallet
+Aliro-capable iPhone
+Home/Aliro UWB credential
+Aliro/Home UWB credential
+an Aliro lock
+Aliro work-queue stack
+Enable Aliro over BLE \+ UWB
+Qorvo Aliro reference application
+introducing-aliro-1-0-a-unified-standard
+# The specification's own wire and cluster vocabulary, as the guides cite it:
+# the PDF by its CSA document number, the attribute block and message header it
+# defines, the APDU exchange and transaction it names, and Espressif's own
+# esp-aliro component.
+Aliro attribute block
+Aliro message header
+Aliro APDU exchange
+Aliro transaction
+Aliro credential-auth
+Aliro 0xFFF2 advertisement
+Aliro ranging session-id
+Aliro_1\.0_specification\.pdf
+esp-aliro
+Nordic Aliro library
+Aliro key during Matter commissioning
+
+# The add-on's C++ entry points, quoted in bring-up guides as log or API text.
+AliroStart\(\)
+AliroInit
+Failed to start Aliro
+legacy Nordic Aliro binary
+app-side `src/aliro/`
+
+# The Matter Data Model's own door-lock vocabulary, as the porting notes cite it.
+(Matter )?Aliro cluster
+BLE\+UWB Aliro flow
+
+# The specification, named as the specification: what it mandates, what it
+# defines on the wire, what it does not cover, and Apple's certification page.
+Aliro support
+Aliro features
+Aliro `0xFFF2`
+Aliro 0xFFF2 service
+Aliro auth commands
+Aliro-over-NFC
+Aliro-certified platforms
+Aliro's time-based credential
+Aliro makes NFC the mandatory transport
+does not mention Aliro
+the published Aliro
+It means Aliro
+and Aliro only
+route the Aliro
+Full Aliro UWB

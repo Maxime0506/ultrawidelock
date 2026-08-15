@@ -414,7 +414,7 @@ static int patch_stream(struct apply_ctx *c, const struct ultrawidelock_dfu_hdr 
  * staging on completion or failure. Returns 0 always; actual success determined by primary image
  * validity on next boot.
  */
-static int ultrawidelock_dfu_apply(void)
+static int dfu_apply(void)
 {
 	struct ultrawidelock_dfu_hdr hdr;
 	uint32_t crc;
@@ -498,4 +498,4 @@ done:
 	return 0;
 }
 
-ULTRAWIDELOCK_INIT_APPLICATION_PRIO(ultrawidelock_dfu_apply, 0);
+ULTRAWIDELOCK_INIT_APPLICATION_PRIO(dfu_apply, 0);

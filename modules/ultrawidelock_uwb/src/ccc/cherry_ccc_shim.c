@@ -221,7 +221,7 @@ void cherry_session_destroy(struct cherry_session *session)
 
 /**
  * @brief Start a credential UWB session by building a RangingConfiguration byte array from session
- * config, calling ultrawidelock_uwb_start_ultrawidelock, and emitting IDLE then ACTIVE status
+ * config, calling ultrawidelock_uwb_start_cred, and emitting IDLE then ACTIVE status
  * events.
  * @param session Base session.
  * @return CHERRY_ERR_INVALID_PARAMETER if session or config is null; CHERRY_ERR_SESSION_CONFIG if
@@ -231,10 +231,10 @@ enum cherry_err cherry_session_start(struct cherry_session *session)
 {
 	struct cherry_ccc_session *s = to_ccc(session);
 	const struct cherry_ccc_ultrawidelock_session_config *c;
-	// Configuration struct for ultrawidelock_uwb_start_ultrawidelock; holds session ID,
+	// Configuration struct for ultrawidelock_uwb_start_cred; holds session ID,
 	// channel, sync code, timing, slot geometry, STS index, UWB time, URSK key, and the
 	// RangingConfiguration byte array required to derive the CCC SaltedHash.
-	struct ultrawidelock_uwb_ultrawidelock_cfg fcfg;
+	struct ultrawidelock_uwb_cred_cfg fcfg;
 	uint8_t rcfg[17];
 	int rc;
 
@@ -290,9 +290,9 @@ enum cherry_err cherry_session_start(struct cherry_session *session)
 		rcfg[0], rcfg[1], rcfg[2], rcfg[3], rcfg[12], rcfg[13], rcfg[14], rcfg[15],
 		rcfg[16]);
 
-	rc = ultrawidelock_uwb_start_ultrawidelock(&fcfg);
+	rc = ultrawidelock_uwb_start_cred(&fcfg);
 	if (rc != 0) {
-		LOG_ERR("ultrawidelock_uwb_start_ultrawidelock rc=%d", rc);
+		LOG_ERR("ultrawidelock_uwb_start_cred rc=%d", rc);
 		emit_error(s, CHERRY_ERR_SESSION_INIT);
 		return CHERRY_ERR_SESSION_INIT;
 	}

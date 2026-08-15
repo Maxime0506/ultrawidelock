@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UltraWideLock — NFC and UWB smart lock firmware</title>
+<meta name="description" content="Portable firmware for NFC and UWB smart locks. Implements Aliro, the CSA's door-lock credential standard, on nRF52833, nRF5340 and ESP32.">
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/design/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="index.html">UltraWideLock <span class="ver">v0.3.0</span></a>
+  <div class="spacer"></div>
+  <nav class="navlinks">
+    <a class="navlink" href="twin/index.html">Twin</a>
+    <a class="navlink" href="flash/index.html">Flash</a>
+    <a class="navlink" href="graph/index.html">Graph</a>
+    <a class="navlink" href="https://github.com/ultrawidelock/ultrawidelock">Source</a>
+  </nav>
+  <button class="icon-btn" data-theme-toggle aria-pressed="false" title="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
+</header>
+
+<main id="main">
+<section class="hero-band">
+  <div class="hero-in">
+    <span class="eyebrow">UWB &middot; NFC &middot; MATTER</span>
+    <h1 style="font-size:var(--fs-1000);letter-spacing:var(--tr-display);line-height:var(--lh-tight);margin:0 0 var(--sp-5);max-width:34ch">A lock that measures the distance instead of trusting it.</h1>
+    <p class="lede">UltraWideLock implements Aliro, the CSA's door-lock credential standard: BLE, NFC
+    over ECP, and UWB ranging. Distance comes from time-of-flight under a rotating STS session, so a
+    relay cannot shorten it. One nRF52833 runs the reader, the radio and a Matter node at once.</p>
+    <div class="cta" style="margin-top:var(--sp-8)">
+      <a class="btn btn-primary" href="#install">Get started</a>
+      <a class="btn" href="twin/index.html">Open the digital twin</a>
+      <a class="btn btn-ghost" href="https://github.com/ultrawidelock/ultrawidelock">github.com/ultrawidelock</a>
+    </div>
+    <div class="metarow">
+      <span class="pill pill-accent">UWB channels 5 &amp; 9</span>
+      <span class="pill">credential service 0xFFF2</span>
+      <span class="pill">Matter over Thread</span>
+      <span class="pill">ISC</span>
+    </div>
+    <div class="stats">
+      <div class="stat-b"><b>4.7 mm</b><span>per ranging tick</span></div>
+      <div class="stat-b"><b>7,375</b><span>host tests, no hardware</span></div>
+      <div class="stat-b"><b>0</b><span>cloud dependencies</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" id="install" style="padding-top:var(--sp-16)">
+  <div class="section-h"><h2>Install</h2><span class="rule"></span></div>
+  <p class="lede" style="margin-bottom:var(--sp-6)">A C compiler and <code>python3</code> run the whole
+  host suite. Nothing phones home.</p>
+  <div class="prewrap">
+    <div class="cap"><span>shell</span><span style="margin-left:auto">no hardware</span></div>
+<pre><code>git clone <span class="tok-string">https://github.com/ultrawidelock/ultrawidelock.git</span>
+<span class="tok-func">cd</span> ultrawidelock
+make check                  <span class="tok-comment"># 7 suites, about 2 minutes</span></code></pre>
+  </div>
+  <p>With a Qorvo DWM3001CDK plugged in, five commands take you from clone to a lock on the bench:</p>
+  <div class="prewrap">
+    <div class="cap"><span>shell</span><span style="margin-left:auto">DWM3001CDK</span></div>
+<pre><code>make dfu-key                <span class="tok-comment"># once per clone   · image-signing key</span>
+make bootstrap              <span class="tok-comment"># once per machine · NCS v3.3.0</span>
+make build                  <span class="tok-comment"># -&gt; build/cdk-matter</span>
+make flash                  <span class="tok-comment"># over the on-board J-Link</span>
+make monitor                <span class="tok-comment"># console, over RTT</span></code></pre>
+  </div>
+  <p>No board on hand? The <a href="flash/index.html">web flasher</a> writes a prebuilt ESP32 image
+  over WebSerial, straight from the browser.</p>
+</section>
+
+<section class="page" style="padding-top:var(--sp-12)">
+  <div class="section-h"><h2>How a door opens</h2><span class="rule"></span></div>
+  <ul class="rows mono">
+    <li><a href="twin/index.html"><span class="row-name">1 &middot; BLE</span><span class="row-desc">the phone finds the credential service 0xFFF2</span></a></li>
+    <li><a href="twin/index.html"><span class="row-name">2 &middot; auth</span><span class="row-desc">AUTH0, AUTH1, EXCHANGE — both ends now hold the URSK</span></a></li>
+    <li><a href="twin/index.html"><span class="row-name">3 &middot; UWB</span><span class="row-desc">key ladder to STS, then DS-TWR ranging</span></a></li>
+    <li><a href="twin/index.html"><span class="row-name">4 &middot; gate</span><span class="row-desc">range consistency agrees, and the bolt moves</span></a></li>
+    <li><a href="twin/index.html"><span class="row-name">5 &middot; Matter</span><span class="row-desc">lock state over Thread, into Apple Home</span></a></li>
+  </ul>
+  <div class="callout callout-note"><span class="ico">note</span><div>
+    <p>Local only. No app, no account, no cloud round trip. The credential is verified on the lock
+    itself, so there is no remote verifier to compromise.</p>
+  </div></div>
+</section>
+
+<section class="page" style="padding-top:var(--sp-12)">
+  <div class="section-h"><h2>Hardware targets</h2><span class="rule"></span></div>
+  <div class="tablewrap">
+    <table class="data">
+      <thead><tr><th>Application</th><th>Hardware</th><th>Connectivity</th></tr></thead>
+      <tbody>
+        <tr><td><code>dwm3001cdk-lock</code></td><td>DWM3001CDK, nRF52833 + DW3110</td><td>UWB, Matter over Thread</td></tr>
+        <tr><td><code>dwm3001cdk-lock-freertos</code></td><td>the same board, no Zephyr</td><td>UWB, Matter over Thread</td></tr>
+        <tr><td><code>nrf5340dk-lock</code></td><td>nRF5340 DK, DWM3000EVB, NFC12A1</td><td>UWB and NFC, Matter over Thread</td></tr>
+        <tr><td><code>esp32-matter-lock</code></td><td>ESP32-S3 / C5 / C6 with DWM3000EVB</td><td>UWB, Matter over Wi-Fi</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="page" style="padding-top:var(--sp-16)">
+  <div class="section-h"><h2>All of it on one nRF52833</h2><span class="rule"></span></div>
+  <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:var(--sp-10);align-items:start">
+    <div>
+      <p>512 KB of flash and 128 KB of RAM carry the reader, the DW3110 radio, an OpenThread MTD and a
+      hand-written Matter node at the same time. The Matter node is written by hand rather than built on
+      CHIP, which is what makes it fit.</p>
+      <ul class="rows mono">
+        <li><span class="row-name">reader</span><span class="row-desc">AUTH0 / AUTH1 / EXCHANGE, key ladder, STS, DS-TWR</span></li>
+        <li><span class="row-name">matter</span><span class="row-desc">hand-written node, not CHIP</span></li>
+        <li><span class="row-name">thread</span><span class="row-desc">OpenThread MTD, joins a real network</span></li>
+        <li><span class="row-name">classifier</span><span class="row-desc">line-of-sight vs obstructed, 776 B of flash</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="tablewrap">
+        <table class="data">
+          <tbody>
+            <tr><th>Flash</th><td>379,332 of 433,664 B</td></tr>
+            <tr><th>RAM</th><td>111,012 of 131,072 B</td></tr>
+            <tr><th>Toolchain</th><td>NCS v3.3.0, Zephyr 4.3.99</td></tr>
+            <tr><th>Signing</th><td>ECDSA-P256, verified by MCUboot</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout-warn"><span class="ico">warn</span><div>
+        <p>Repository defaults are bench defaults. Keys and identities in the tree are for
+        development. Do not secure valuables with it.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" style="padding-top:var(--sp-16)">
+  <div class="section-h"><h2>Is the door in the way?</h2><span class="rule"></span></div>
+  <p>Distance alone cannot tell a phone in your hand from a phone through a wall. A decision tree reads
+  the DW3000's own receive diagnostics and answers, in 776 bytes of flash with no interpreter and no
+  allocation.</p>
+  <div class="tablewrap">
+    <table class="data">
+      <tbody>
+        <tr><th>Model</th><td>depth-2 decision tree, generated by emlearn</td></tr>
+        <tr><th>Cost</th><td>776 B flash, 0 B RAM, 28 B stack</td></tr>
+        <tr><th>Input</th><td>five CIA registers plus the measured range</td></tr>
+        <tr><th>Gate</th><td>the host suite certifies the C matches the trained model</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="page" style="padding-top:var(--sp-16)">
+  <div class="section-h"><h2>Try it without hardware</h2><span class="rule"></span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:var(--sp-4)">
+    <a class="card" href="twin/index.html">
+      <div class="card-h"><span class="status status-live">runs the firmware</span></div>
+      <b style="display:block;color:var(--strong);font-size:var(--fs-600);margin-bottom:var(--sp-2)">Digital twin</b>
+      <p>The ranging stack itself, compiled to WASM and running in the page. Walk a phantom phone at the
+      lock, add noise, spoof a relay, and single-step a real DS-TWR round.</p>
+      <div class="range-viz" style="margin-top:var(--sp-4);min-height:8rem" aria-hidden="true">
+        <span class="rv-ring"></span><span class="rv-ring"></span><span class="rv-ring"></span>
+        <span class="rv-line"></span>
+        <span class="rv-shot"></span><span class="rv-echo"></span>
+        <span class="rv-anchor"></span><span class="rv-tag"></span>
+      </div>
+    </a>
+    <a class="card" href="flash/index.html">
+      <div class="card-h"><span class="status">WebSerial</span></div>
+      <b style="display:block;color:var(--strong);font-size:var(--fs-600);margin-bottom:var(--sp-2)">Web flasher</b>
+      <p>Plug an ESP32-S3, C5 or C6 into USB and install a merged image from this page. No ESP-IDF, no
+      command line. The page detects which chip you plugged in.</p>
+      <div class="progress progress-lg" style="margin-top:var(--sp-4)"><span style="width:62%"></span></div>
+      <div class="progress-row" style="margin-top:var(--sp-2)"><span>writing app partition</span><span class="pct">62%</span></div>
+    </a>
+  </div>
+</section>
+
+<section class="page" style="padding:var(--sp-16) var(--sp-8) var(--sp-20)">
+  <div class="section-h"><h2>Specification</h2><span class="rule"></span></div>
+  <div class="tablewrap">
+    <table class="data">
+      <tbody>
+        <tr><th>UWB</th><td>DS-TWR under an STS session, channels 5 and 9</td></tr>
+        <tr><th>Resolution</th><td>one tick is about 15.65 ps, roughly 4.692 mm</td></tr>
+        <tr><th>BLE</th><td>credential service 0xFFF2, AUTH0 / AUTH1 / EXCHANGE</td></tr>
+        <tr><th>NFC</th><td>ECP, on the nRF5340 DK target</td></tr>
+        <tr><th>Matter</th><td>hand-written node over Thread, or over Wi-Fi on ESP32</td></tr>
+        <tr><th>Updates</th><td>signed delta over BLE, applied from inside MCUboot</td></tr>
+        <tr><th>Ports</th><td>Zephyr, ESP-IDF, and a Zephyr-free FreeRTOS port</td></tr>
+        <tr><th>License</th><td>ISC. The vendored Qorvo UWB driver is LicenseRef-QORVO-2</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="cta" style="margin-top:var(--sp-8)">
+    <a class="btn btn-primary" href="https://github.com/ultrawidelock/ultrawidelock">Read the source</a>
+    <a class="btn" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/LICENSE">ISC license</a>
+    <a class="btn btn-ghost" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/PORTING.md">Port it to a board</a>
+  </div>
+</section>
+</main>
+<footer class="footer">
+  <div class="footer-in">
+    <div class="footer-col">
+      <a class="wordmark" href="index.html">UltraWideLock <span class="ver">v0.3.0</span></a>
+      <p class="fine">Portable firmware for NFC and UWB smart locks, on nRF52833, nRF5340 and ESP32.
+      ISC licensed.</p>
+    </div>
+    <div class="footer-col">
+      <span class="footer-cap">Tools</span>
+      <a href="twin/index.html">Digital twin</a>
+      <a href="flash/index.html">Web flasher</a>
+      <a href="graph/index.html">Subsystem graph</a>
+    </div>
+    <div class="footer-col">
+      <span class="footer-cap">Source</span>
+      <a href="https://github.com/ultrawidelock/ultrawidelock">github.com/ultrawidelock</a>
+      <a href="https://github.com/ultrawidelock/ultrawidelock/blob/main/LICENSE">LICENSE (ISC)</a>
+      <a href="https://github.com/ultrawidelock/ultrawidelock/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/ultrawidelock/ultrawidelock/blob/main/SECURITY.md">Security</a>
+    </div>
+  </div>
+  <div class="footer-bar">
+    <span>ISC &middot; no CLA</span>
+    <span>built static, works offline</span>
+    <span>bench defaults, not a product</span>
+  </div>
+</footer>
+<script src="assets/design/theme-toggle.js"></script>
+</body>
+</html>

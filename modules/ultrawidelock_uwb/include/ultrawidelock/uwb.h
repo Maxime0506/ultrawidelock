@@ -39,7 +39,7 @@ int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len);
  * fallback.
  * @param rc_len RangingConfiguration length in bytes (typically 17).
  */
-struct ultrawidelock_uwb_ultrawidelock_cfg {
+struct ultrawidelock_uwb_cred_cfg {
 	uint32_t session_id;         /**< credential UWB session id (any non-zero). */
 	uint8_t channel;             /**< UWB channel: 5 or 9. */
 	uint8_t sync_code_index;     /**< SYNC/preamble code index (1..32). */
@@ -55,7 +55,7 @@ struct ultrawidelock_uwb_ultrawidelock_cfg {
 };
 
 /** Start the CCC DS-TWR responder bound to a live credential; returns 0 on success. */
-int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg);
+int ultrawidelock_uwb_start_cred(const struct ultrawidelock_uwb_cred_cfg *cfg);
 
 /** Pre-apply the expected session PHY (radio configured, TRX off, RX not armed) so the
  * M4-time start skips the dwt_configure long pole when the negotiated params match. */

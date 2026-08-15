@@ -37,11 +37,11 @@ static void okc(const char *name, int cond)
 volatile int ultrawidelock_uwb_diag_on;
 
 static int s_start_calls, s_stop_calls, s_start_rc;
-static const struct ultrawidelock_uwb_ultrawidelock_cfg *s_last_cfg;
+static const struct ultrawidelock_uwb_cred_cfg *s_last_cfg;
 static bool s_have_range, s_have_trusted;
 static int32_t s_range_cm = 123, s_trusted_cm = 111;
 
-int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
+int ultrawidelock_uwb_start_cred(const struct ultrawidelock_uwb_cred_cfg *cfg)
 {
 	s_start_calls++;
 	s_last_cfg = cfg;

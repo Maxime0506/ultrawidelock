@@ -60,7 +60,7 @@ static const uint8_t demo_ursk[32] = {
 };
 
 // Demo credential UWB responder configuration used by the shell's ultrawidelock-start command.
-static const struct ultrawidelock_uwb_ultrawidelock_cfg demo_cfg = {
+static const struct ultrawidelock_uwb_cred_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
 	.sync_code_index = 9u,
@@ -93,7 +93,7 @@ int app_responder_start(void)
 	if (s_up) {
 		rc = 1; /* already running */
 	} else {
-		rc = ultrawidelock_uwb_start_ultrawidelock(&demo_cfg);
+		rc = ultrawidelock_uwb_start_cred(&demo_cfg);
 		if (rc == 0) {
 			s_up = true;
 		}
