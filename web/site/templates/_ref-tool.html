@@ -1,0 +1,54 @@
+<!-- @dsCard group="Site Templates" viewport="1280x700" subtitle="Full-viewport tool chrome" name="Tool chrome" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital twin — UltraWideLock</title>
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../../tool-chrome.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="back-link" href="landing.html" id="backBtn">&larr; UltraWideLock</a>
+  <span class="crumb">/ digital twin</span>
+  <div class="spacer"></div>
+  <span class="status status-live" style="display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-3);border:var(--bw-1) solid var(--accent-line);border-radius:var(--r-pill);font-family:var(--font-mono);font-size:var(--fs-200);color:var(--accent-ink);background:var(--accent-tint)">wasm ready</span>
+  <button class="icon-btn" id="themeBtn" data-theme-toggle aria-pressed="false" title="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
+</header>
+
+<div class="tool-stage" id="scene-wrap">
+  <!-- The app owns everything below the header. This placeholder stands in for
+       the twin canvas / flasher body / 3d-force-graph stage. Element IDs and
+       classes used by the page's JavaScript are preserved verbatim. -->
+  <div style="position:absolute;inset:0;display:grid;place-items:center;
+    background-image:linear-gradient(var(--hairline) 1px,transparent 1px),linear-gradient(90deg,var(--hairline) 1px,transparent 1px);
+    background-size:28px 28px;
+    color:var(--faint);font-family:var(--font-mono);font-size:var(--fs-200);text-align:center">
+    app stage &mdash; twin.js / esp-web-tools / 3d-force-graph renders here
+  </div>
+
+  <div class="panel" style="position:absolute;top:var(--sp-4);left:var(--sp-4);width:15rem">
+    <div class="p-head"><span class="p-eyebrow">readouts</span><button class="p-x" aria-label="Close">&times;</button></div>
+    <div class="p-body" style="display:grid;gap:var(--sp-2)">
+      <div class="ro"><span class="k">distance</span><span class="v">1.14 m</span></div>
+      <div class="ro"><span class="k">trust</span><span class="v">0.92</span></div>
+      <div class="ro"><span class="k">ble rssi</span><span class="v">&minus;61 <span class="pips lit-3"><i></i><i></i><i></i><i></i></span></span></div>
+    </div>
+  </div>
+
+  <div class="panel" style="position:absolute;bottom:var(--sp-4);left:var(--sp-4);right:var(--sp-4);padding:var(--sp-3) var(--sp-4);display:flex;flex-wrap:wrap;gap:var(--sp-4);align-items:center">
+    <div class="ctl"><label for="c-speed">speed</label><input id="c-speed" type="range" min="0" max="100" value="42"><output id="o-speed" class="mono">0.42</output></div>
+    <div class="ctl"><label for="c-thresh">bound</label><input id="c-thresh" type="range" min="30" max="300" value="120"><output id="o-thresh" class="mono">120 cm</output></div>
+    <div class="btnrow" style="margin-left:auto">
+      <button class="btn" id="b-walk">Walk up</button>
+      <button class="btn" id="b-spoof">Spoof relay</button>
+      <button class="btn danger" id="b-reset">Reset</button>
+    </div>
+  </div>
+
+  <div class="hint" style="position:absolute;top:var(--sp-4);right:var(--sp-4)" id="hint">drag to orbit &middot; scroll to zoom</div>
+</div>
+<script src="../../theme-toggle.js"></script>
+</body>
+</html>

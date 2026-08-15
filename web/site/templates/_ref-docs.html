@@ -1,0 +1,184 @@
+<!-- @dsCard group="Site Templates" viewport="1280x820" subtitle="Docs page with sidebar, TOC and search palette" name="Docs page" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secure ranging — UltraWideLock docs</title>
+<script>(function(){try{var t=localStorage.getItem('uwl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../../styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="app">
+<aside class="side">
+  <div class="side-head">
+    <a class="brand" href="landing.html"><b>UltraWideLock</b><span class="tag">v0.3.0</span></a>
+    <button class="search-btn" type="button" aria-haspopup="dialog">Search docs <kbd>/</kbd></button>
+  </div>
+  <nav class="tree" aria-label="Documentation">
+    <div class="tree-cap">Start</div>
+    <a class="item" href="docs-page.html">Overview</a>
+    <a class="item" href="docs-page.html">Get started</a>
+    <a class="item" href="docs-page.html">Hardware targets</a>
+    <div class="tree-cap">Subsystems</div>
+    <div class="group">
+      <button class="group-h" aria-expanded="true">UWB <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items">
+        <a class="item-g on" href="docs-page.html">secure_ranging.h</a>
+        <a class="item-g" href="docs-page.html">sts_session.h</a>
+        <a class="item-g" href="docs-page.html">rx_diag.h</a>
+      </div>
+    </div>
+    <div class="group collapsed">
+      <button class="group-h" aria-expanded="false">BLE <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items">
+        <a class="item-g" href="docs-page.html">gatt_service.h</a>
+        <a class="item-g" href="docs-page.html">pairing.h</a>
+      </div>
+    </div>
+    <div class="group collapsed">
+      <button class="group-h" aria-expanded="false">NFC <span class="chev" aria-hidden="true">&#9662;</span></button>
+      <div class="items"><a class="item-g" href="docs-page.html">nfc_select.h</a></div>
+    </div>
+    <div class="tree-cap">Guides</div>
+    <a class="item" href="docs-page.html">Wiring the radio</a>
+    <a class="item" href="docs-page.html">Provisioning keys</a>
+    <a class="item" href="docs-page.html">Troubleshooting</a>
+    <div class="tree-cap">Reference</div>
+    <a class="item" href="api-reference.html">API (Doxygen)</a>
+  </nav>
+</aside>
+<div class="content">
+<header class="topbar">
+  <a class="wordmark" href="landing.html">UltraWideLock <span class="ver">v0.3.0</span></a>
+  <nav class="crumb" aria-label="Breadcrumb">
+    <span class="sep">/</span><a href="docs-page.html">Docs</a>
+    <span class="sep">/</span><b>Secure ranging</b>
+  </nav>
+  <div class="spacer"></div>
+  <nav class="navlinks">
+    <a class="navlink" href="docs-page.html">Docs</a>
+    <a class="navlink" href="api-reference.html">API</a>
+    <a class="navlink" href="tool-chrome.html">Twin</a>
+    <a class="navlink" href="tool-chrome.html">Flash</a>
+    <a class="navlink" href="https://git.ultrawidelock.com/ultrawidelock/ultrawidelock">Source</a>
+  </nav>
+  <button class="icon-btn" data-theme-toggle aria-pressed="false" title="Switch theme"><svg class="sun" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="1.4" r="1.1"/><circle cx="8" cy="14.6" r="1.1"/><circle cx="1.4" cy="8" r="1.1"/><circle cx="14.6" cy="8" r="1.1"/></svg><svg class="moon" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7 5.5 5.5 0 0 1-7-7Z"/></svg></button>
+</header>
+  <div class="mid">
+    <article class="doc" id="main">
+      <span class="eyebrow">UWB subsystem</span>
+      <h1>Secure ranging</h1>
+      <p class="lede">How the lock turns a time-of-flight measurement into an access decision, and what
+      it refuses to do.</p>
+
+      <h2>Session lifecycle</h2>
+      <p>A ranging session is opened by the BLE layer once a credential verifies, never by the radio
+      itself. <code>uwl_sts_session_open()</code> derives the STS key from the BLE handshake transcript,
+      so a session cannot be reused across unlocks or across devices.</p>
+      <div class="callout callout-warn"><span class="ico">careful</span><div>
+        <p>Opening a session before credential verification is a distance-fraud hole: an attacker gets a
+        keyed ranging channel for free. The facade asserts on this in debug builds.</p>
+      </div></div>
+
+      <h3>Opening a session</h3>
+      <div class="prewrap">
+        <div class="cap"><span>uwb/sts_session.h</span><a href="https://git.ultrawidelock.com/ultrawidelock/ultrawidelock/blob/main/modules/uwb/include/sts_session.h" style="margin-left:auto">view source</a></div>
+<pre><code><span class="tok-macro">#include</span> <span class="tok-string">&lt;uwl/sts_session.h&gt;</span>
+
+<span class="tok-type">int</span> <span class="tok-func">open_after_auth</span>(<span class="tok-keyword">const</span> <span class="tok-type">uwl_transcript_t</span> *tr)
+{
+    <span class="tok-type">uwl_sts_session_cfg_t</span> cfg = {
+        .channel   = <span class="tok-number">9</span>,
+        .rate_hz   = <span class="tok-number">10</span>,
+        .bound_cm  = <span class="tok-number">120</span>,
+        .integrity = <span class="tok-const">UWL_RANGE_INTEGRITY_STRICT</span>,
+    };
+
+    <span class="tok-comment">/* key material never leaves the key store */</span>
+    <span class="tok-keyword">if</span> (<span class="tok-func">uwl_sts_derive</span>(tr, &amp;cfg.key) != <span class="tok-number">0</span>)
+        <span class="tok-keyword">return</span> -<span class="tok-const">EACCES</span>;
+
+    <span class="tok-keyword">return</span> <span class="tok-func">uwl_sts_session_open</span>(&amp;cfg);
+}</code></pre>
+        <button class="btn btn-sm copy">Copy</button>
+      </div>
+
+      <h3>Per-target configuration</h3>
+      <div class="tabs">
+        <div class="tablist" role="tablist">
+          <button class="tab" role="tab" aria-selected="true">nRF5340</button>
+          <button class="tab" role="tab" aria-selected="false">DWM3001CDK</button>
+          <button class="tab" role="tab" aria-selected="false">ESP32-S3</button>
+        </div>
+        <div class="tabpanel" role="tabpanel">
+          <div class="prewrap">
+<pre><code><span class="tok-comment"># boards/nrf5340dk_cpuapp.conf</span>
+<span class="tok-const">CONFIG_UWL_UWB_DRIVER_DW3110</span>=<span class="tok-string">y</span>
+<span class="tok-const">CONFIG_UWL_STS_KEYSTORE</span>=<span class="tok-string">"cryptocell"</span>
+<span class="tok-const">CONFIG_UWL_RANGE_INTEGRITY_STRICT</span>=<span class="tok-string">y</span></code></pre>
+          </div>
+        </div>
+      </div>
+
+      <h2>Range integrity</h2>
+      <p>Strict integrity runs three gates on every measurement. A single failing gate drops the
+      measurement; three consecutive failures close the session and log to the flight recorder.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Gate</th><th>Rejects</th><th>Tunable</th></tr></thead>
+          <tbody>
+            <tr><td><code>cir_leading_edge</code></td><td>relayed frames with a smeared first path</td><td><code>cir_thresh</code></td></tr>
+            <tr><td><code>rssi_vs_tof</code></td><td>amplified replays at implausible power</td><td><code>rssi_window</code></td></tr>
+            <tr><td><code>rate_monotonic</code></td><td>injected frames out of the round schedule</td><td>&mdash;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout-ok"><span class="ico">verified</span><div>
+        <p>The three gates are exercised on real silicon in <code>tests/range_integrity</code> and
+        replayed in the <a href="tool-chrome.html">digital twin</a> against captured attack traces.</p>
+      </div></div>
+
+      <h2>Reading the decision</h2>
+      <p>Each decision lands in the flight recorder with its inputs, which is what you want on the bench
+      when an unlock does not happen.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:var(--sp-3);margin-bottom:var(--sp-8)">
+        <div class="ro"><span class="k">distance</span><span class="v">1.14 m</span></div>
+        <div class="ro"><span class="k">trust</span><span class="v">0.92</span></div>
+        <div class="ro"><span class="k">gates</span><span class="v">3/3</span></div>
+        <div class="ro"><span class="k">bolt</span><span class="v" style="color:var(--ok)">open</span></div>
+      </div>
+      <p>See also: <a href="docs-page.html">rx_diag.h</a>, <a href="docs-page.html">flight recorder</a>,
+      <a href="api-reference.html">generated API reference</a>.</p>
+    </article>
+
+    <aside class="toc-rail">
+      <div class="toc-in">
+        <div class="toc-cap">On this page</div>
+        <nav>
+          <a class="toc-link on" href="#">Session lifecycle</a>
+          <a class="toc-link mono" href="#">uwl_sts_session_open</a>
+          <a class="toc-link" href="#">Per-target configuration</a>
+          <a class="toc-link" href="#">Range integrity</a>
+          <a class="toc-link" href="#">Reading the decision</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+</div>
+</div>
+<div class="scrim" hidden></div>
+<div class="palette" role="dialog" aria-label="Search documentation" hidden>
+  <input type="search" placeholder="Search symbols, guides, files&hellip;" value="sts_ses">
+  <div class="results">
+    <a class="res sel" href="#"><span class="kind">symbol</span><span class="nm">uwl_sts_session_open</span><span class="ctx">uwb/sts_session.h</span></a>
+    <a class="res" href="#"><span class="kind">symbol</span><span class="nm">uwl_sts_session_key_t</span><span class="ctx">uwb/sts_session.h</span></a>
+    <a class="res" href="#"><span class="kind">guide</span><span class="nm">Rotating STS keys per session</span><span class="ctx">Guides / Security</span></a>
+    <a class="res" href="#"><span class="kind">file</span><span class="nm">sts_session.c</span><span class="ctx">modules/uwb/src</span></a>
+  </div>
+  <div class="pal-foot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> move</span><span><kbd>&crarr;</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+</div>
+<script src="../../theme-toggle.js"></script>
+</body>
+</html>

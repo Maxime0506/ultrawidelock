@@ -1,0 +1,24 @@
+/* UltraWideLock tokens — space, radii, borders, motion, layout, z. */
+:root{
+  --sp-0:0; --sp-1:0.235rem; --sp-2:0.47rem; --sp-3:0.705rem; --sp-4:0.94rem;
+  --sp-5:1.176rem; --sp-6:1.41rem; --sp-8:1.88rem; --sp-10:2.35rem;
+  --sp-12:2.82rem; --sp-16:3.76rem; --sp-20:4.7rem; --sp-28:6.58rem; --sp-40:9.4rem;
+
+  --r-xs:2px; --r-sm:4px; --r-md:7px; --r-lg:11px; --r-xl:16px; --r-pill:999px;
+
+  --bw-hair:1px; --bw-1:1px; --bw-2:2px; --bw-rule:3px;
+  --border:var(--bw-1) solid var(--line);
+  --border-hair:var(--bw-hair) solid var(--hairline);
+  --border-accent:var(--bw-1) solid var(--accent-line);
+
+  --dur-1:80ms; --dur-2:150ms; --dur-3:240ms; --dur-4:420ms;
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+  --ease-in-out:cubic-bezier(.45,.05,.55,.95);
+  --ease-emphatic:cubic-bezier(.16,.84,.24,1);
+  --ease-linear:linear;
+
+  --measure:46rem; --article:48rem; --side:17.5rem; --toc:14rem;
+  --topbar-h:3.35rem; --page-max:80rem; --tool-header-h:2.9rem;
+
+  --z-base:0; --z-sticky:10; --z-header:20; --z-dropdown:30; --z-scrim:40; --z-palette:50;
+}
