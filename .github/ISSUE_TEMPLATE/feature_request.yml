@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose new behavior, a new port, or a new chipset
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a new board or chipset, read
+        [PORTING.md](https://github.com/ultrawidelock/ultrawidelock/blob/main/PORTING.md)
+        first. It names the five HAL seams, and it usually answers whether the
+        work is a new port or an extension of an existing one.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What can you not do today? Describe the situation, not the solution you
+        have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should happen instead, and how would you know it worked?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - Portable behavior in modules/
+        - A new backend in an existing port
+        - A new operating system port
+        - A new chipset on an existing framework
+        - A new application or example
+        - SDK / packaging / build system
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: >
+        Including doing nothing. If an existing target nearly does this, say
+        which and what is missing.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to implement this myself.
+        - label: I have hardware to test it on.
