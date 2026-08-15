@@ -34,7 +34,12 @@ a{color:inherit;text-decoration:none}
 .back:hover{border-color:var(--line);color:var(--strong)}
 .crumbs{display:flex;align-items:center;gap:.45rem;font-family:var(--serif);font-weight:500;
   font-size:1.02rem;color:var(--strong);min-width:0}
-.crumbs .cr{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:14rem}
+/* These are <button> so a keyboard can reach them -- they change what the
+   graph is showing. That means undoing the user-agent button box, or they
+   render as three grey chips in the middle of a breadcrumb. */
+.crumbs .cr{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:14rem;
+  background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;
+  line-height:inherit}
 .crumbs .cr:hover{color:var(--accent)}
 .crumbs .cr:last-child{cursor:default}
 .crumbs .cr:last-child:hover{color:var(--strong)}
@@ -560,10 +565,11 @@ function swatch(el,g){
 }
 
 /* what a click means depends on where you are: on the surface it selects,
-   in a dive symbols open their docs and outer files dive deeper */
+   in a dive a symbol opens its line on the source browser and an outer file
+   dives deeper */
 function nodeAct(n){
   if(stack.length){
-    if(n.url||n.kind==="file")openDoc(n);
+    if(n.url)window.open(n.url,"_blank","noopener");
     else dive(n.id);
   }else select(n,true);
 }
@@ -760,12 +766,14 @@ document.getElementById("pbody").addEventListener("click",function(e){
   var t=e.target;
   var dv=t.closest("[data-dive]");
   if(dv){dive(dv.getAttribute("data-dive"));return}
-  var a=t.closest(".sym a");
-  if(a){
-    e.preventDefault();
-    openDoc({name:a.textContent,url:a.getAttribute("href"),kind:a.getAttribute("data-k")});
-    return;
-  }
+  /* Symbol rows are plain links to the source browser and are left alone.
+     They used to be intercepted into openDoc(), which loaded the URL into an
+     iframe -- and every one of those URLs is a github.com blob page, which
+     sends X-Frame-Options: deny. The frame could never paint. The onload
+     handler then reached for its contentDocument, threw cross-origin, and was
+     swallowed by a bare catch, so the failure was silent and the pane just sat
+     there empty. A target="_blank" anchor does what that was trying to do. */
+  if(t.closest(".sym a"))return;
   var go=t.getAttribute&&t.getAttribute("data-go");
   if(go&&byId[go])select(byId[go],true);
 });

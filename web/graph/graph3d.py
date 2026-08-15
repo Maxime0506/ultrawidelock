@@ -115,8 +115,50 @@ def build(graph_json: Path, root: Path) -> dict:
     # Slots in sorted group order, so a rebuild does not reshuffle the colours.
     groups = sorted({n["grp"] for n in nodes})
     slots = {g: i for i, g in enumerate(groups)}
-    return {"nodes": nodes, "links": links, "syms": {},
+    return {"nodes": nodes, "links": links, "syms": symbols(graph, set(files)),
             "slots": slots, "colors": COLORS}
+
+
+# What the page shows as a file's API surface: one row per symbol, badged by
+# kind, linking to the exact line on the source browser.
+#
+# This was `"syms": {}` -- an empty dict, shipped -- which made the whole symbol
+# half of the template dead code: the API-surface caption, the .sym rows, the
+# F/T/# badge map, kdist() and the close symbol orbit in layerData all had
+# nothing to render. The comment explaining it said the data was gone with the
+# generator that used to mine it. It is not gone; graphify emits it.
+#
+# graphify gives one node per file (label is the filename, at L1) and one per
+# symbol below it (label like `grant_init()`, with _callable set on functions).
+# The file node is skipped by matching source_location, not by name: two
+# symbols in a header can share a filename-shaped label.
+SYM_CAP = 60
+
+
+def symbols(graph: dict, files: set[str]) -> dict:
+    """slug -> [[kind, name, url], ...] for each kept file."""
+    per_file: dict[str, list] = {}
+    for node in graph["nodes"]:
+        src = node.get("source_file", "")
+        if src not in files or node.get("source_location") == "L1":
+            continue
+        label = (node.get("label") or "").strip()
+        if not label:
+            continue
+        kind = "f" if node.get("_callable") else "c"
+        line = str(node.get("source_location") or "").lstrip("L")
+        url = REPO + src + (f"#L{line}" if line.isdigit() else "")
+        per_file.setdefault(src, []).append(
+            (line.zfill(6) if line.isdigit() else "999999",
+             [kind, label.rstrip("()"), url]))
+
+    out = {}
+    for src, rows in per_file.items():
+        # Source order, which is the order someone reading the file would meet
+        # them, and truncated: a 300-symbol header is a scroll, not a summary.
+        rows.sort(key=lambda r: r[0])
+        out[REPO + src] = [r[1] for r in rows[:SYM_CAP]]
+    return out
 
 
 def render(graph_json: Path, root: Path) -> str:
