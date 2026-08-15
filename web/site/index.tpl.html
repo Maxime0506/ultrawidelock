@@ -310,14 +310,17 @@ make monitor                <span class="tok-comment"># console, over RTT</span>
 <!-- ================================================================= targets -->
 <section class="page railed defer-paint" style="padding-top:var(--sp-16)">
   <div class="section-h"><span class="n">05</span><h2>Hardware targets</h2><span class="rule"></span></div>
-  <div class="tablewrap" data-reveal="0">
+  <!-- The frame is already there and the readings arrive into it, one row at a
+       time on --reveal-step. A table of hardware that flashes on as a finished
+       grid says the answer was always there; this says it was measured. -->
+  <div class="tablewrap">
     <table class="data">
       <thead><tr><th>Application</th><th>Hardware</th><th>Connectivity</th></tr></thead>
       <tbody>
-        <tr><td><code>dwm3001cdk-lock</code></td><td>DWM3001CDK, nRF52833 + DW3110</td><td>UWB, Matter over Thread</td></tr>
-        <tr><td><code>dwm3001cdk-lock-freertos</code></td><td>the same board, no Zephyr</td><td>UWB, Matter over Thread</td></tr>
-        <tr><td><code>nrf5340dk-lock</code></td><td>nRF5340 DK, DWM3000EVB, NFC12A1</td><td>UWB and NFC, Matter over Thread</td></tr>
-        <tr><td><code>esp32-matter-lock</code></td><td>ESP32-S3 / C5 / C6 with DWM3000EVB</td><td>UWB, Matter over Wi-Fi</td></tr>
+        <tr data-reveal="0"><td><code>dwm3001cdk-lock</code></td><td>DWM3001CDK, nRF52833 + DW3110</td><td>UWB, Matter over Thread</td></tr>
+        <tr data-reveal="1"><td><code>dwm3001cdk-lock-freertos</code></td><td>the same board, no Zephyr</td><td>UWB, Matter over Thread</td></tr>
+        <tr data-reveal="2"><td><code>nrf5340dk-lock</code></td><td>nRF5340 DK, DWM3000EVB, NFC12A1</td><td>UWB and NFC, Matter over Thread</td></tr>
+        <tr data-reveal="3"><td><code>esp32-matter-lock</code></td><td>ESP32-S3 / C5 / C6 with DWM3000EVB</td><td>UWB, Matter over Wi-Fi</td></tr>
       </tbody>
     </table>
   </div>
@@ -354,21 +357,22 @@ make monitor                <span class="tok-comment"># console, over RTT</span>
 <!-- =========================================================== specification -->
 <section class="page railed defer-paint" style="padding:var(--sp-16) var(--sp-8) var(--sp-20)">
   <div class="section-h"><span class="n">07</span><h2>Specification</h2><span class="rule"></span></div>
-  <div class="tablewrap" data-reveal="0">
+  <div class="tablewrap">
     <table class="data">
       <tbody>
-        <tr><th>UWB</th><td>DS-TWR under an STS session, channels 5 and 9</td></tr>
-        <tr><th>Resolution</th><td>one tick is about 15.65 ps, roughly 4.692 mm</td></tr>
-        <tr><th>BLE</th><td>credential service 0xFFF2, AUTH0 / AUTH1 / EXCHANGE</td></tr>
-        <tr><th>NFC</th><td>ECP, on the nRF5340 DK target</td></tr>
-        <tr><th>Matter</th><td>hand-written node over Thread, or over Wi-Fi on ESP32</td></tr>
-        <tr><th>Updates</th><td>signed delta over BLE, applied from inside MCUboot</td></tr>
-        <tr><th>Ports</th><td>Zephyr, ESP-IDF, and a Zephyr-free FreeRTOS port</td></tr>
-        <tr><th>License</th><td>ISC. The vendored Qorvo UWB driver is LicenseRef-QORVO-2</td></tr>
+        <tr data-reveal="0"><th>UWB</th><td>DS-TWR under an STS session, channels 5 and 9</td></tr>
+        <tr data-reveal="1"><th>Resolution</th><td>one tick is about 15.65 ps, roughly 4.692 mm</td></tr>
+        <tr data-reveal="2"><th>BLE</th><td>credential service 0xFFF2, AUTH0 / AUTH1 / EXCHANGE</td></tr>
+        <tr data-reveal="3"><th>NFC</th><td>ECP, on the nRF5340 DK target</td></tr>
+        <tr data-reveal="4"><th>Matter</th><td>hand-written node over Thread, or over Wi-Fi on ESP32</td></tr>
+        <tr data-reveal="5"><th>Updates</th><td>signed delta over BLE, applied from inside MCUboot</td></tr>
+        <tr data-reveal="6"><th>Ports</th><td>Zephyr, ESP-IDF, and a Zephyr-free FreeRTOS port</td></tr>
+        <tr data-reveal="7"><th>License</th><td>ISC. The vendored Qorvo UWB driver is LicenseRef-QORVO-2</td></tr>
       </tbody>
     </table>
   </div>
-  <div class="cta" style="margin-top:var(--sp-8)" data-reveal="1">
+  <!-- After the last row, not alongside the first. -->
+  <div class="cta" style="margin-top:var(--sp-8)" data-reveal="8">
     <a class="btn btn-primary" href="https://github.com/ultrawidelock/ultrawidelock" data-ext>Read the source</a>
     <a class="btn" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/LICENSE" data-ext>ISC license</a>
     <a class="btn btn-ghost" href="https://github.com/ultrawidelock/ultrawidelock/blob/main/PORTING.md" data-ext>Port it to a board</a>

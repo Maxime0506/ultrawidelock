@@ -626,11 +626,32 @@ applies to sidebar items, search results and the mobile nav alike, so
 measurement, a state change, and an arrival. `--dur-1` (80ms) for a hover,
 `--dur-2` (150ms) for a card or a copy button, `--dur-3` (240ms) for a panel,
 `--dur-4` (420ms) for a scroll reveal, `--dur-5` (640ms) for a meter filling.
-One rise distance (`--reveal-y`, 14px) and one 60ms stagger for every revealed
-element on the site, so nothing arrives with its own idea of how far up is. Note
-that the stagger is currently hardcoded as `i * 60` in `site.js` while
-`--reveal-step` declares the same 60ms and is never read; they agree by
-coincidence, not by wiring.
+One rise distance (`--reveal-y`, 14px) and one stagger (`--reveal-step`, 60ms)
+for every revealed element on the site, so nothing arrives with its own idea of
+how far up is. `site.js` reads that token once at startup rather than repeating
+the number. A revealed element travels the rise, scales from .985, and clears a
+2px blur, so a block reads as coming into focus rather than sliding; table rows
+carry their own `data-reveal` indices, so a table of readings arrives row by row
+into a frame that is already drawn.
+
+**The One Beat Rule.** The landing page has exactly one authored entrance and
+then it is quiet. Under the `.booted` class the markup ships with, the headline
+rises, the scope's ruler draws itself from the lock outwards, the metre ticks
+stamp 40ms apart, the DS-TWR round starts, and the readouts settle -- about
+1.8s of `animation-delay`, no JavaScript, no observer, and no way to replay it.
+The whole sequence lives inside `prefers-reduced-motion: no-preference` and is
+skipped rather than shortened, because the static SVG is already the finished
+instrument.
+
+**The Instruments Do Not Levitate Rule.** Hover on a card or a row means
+picking out one measurement, so it raises the surface one tonal step and grows
+a 2px `--accent` rule out of the centre of the left edge over `--dur-2`. Never
+a `translateY` lift and never a grown shadow: a card that rises under the
+cursor is claiming to be an object on a desk, and these are readings. Every
+overlay -- scrim, palette, mobile nav sheet -- shares one entrance instead:
+fade, 4px drift, .98 to 1, on `--dur-2 --ease-out`, with `@starting-style` and
+`transition-behavior: allow-discrete` behind an `@supports` so the palette
+animates open as well as shut.
 
 **The Reduced Motion Keeps The Instrument Rule.** Under
 `prefers-reduced-motion`, the duration tokens collapse to 0ms and animations are
@@ -683,8 +704,10 @@ mid-flight rather than vanishing, so it still shows what travels where.
 - **Don't** invent a hex for a state that already has a semantic alias. Mint,
   amber and red are spoken for; a new state gets a new alias over an existing
   primitive.
-- **Don't** add a token before checking the seven that are already declared and
-  unreferenced: `--fs-1100`, `--article`, `--r-xl`, `--sp-40`, `--ease-spring`,
-  `--ease-decel`, `--reveal-step`.
+- **Don't** add a token before checking the four that are still declared and
+  unreferenced: `--fs-1100`, `--article`, `--r-xl`, `--sp-40`. The other three
+  found their jobs: `--reveal-step` carries the scroll stagger, `--ease-spring`
+  the verdict stamp, and `--ease-decel` the ring and the dimension flash when a
+  grant lands.
 - **Don't** animate anything the global reduced-motion cap cannot stop, and
   don't let that cap leave a diagram blank; park it in a readable state instead.
