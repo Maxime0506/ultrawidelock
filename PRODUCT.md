@@ -21,10 +21,10 @@ not as the people the surfaces are optimized for.
 
 ## Product Purpose
 
-UltraWideLock is portable firmware for NFC and UWB smart locks. It implements
-Aliro, the CSA's door lock credential standard, on real hardware across BLE, NFC
-over ECP, and UWB ranging, with three complete locks plus reader, initiator and
-anchor examples.
+UltraWideLock is portable firmware for NFC and UWB smart locks. It
+implements Aliro, the CSA's door-lock credential standard, on real hardware
+across BLE, NFC over ECP, and UWB ranging, with three complete locks plus
+reader, initiator and anchor examples.
 
 `web/` is the project's public face and its no hardware on ramp. It carries four
 surfaces: the site (landing page plus 18 guides rendered from `docs/*.md`), a

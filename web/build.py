@@ -793,9 +793,9 @@ def check_links(pages: list[Path], have_twin: bool, have_graph: bool) -> list[st
 
 
 LANDING_TITLE = "UltraWideLock — NFC and UWB smart lock firmware"
-LANDING_DESC = ("Portable firmware for NFC and UWB smart locks. Implements "
-                "Aliro, the CSA's door-lock credential standard, on nRF52833, "
-                "nRF5340 and ESP32.")
+LANDING_DESC = ("Portable firmware for NFC and UWB smart locks. "
+                "Implements Aliro, the CSA's door-lock credential standard, "
+                "on nRF52833, nRF5340 and ESP32.")
 
 
 def build_landing() -> Path:

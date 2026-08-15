@@ -543,9 +543,18 @@ private_header_target() { # <source> <include-token> <private-header>...
 }
 
 check_private_headers() {
-	local private=() h f hit inc target fails=0 n=0
+	local private=() sources=() h f hits hit inc target fails=0 n=0
 	while IFS= read -r h; do private+=("$h"); done < <(private_headers)
-	while IFS= read -r f; do
+	# Both the file list and each file's hits are collected before the loop that
+	# reads them, and neither is a process substitution inside another loop.
+	# bash 3.2 — what macOS ships, and what the CI image's /usr/bin/env finds
+	# second — holds a process substitution's descriptor until the enclosing
+	# loop ends, so one per file across these 387 sources exhausts a stock
+	# 256-descriptor limit partway through and the check dies mid-scan.
+	while IFS= read -r h; do sources+=("$h"); done < <(boundary_sources)
+	for f in "${sources[@]}"; do
+		hits=$(grep -nE "${INC_RE}[^>\"]+[>\"]" "$f" || true)
+		[ -n "$hits" ] || continue
 		while IFS= read -r hit; do
 			[ -n "$hit" ] || continue
 			n=$((n + 1))
@@ -561,8 +570,8 @@ check_private_headers() {
 			printf '%s  private header include: %s:%s -> %s%s\n' \
 				"$R" "$f" "${hit%%:*}" "$target" "$Z" >&2
 			fails=$((fails + 1))
-		done < <(grep -nE "${INC_RE}[^>\"]+[>\"]" "$f" || true)
-	done < <(boundary_sources)
+		done <<<"$hits"
+	done
 	if [ "$fails" -gt 0 ]; then
 		printf '%scheck-purity: %d production include(s) cross a module private boundary%s\n' \
 			"$R" "$fails" "$Z" >&2

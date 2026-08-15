@@ -135,6 +135,11 @@ REMOVE_ITEM _zephyr_libraries aliro
 # name for ours.
 [Ii]mplements Aliro, the CSA's door-lock credential standard
 
+# PRODUCT.md disclaims the CSA's certification program by name, which is the
+# opposite of claiming it. Anchored to the disclaimer rather than to the bare
+# words so that a line asserting certification still fails.
+no claim of Aliro certification
+
 # --- The guides under docs/, citing the standard and the add-on ---------------
 # The bring-up and porting guides have to name the specification they are
 # implementing and the vendor code they sit on, the same way the source
