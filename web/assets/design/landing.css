@@ -343,8 +343,15 @@
 
 /* The dimension line ignites. In "grant" the whole dimension is already
    --path-first, so bringing it up from a quarter opacity flashes it in the
-   first-path colour without a second colour or a paint-property animation. */
-.granted .hs-dim,.granted .hs-dim-cap{
+   first-path colour without a second colour or a paint-property animation.
+
+   #hs-dim is named twice on purpose. The span line carries both the class and
+   the id, and the boot sequence claims it by id (.booted #hs-dim) to scale it
+   from the lock, which outranks any selector that only names the class -- so
+   without the id here the one line the flash is most about would be the only
+   one that never flashed. Naming it ties the specificity at (1,1,0) and this
+   block, being the later one, wins whenever .granted is on. */
+.granted #hs-dim,.granted .hs-dim,.granted .hs-dim-cap{
   animation:hs-dim-flash var(--dur-5) var(--ease-decel)}
 @keyframes hs-dim-flash{0%{opacity:.25} 22%,100%{opacity:1}}
 
@@ -352,7 +359,11 @@
    dimension and the pill still change colour, and nothing moves. */
 @media (prefers-reduced-motion:reduce){
   .granted .hs-ring{display:none}
-  .granted .scope-verdict,.granted .hs-dim,.granted .hs-dim-cap{animation:none}
+  /* #hs-dim again, for the same reason and one more: the rule above now wins
+     at (1,1,0), so cancelling it needs to match that, or asking for less
+     motion would have switched the flash on. */
+  .granted .scope-verdict,
+  .granted #hs-dim,.granted .hs-dim,.granted .hs-dim-cap{animation:none}
 }
 
 /* ------------------------------------------------------- scope controls -- */
