@@ -1,7 +1,28 @@
 /* UltraWideLock tokens — typography. Space Grotesk (UI/prose) + JetBrains Mono
-   (identifiers, numerals, wordmark). Google Fonts stand in for self-hosted
-   WOFF2 — swap to local files by replacing the @import with @font-face rules. */
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600;800&display=swap");
+   (identifiers, numerals, wordmark).
+
+   Self-hosted, not Google Fonts. The @import that used to sit here told a
+   third party the IP address of every visitor to a privacy-focused lock
+   project's site, on every page view, and made the page depend on a host we
+   do not control. Each file is the latin subset of the upstream variable
+   font, so one file covers every weight the system asks for: 56 KB in total
+   against 192 KB for the seven static cuts.
+
+   SIL Open Font License 1.1. See fonts/LICENSE. */
+@font-face{
+  font-family:'Space Grotesk';
+  font-style:normal;
+  font-weight:300 700;
+  font-display:swap;
+  src:url('../fonts/space-grotesk.woff2') format('woff2');
+}
+@font-face{
+  font-family:'JetBrains Mono';
+  font-style:normal;
+  font-weight:100 800;
+  font-display:swap;
+  src:url('../fonts/jetbrains-mono.woff2') format('woff2');
+}
 
 :root{
   --font-sans:"Space Grotesk","Helvetica Neue",Helvetica,"Segoe UI",system-ui,sans-serif;
