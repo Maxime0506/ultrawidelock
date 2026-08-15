@@ -543,6 +543,37 @@ table.data tbody tr:hover{background:var(--raise)}
 .range-viz .rv-read{position:absolute;right:var(--sp-4);top:var(--sp-4);z-index:3;
   display:flex;gap:var(--sp-2)}
 
+/* ------------------------------------------------------ theme sweep ----- */
+/* The theme toggle does not cut, it ranges. theme.js wraps the swap in a view
+   transition and hands this the button's centre (--uwl-vt-x/y), the distance
+   to the far corner plus one feather (--uwl-vt-max) and the feather itself
+   (--uwl-vt-f); [data-uwl-vt] is present only while that transition runs, so
+   nothing here can touch any other view transition the site grows later.
+
+   One circle of radius --uwl-vt-r drives both snapshots. The incoming theme is
+   opaque inside r - f and gone by r. The outgoing one starts at r and is only
+   opaque again at r + f. Between them the pair's own alpha dips below 1 and
+   the group's accent shows through as a single ring riding the edge — the same
+   first-path pulse .range-viz draws, at the scale of the whole page. Without
+   mix-blend-mode:normal the UA's plus-lighter would blow that band to white.
+
+   The instant swap remains the fallback: reduced motion and browsers without
+   the API never enter here, because theme.js does not start a transition. */
+@property --uwl-vt-r{syntax:"<length>";inherits:false;initial-value:0px}
+@keyframes uwl-vt-sweep{from{--uwl-vt-r:0px}to{--uwl-vt-r:var(--uwl-vt-max)}}
+html[data-uwl-vt]::view-transition-group(root){
+  background:color-mix(in oklab,var(--accent) 62%,var(--ground))}
+html[data-uwl-vt]::view-transition-old(root),
+html[data-uwl-vt]::view-transition-new(root){
+  mix-blend-mode:normal;
+  animation:uwl-vt-sweep var(--dur-4) var(--ease-decel) both}
+html[data-uwl-vt]::view-transition-new(root){
+  mask-image:radial-gradient(circle at var(--uwl-vt-x) var(--uwl-vt-y),
+    #000 calc(var(--uwl-vt-r) - var(--uwl-vt-f)),transparent var(--uwl-vt-r))}
+html[data-uwl-vt]::view-transition-old(root){
+  mask-image:radial-gradient(circle at var(--uwl-vt-x) var(--uwl-vt-y),
+    transparent var(--uwl-vt-r),#000 calc(var(--uwl-vt-r) + var(--uwl-vt-f)))}
+
 /* ------------------------------------------------------- scroll reveal --- */
 /* One rise distance and one stagger for the whole site, so nothing arrives
    with its own idea of how far "up" is. site.js adds .is-in; the no-JS and
