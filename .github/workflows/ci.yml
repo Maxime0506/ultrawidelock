@@ -1,0 +1,73 @@
+# Pull request gates: the checks worth having a machine repeat.
+#
+# One job, one runner, no toolchain. Everything here runs on a stock
+# ubuntu-latest with python3, cmake and a C compiler, which is what makes it
+# cheap enough to run on every pull request. Nothing in this file builds
+# firmware: the Zephyr and ESP32 images need NCS, ESP-IDF and esp-matter, they
+# take hours, and `make fw-check` and `make esp-release` cover them on a bench
+# where the hardware also is. A green run here does not mean the firmware
+# builds; it means nothing broke that a host can see.
+#
+# Ordered cheapest first, so a broken constant fails in seconds rather than
+# after two minutes of C suites. Steps rather than jobs, deliberately: parallel
+# jobs would each pay the checkout and setup cost to save less time than they
+# spend, and a serial list is easier to read in the PR's status panel.
+#
+# What each gate is actually for:
+#
+#   drift   constants and the integration patch-state identity stay exact. This
+#           is the one that catches a value edited in one place and not the
+#           other, which is invisible to a compiler and to every test below.
+#   site    every internal href/src in the rendered site resolves. Catches a
+#           guide renamed without its links updated, which is otherwise found
+#           by a reader hitting a 404.
+#   check   every host-side suite: the C tests for firmware logic and the shared
+#           core, the CMake SDK package, the UWB seam and engine scope, port
+#           purity, progress display.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  # So a run can be repeated without pushing an empty commit to the branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Supersede the previous run when a pull request is updated: only the newest
+# commit's result is worth waiting for. This is the opposite of pages.yml, where
+# cancelling mid-deployment would leave a half-published site.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: gates (host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here talks to git after the checkout, and no gate below
+          # reads history, so the default shallow fetch is enough.
+          persist-credentials: false
+
+      # Pure python3, no compiler, about a second. First because a drifted
+      # constant makes every result below untrustworthy rather than merely red.
+      - name: drift
+        run: make drift
+
+      # No emscripten here, unlike pages.yml. Without emcc the twin is absent
+      # and build.py's link pass knows to skip twin.js rather than call it dead,
+      # so the gate still checks every other link and the run stays cheap. The
+      # site that gets published is built with emscripten; this only proves the
+      # links in it resolve.
+      - name: site links
+        run: python3 web/build.py --check
+
+      # The long one, about two minutes locally. Last so the two fast gates have
+      # already reported by the time it matters.
+      - name: host suites
+        run: make check
