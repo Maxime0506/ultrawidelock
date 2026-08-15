@@ -33,6 +33,16 @@ docs-check:
 DOCS_PORT ?= 8080
 
 docs-serve: docs
+	@# Say who holds the port. http.server's own failure is a 25-line traceback
+	@# ending in "Address already in use", which does not name the process and
+	@# reads like the build broke.
+	@if lsof -nP -iTCP:$(DOCS_PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
+	  printf '  port %s is already serving:\n' '$(DOCS_PORT)' >&2; \
+	  lsof -nP -iTCP:$(DOCS_PORT) -sTCP:LISTEN \
+	    | awk 'NR>1 {printf "    pid %s  %s\n", $$2, $$1}' >&2; \
+	  printf '  stop it, or pick another: make docs-serve DOCS_PORT=8081\n' >&2; \
+	  exit 1; \
+	fi
 	@printf '  serving web/dist on http://localhost:%s  (Ctrl-C to stop)\n' '$(DOCS_PORT)'
 	@cd $(REPO_ROOT)/web/dist && python3 -m http.server $(DOCS_PORT)
 
