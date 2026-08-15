@@ -21,7 +21,7 @@
 #                                         the page says so instead of offering
 #                                         a button that downloads nothing
 
-.PHONY: docs docs-check docs-serve docs-clean release-all
+.PHONY: docs docs-check docs-serve docs-clean docs-graph3d release-all
 
 ##@ Docs
 ## docs: build the website  ->  web/dist/index.html
@@ -32,6 +32,32 @@ docs:
 ## docs-check: build the website and fail on any dead internal link
 docs-check:
 	@python3 $(REPO_ROOT)/web/build.py --check
+
+## docs-graph3d: vendor the 3D graph renderer  ·  then `graphify update .`
+##   The flat subsystem graph needs nothing: it builds from the committed
+##   web/graph/subsystems.json on any fresh clone. The orbiting file-level
+##   graph needs two things that are deliberately not in the tree, and this
+##   fetches the one of them that is fetchable:
+##
+##     web/vendor/3d-force-graph.min.js   1.3 MB of three.js and d3-force-3d.
+##                                        A third-party bundle; gitignored.
+##     graphify-out/graph.json            node-level data, 11 MB. Produced by
+##                                        `graphify update .`, which is not in
+##                                        this repository either.
+##
+##   With only one of the two present the build says which is missing and
+##   renders the flat graph, which is always correct and never a dead link.
+GRAPH3D_URL ?= https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js
+docs-graph3d:
+	@mkdir -p $(REPO_ROOT)/web/vendor
+	@curl -sSLf -o $(REPO_ROOT)/web/vendor/3d-force-graph.min.js '$(GRAPH3D_URL)'
+	@printf '  vendored web/vendor/3d-force-graph.min.js (%s KB)\n' \
+	  "$$(( $$(wc -c <$(REPO_ROOT)/web/vendor/3d-force-graph.min.js) / 1024 ))"
+	@if [ -f '$(REPO_ROOT)/graphify-out/graph.json' ]; then \
+	  printf '  graphify data present — `make docs` now builds the 3D graph\n'; \
+	else \
+	  printf '  next: graphify update .   (without it the flat graph still builds)\n'; \
+	fi
 
 ## docs-serve: build, then serve it on http://localhost:8080  ·  DOCS_PORT= to change
 ##   file:// cannot work: the fonts, the twin's WASM and the 3D renderer are

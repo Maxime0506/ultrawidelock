@@ -441,8 +441,8 @@ def build_graph() -> Path | None:
         print(f"build: 3D graph -> {out.relative_to(DIST)}")
     else:
         out.write_text(graph_mod.render(source), encoding="utf-8")
-        why = ("3d-force-graph not vendored" if node_level
-               else "no node-level graph data")
+        why = ("3d-force-graph not vendored, `make docs-graph3d`" if node_level
+               else "no node-level graph data, `graphify update .`")
         print(f"build: flat graph from {source.name} ({why})")
     return out
 
