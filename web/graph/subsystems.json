@@ -1,9 +1,9 @@
 {
- "built_at_commit": "42ac1acfdcd99e0d2003799848b25c41b68fe930",
+ "built_at_commit": "80f91e8cf8e6c02a2fca3ec3bec22f3fd1158982",
  "note": "Generated from graphify-out/graph.json by web/build.py. Refresh with `graphify update .` then `make docs-graph-refresh`.",
  "subsystems": {
   "apps/dwm3001cdk-lock": 16,
-  "apps/dwm3001cdk-lock-freertos": 5,
+  "apps/dwm3001cdk-lock-freertos": 6,
   "apps/esp32-matter-lock": 18,
   "apps/nrf5340dk-lock": 3,
   "modules/ultrawidelock_anchor": 15,
@@ -17,7 +17,7 @@
   "modules/ultrawidelock_port": 6,
   "modules/ultrawidelock_uwb": 57,
   "ports/esp32": 22,
-  "ports/freertos-nrf52833": 105,
+  "ports/freertos-nrf52833": 106,
   "ports/zephyr": 25
  },
  "edges": [
@@ -49,7 +49,7 @@
   [
    "apps/dwm3001cdk-lock",
    "modules/ultrawidelock_matter",
-   54
+   55
   ],
   [
    "apps/dwm3001cdk-lock",
@@ -64,7 +64,7 @@
   [
    "apps/dwm3001cdk-lock",
    "modules/ultrawidelock_uwb",
-   4
+   5
   ],
   [
    "apps/dwm3001cdk-lock",
@@ -94,7 +94,7 @@
   [
    "apps/dwm3001cdk-lock-freertos",
    "modules/ultrawidelock_uwb",
-   4
+   5
   ],
   [
    "apps/dwm3001cdk-lock-freertos",
@@ -109,7 +109,7 @@
   [
    "apps/esp32-matter-lock",
    "modules/ultrawidelock_uwb",
-   7
+   9
   ],
   [
    "apps/esp32-matter-lock",
@@ -124,7 +124,7 @@
   [
    "modules/ultrawidelock_cred",
    "modules/ultrawidelock_cred_stack",
-   19
+   22
   ],
   [
    "modules/ultrawidelock_cred",
@@ -144,7 +144,7 @@
   [
    "modules/ultrawidelock_cred",
    "modules/ultrawidelock_uwb",
-   15
+   18
   ],
   [
    "modules/ultrawidelock_cred",
@@ -184,7 +184,7 @@
   [
    "modules/ultrawidelock_dw3000",
    "modules/ultrawidelock_uwb",
-   110
+   111
   ],
   [
    "modules/ultrawidelock_dw3000",
@@ -209,7 +209,7 @@
   [
    "modules/ultrawidelock_matter",
    "ports/zephyr",
-   16
+   17
   ],
   [
    "modules/ultrawidelock_nfc",
@@ -224,7 +224,7 @@
   [
    "modules/ultrawidelock_nfc",
    "ports/zephyr",
-   2
+   3
   ],
   [
    "modules/ultrawidelock_port",
@@ -249,12 +249,12 @@
   [
    "modules/ultrawidelock_uwb",
    "ports/esp32",
-   6
+   8
   ],
   [
    "modules/ultrawidelock_uwb",
    "ports/freertos-nrf52833",
-   5
+   7
   ],
   [
    "modules/ultrawidelock_uwb",

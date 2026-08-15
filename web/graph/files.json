@@ -50,6 +50,10 @@
   },
   {
    "source": "apps/dwm3001cdk-lock-freertos/src/main.c",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h"
+  },
+  {
+   "source": "apps/dwm3001cdk-lock-freertos/src/main.c",
    "target": "modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c"
   },
   {
@@ -254,6 +258,10 @@
   },
   {
    "source": "apps/dwm3001cdk-lock/src/main.c",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h"
+  },
+  {
+   "source": "apps/dwm3001cdk-lock/src/main.c",
    "target": "modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c"
   },
   {
@@ -315,6 +323,10 @@
   {
    "source": "apps/dwm3001cdk-lock/src/matter_commission.c",
    "target": "modules/ultrawidelock_matter/include/matter_pase_sm.h"
+  },
+  {
+   "source": "apps/dwm3001cdk-lock/src/matter_commission.c",
+   "target": "modules/ultrawidelock_matter/include/matter_thread.h"
   },
   {
    "source": "apps/dwm3001cdk-lock/src/matter_commission.c",
@@ -522,6 +534,10 @@
   },
   {
    "source": "apps/esp32-matter-lock/main/app_main.cpp",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h"
+  },
+  {
+   "source": "apps/esp32-matter-lock/main/app_main.cpp",
    "target": "modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c"
   },
   {
@@ -554,6 +570,10 @@
   },
   {
    "source": "apps/esp32-matter-lock/main/app_shell.cpp",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h"
+  },
+  {
+   "source": "apps/esp32-matter-lock/main/app_shell.cpp",
    "target": "modules/ultrawidelock_uwb/include/ultrawidelock_diag.h"
   },
   {
@@ -566,7 +586,7 @@
   },
   {
    "source": "apps/esp32-matter-lock/main/lock/door_lock_callbacks.cpp",
-   "target": "apps/esp32-matter-lock/main/lock/door_lock_manager.cpp"
+   "target": "apps/esp32-matter-lock/main/lock/door_lock_manager.h"
   },
   {
    "source": "apps/esp32-matter-lock/main/lock/door_lock_callbacks.cpp",
@@ -611,6 +631,26 @@
   {
    "source": "modules/ultrawidelock_anchor/src/ultrawidelock_fusion.c",
    "target": "modules/ultrawidelock_anchor/src/ultrawidelock_satellite.c"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/include/ultrawidelock/tlv.h",
+   "target": "modules/ultrawidelock_cred/src/ultrawidelock_stepup_wire.c"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/include/ultrawidelock/tlv.h",
+   "target": "modules/ultrawidelock_cred/src/ultrawidelock_tlv.c"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/include/ultrawidelock/tlv.h",
+   "target": "modules/ultrawidelock_cred_stack/src/protocol/ble_message.c"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/include/ultrawidelock/tlv.h",
+   "target": "modules/ultrawidelock_cred_stack/src/protocol/nfc_auth.c"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/include/ultrawidelock/tlv.h",
+   "target": "modules/ultrawidelock_cred_stack/src/protocol/nfc_select.c"
   },
   {
    "source": "modules/ultrawidelock_cred/include/ultrawidelock_advtag.h",
@@ -906,6 +946,18 @@
   },
   {
    "source": "modules/ultrawidelock_cred/src/ultrawidelock_ranging.c",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry.h"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/src/ultrawidelock_ranging.c",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/src/ultrawidelock_ranging.c",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h"
+  },
+  {
+   "source": "modules/ultrawidelock_cred/src/ultrawidelock_ranging.c",
    "target": "modules/ultrawidelock_uwb/src/ccc/cherry_ccc_shim.c"
   },
   {
@@ -1157,6 +1209,10 @@
    "target": "ports/zephyr/dfu/dfu_smp_img.c"
   },
   {
+   "source": "modules/ultrawidelock_dw3000/include/deca_probe_interface.h",
+   "target": "modules/ultrawidelock_uwb/src/driver/uwb_min.c"
+  },
+  {
    "source": "modules/ultrawidelock_dw3000/src/deca_compat.c",
    "target": "modules/ultrawidelock_uwb/include/uwb_seam.h"
   },
@@ -1325,6 +1381,10 @@
    "target": "modules/ultrawidelock_matter/include/matter_tlv.h"
   },
   {
+   "source": "modules/ultrawidelock_matter/include/matter_thread.h",
+   "target": "ports/zephyr/matter/matter_thread_port.c"
+  },
+  {
    "source": "modules/ultrawidelock_matter/src/matter_attest.c",
    "target": "modules/ultrawidelock_matter/src/matter_clusters.c"
   },
@@ -1467,6 +1527,18 @@
   {
    "source": "modules/ultrawidelock_ml/src/ultrawidelock_ml_los.c",
    "target": "modules/ultrawidelock_ml/src/ultrawidelock_ml_los_tree.h"
+  },
+  {
+   "source": "modules/ultrawidelock_nfc/include/ultrawidelock_nfc/pn532_bus.h",
+   "target": "modules/ultrawidelock_nfc/src/pn532.h"
+  },
+  {
+   "source": "modules/ultrawidelock_nfc/include/ultrawidelock_nfc/pn532_bus.h",
+   "target": "modules/ultrawidelock_nfc/src/transport_pn532.cpp"
+  },
+  {
+   "source": "modules/ultrawidelock_nfc/include/ultrawidelock_nfc/pn532_bus.h",
+   "target": "ports/zephyr/nfc/pn532_bus_spi.c"
   },
   {
    "source": "modules/ultrawidelock_nfc/src/pn532.c",
@@ -1694,7 +1766,39 @@
   },
   {
    "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
    "target": "modules/ultrawidelock_uwb/include/cherry/cherry_common.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_session.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
+   "target": "modules/ultrawidelock_uwb/src/ccc/cherry_ccc_shim.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry.h",
+   "target": "modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_internal.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_common.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_session.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
+   "target": "modules/ultrawidelock_uwb/include/ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h"
   },
   {
    "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
@@ -1702,7 +1806,47 @@
   },
   {
    "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
+   "target": "modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_adapter.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
+   "target": "modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_internal.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_ccc.h",
    "target": "modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_session.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_common.h",
+   "target": "modules/ultrawidelock_uwb/include/cherry/cherry_session.h"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/cherry/cherry_session.h",
+   "target": "modules/ultrawidelock_uwb/src/ccc/cherry_ccc_shim.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "modules/ultrawidelock_uwb/src/ccc/cherry_ccc_shim.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "modules/ultrawidelock_uwb/src/driver/uwb_selftest.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "modules/ultrawidelock_uwb/src/facade/flight_recorder.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "ports/esp32/components/ultrawidelock_reader/presence_link.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h",
+   "target": "ports/freertos-nrf52833/uwb/ultrawidelock_freertos_uwb.c"
   },
   {
    "source": "modules/ultrawidelock_uwb/include/ultrawidelock_device_uwb.h",
@@ -1739,6 +1883,34 @@
   {
    "source": "modules/ultrawidelock_uwb/include/ultrawidelock_uwb_msg_spec.h",
    "target": "modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_session.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "modules/ultrawidelock_uwb/src/ccc/ccc_shim_wrap.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "modules/ultrawidelock_uwb/src/driver/uwb_isr.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "modules/ultrawidelock_uwb/src/driver/uwb_min.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "modules/ultrawidelock_uwb/src/driver/uwb_rxdiag.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "ports/esp32/components/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/include/uwb_seam.h",
+   "target": "ports/freertos-nrf52833/uwb/ultrawidelock_seam_stubs.c"
   },
   {
    "source": "modules/ultrawidelock_uwb/src/ccc/ccc_kdf.c",
@@ -1971,6 +2143,10 @@
   {
    "source": "modules/ultrawidelock_uwb/src/driver/uwb_isr.c",
    "target": "modules/ultrawidelock_uwb/src/driver/uwb_rxdiag.c"
+  },
+  {
+   "source": "modules/ultrawidelock_uwb/src/driver/uwb_isr.c",
+   "target": "modules/ultrawidelock_uwb/src/facade/trace.h"
   },
   {
    "source": "modules/ultrawidelock_uwb/src/driver/uwb_min.c",
@@ -2801,6 +2977,10 @@
    "target": "ports/zephyr/osal/flash_zephyr.c"
   },
   {
+   "source": "ports/zephyr/dw3000/dw3000_hw.c",
+   "target": "ports/zephyr/dw3000/dw3000_spi.c"
+  },
+  {
    "source": "ports/zephyr/matter/matter_ble_zephyr.c",
    "target": "ports/zephyr/matter/matter_ble_zephyr.h"
   },
@@ -2820,6 +3000,13 @@
    "id": "apps/README.md",
    "name": "README.md",
    "slug": "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/README.md"
+  },
+  {
+   "blurb": "",
+   "grp": "apps/dwm3001cdk-lock-freertos",
+   "id": "apps/dwm3001cdk-lock-freertos/README.md",
+   "name": "README.md",
+   "slug": "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock-freertos/README.md"
   },
   {
    "blurb": "The grant decision.",
@@ -4656,6 +4843,13 @@
    "slug": "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c"
   },
   {
+   "blurb": "",
+   "grp": "ports/freertos-nrf52833",
+   "id": "ports/freertos-nrf52833/README.md",
+   "name": "README.md",
+   "slug": "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/README.md"
+  },
+  {
    "blurb": "Build configuration for the pinned Nordic opcode dispatcher.",
    "grp": "ports/freertos-nrf52833",
    "id": "ports/freertos-nrf52833/ble/hci_compat/ultrawidelock_freertos_hci_config.h",
@@ -5589,18 +5783,6 @@
   "ports/zephyr": 19
  },
  "syms": {
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/README.md": [
-   [
-    "c",
-    "apps/ complete lock products",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/README.md"
-   ],
-   [
-    "c",
-    "Apps are product front ends, not stack copies",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/README.md"
-   ]
-  ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock-freertos/src/grant.c": [
    [
     "f",
@@ -5680,72 +5862,6 @@
     "f",
     "status_led_start",
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock-freertos/src/status_led.c#L264"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt": [
-   [
-    "c",
-    "DWM3001CDK lock CMake build definition",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "APPROTECT configure-time build guard",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "woz_role_sources() role manifest consumption",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "Kconfig-gated module listing keeps default image byte-identical",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "MBEDTLS_MEMORY_DEBUG PSA-only no-op workaround",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/CMakeLists.txt"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/README.md": [
-   [
-    "c",
-    "DWM3001CDK lock application",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/README.md"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml": [
-   [
-    "c",
-    "DWM3001CDK pinned flash map",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
-   ],
-   [
-    "c",
-    "settings_storage pinned at 0x7e000",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
-   ],
-   [
-    "c",
-    "patch_staging delta OTA partition",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
-   ],
-   [
-    "c",
-    "MCUboot partition at 0xA000",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
-   ],
-   [
-    "c",
-    "LTO required for this flash map",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
-   ],
-   [
-    "c",
-    "detools resumable step counter on the control page",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/pm_static.yml"
    ]
   ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/src/case_bench.c": [
@@ -6260,32 +6376,6 @@
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/dwm3001cdk-lock/src/thread_gate.c#L136"
    ]
   ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/CMakeLists.txt": [
-   [
-    "c",
-    "door_lock ESP-IDF project definition",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/CMakeLists.txt"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/README.md": [
-   [
-    "c",
-    "ESP32 Matter lock application",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/README.md"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/CMakeLists.txt": [
-   [
-    "c",
-    "main component registration",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "No explicit REQUIRES on main (implicit dependency on all components",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/CMakeLists.txt"
-   ]
-  ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/app_driver.cpp": [
    [
     "f",
@@ -6567,13 +6657,6 @@
     "f",
     "ha_mqtt_shell_cmd",
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/ha_mqtt.c#L552"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/idf_component.yml": [
-   [
-    "c",
-    "Exact-version managed component pins",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/idf_component.yml"
    ]
   ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/lock/door_lock_callbacks.cpp": [
@@ -7051,13 +7134,6 @@
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/esp32-matter-lock/main/lock_led.c#L8"
    ]
   ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/README.md": [
-   [
-    "c",
-    "nRF5340 DK lock application",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/README.md"
-   ]
-  ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/build.sh": [
    [
     "c",
@@ -7118,45 +7194,6 @@
     "c",
     "warn_if_locked",
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/build.sh#L546"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/overlays/pm_static.yml": [
-   [
-    "c",
-    "nRF5340 DK no-bootloader flash layout",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/apps/nrf5340dk-lock/overlays/pm_static.yml"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md": [
-   [
-    "c",
-    "Portable modules layer (modules/",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
-   ],
-   [
-    "c",
-    "Purity gate",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
-   ],
-   [
-    "c",
-    "Public/private module boundary (include vs src",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
-   ],
-   [
-    "c",
-    "roles/*.list source-membership manifest",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
-   ],
-   [
-    "c",
-    "woz_port platform contracts (headers-only",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
-   ],
-   [
-    "c",
-    "woz_hal.h five chipset seams",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/README.md"
    ]
   ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/ultrawidelock_anchor/src/ultrawidelock_door.c": [
@@ -14732,64 +14769,6 @@
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/modules/ultrawidelock_uwb/src/fira/fira_session.c#L164"
    ]
   ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md": [
-   [
-    "c",
-    "Platform ports tree (ports/",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md"
-   ],
-   [
-    "c",
-    "Thin-port policy: translate platform API, return to shared implementation",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md"
-   ],
-   [
-    "c",
-    "One OS or framework per port",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md"
-   ],
-   [
-    "c",
-    "Host OSAL backend under tests/host/port/",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md"
-   ],
-   [
-    "c",
-    "PORTING.md five-seam chipset contract",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/README.md"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/README.md": [
-   [
-    "c",
-    "ESP32 port (ESP-IDF components",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/README.md"
-   ],
-   [
-    "c",
-    "EXTRA_COMPONENT_DIRS dependency-driven component selection",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/README.md"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/CMakeLists.txt": [
-   [
-    "c",
-    "piv_ccid component (optional USB PIV CCID transport",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "USB-OTG requires scoped by IDF_TARGET, not Kconfig",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/CMakeLists.txt"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/idf_component.yml": [
-   [
-    "c",
-    "Exact esp_tinyusb 2.2.1 version pin",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/idf_component.yml"
-   ]
-  ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/piv_ccid/piv_apdu.c": [
    [
     "f",
@@ -15539,6 +15518,18 @@
     "f",
     "ultrawidelock_uwb_set_callbacks",
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/esp32/components/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c#L103"
+   ]
+  ],
+  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/README.md": [
+   [
+    "c",
+    "Platform architecture",
+    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/README.md#L300"
+   ],
+   [
+    "c",
+    "Target build",
+    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/README.md#L392"
    ]
   ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/ble/hci_compat/zephyr/sys/byteorder.h": [
@@ -17779,95 +17770,6 @@
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/freertos-nrf52833/uwb/ultrawidelock_seam_stubs.c#L112"
    ]
   ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt": [
-   [
-    "c",
-    "woz_zephyr_port library",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "Zero-cost module: contributes nothing unless a consuming CONFIG is y",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "osal/osal_zephyr.c (Zephyr woz_osal.h backend",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "Zephyr DW3000 GPIO/SPI/trace backend",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "WOZ_PRETTY_SHELL log backend (woz_logfmt, woz_logquiet",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "aliro UART console (shell/aliro_shell.c",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "WOZ_GIT_SHA configure-time commit stamp",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "uwb/woz_hfclk_boost.c (nRF5340 app-core HFCLK boost",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "dfu/dfu_smp_img.c (mcumgr SMP image group front door",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "drivers/woz_slam_lis2dh12.c (wake-on-motion backend",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "CONFIG_WOZ_ANCHOR_SLAM split from CONFIG_WOZ_ANCHOR",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "App-target glue compile pattern",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "nfc/pn532_bus_spi.c (Zephyr PN532 bus backend",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "Matter 0xFFF6 commissioning transport and fabric store",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "ble/aliro_ble_central_zephyr.c (initiator BLE central transport",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ],
-   [
-    "c",
-    "dfu/dfu_ble_zephyr.c (BLE transport of delta-update receiver",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/CMakeLists.txt"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/README.md": [
-   [
-    "c",
-    "Zephyr port (single Zephyr module",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/README.md"
-   ]
-  ],
   "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/ble/ultrawidelock_ble_central_zephyr.c": [
    [
     "f",
@@ -18949,13 +18851,6 @@
     "f",
     "ultrawidelock_hfclk_boost",
     "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/uwb/ultrawidelock_hfclk_boost.c#L24"
-   ]
-  ],
-  "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/zephyr/module.yml": [
-   [
-    "c",
-    "woz_zephyr_port Zephyr module manifest",
-    "https://github.com/ultrawidelock/ultrawidelock/blob/main/ports/zephyr/zephyr/module.yml"
    ]
   ]
  }

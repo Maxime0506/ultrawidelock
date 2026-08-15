@@ -154,15 +154,22 @@ def symbols(graph: dict, files: set[str]) -> dict:
         src = node.get("source_file", "")
         if src not in files or node.get("source_location") == "L1":
             continue
+        line = str(node.get("source_location") or "").lstrip("L")
+        # Line-anchored nodes only. graphify's AST pass gives every symbol a
+        # line; its semantic pass adds prose nodes with source_location None,
+        # written by an LLM in an earlier run and never refreshed by `graphify
+        # update`. Twenty-four of them still spelled the project's old name,
+        # and check-purity's brand ratchet caught them the moment this payload
+        # was first committed. They also cannot link to a line, which is the
+        # one thing this panel promises.
+        if not line.isdigit():
+            continue
         label = (node.get("label") or "").strip()
         if not label:
             continue
         kind = "f" if node.get("_callable") else "c"
-        line = str(node.get("source_location") or "").lstrip("L")
-        url = REPO + src + (f"#L{line}" if line.isdigit() else "")
         per_file.setdefault(src, []).append(
-            (line.zfill(6) if line.isdigit() else "999999",
-             [kind, label.rstrip("()"), url]))
+            (line.zfill(6), [kind, label.rstrip("()"), REPO + src + f"#L{line}"]))
 
     out = {}
     for src, rows in per_file.items():
