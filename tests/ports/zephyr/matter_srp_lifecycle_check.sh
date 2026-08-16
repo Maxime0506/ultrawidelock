@@ -6,7 +6,7 @@ port="$repo_root/ports/zephyr/matter/matter_thread_port.c"
 
 need() {
 	local pattern=$1
-	if ! rg -q "$pattern" "$port"; then
+	if ! grep -Eq "$pattern" "$port"; then
 		echo "missing SRP lifetime invariant: $pattern" >&2
 		exit 1
 	fi
@@ -14,7 +14,7 @@ need() {
 
 reject() {
 	local pattern=$1
-	if rg -q "$pattern" "$port"; then
+	if grep -Eq "$pattern" "$port"; then
 		echo "forbidden SRP lifetime pattern: $pattern" >&2
 		exit 1
 	fi
