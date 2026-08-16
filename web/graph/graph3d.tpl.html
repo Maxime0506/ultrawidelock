@@ -35,8 +35,11 @@ a{color:inherit;text-decoration:none}
 .bar{position:fixed;inset:0 0 auto 0;z-index:20;display:flex;align-items:center;gap:1rem;
   height:3.4rem;padding:0 1.1rem;background:var(--barbg);border-bottom:1px solid var(--hairline);
   backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3)}
+/* flex:none and nowrap: without them the link is the row's shrinkable item, so
+   on a phone it wrapped to two lines inside a bar that is a fixed 3.4rem. */
 .back{display:inline-flex;align-items:center;gap:.45rem;font-size:.85rem;color:var(--muted);
-  padding:.4rem .7rem;border-radius:99px;border:1px solid transparent}
+  padding:.4rem .7rem;border-radius:99px;border:1px solid transparent;
+  flex:none;white-space:nowrap}
 .back:hover{border-color:var(--line);color:var(--strong)}
 .crumbs{display:flex;align-items:center;gap:.45rem;font-family:var(--serif);font-weight:500;
   font-size:1.02rem;color:var(--strong);min-width:0}
@@ -58,11 +61,18 @@ a{color:inherit;text-decoration:none}
 .bar input::placeholder{color:var(--faint)}
 .bar input:focus{border-color:var(--accent)}
 .fitb{padding:.4rem .8rem;border-radius:99px;border:1px solid var(--line);background:var(--card);
-  color:var(--muted);font-size:.8rem;font-family:var(--sans);cursor:pointer}
+  color:var(--muted);font-size:.8rem;font-family:var(--sans);cursor:pointer;flex:none}
 .fitb:hover{border-color:var(--accent);color:var(--strong)}
 
-.legend{position:fixed;left:1.1rem;bottom:1.1rem;z-index:20;display:flex;flex-wrap:wrap;
-  gap:.4rem;max-width:min(46rem,70vw)}
+/* The rail carries the position the legend used to carry itself. The sheet
+   wrapper inside it is display:contents here, so the chips stay direct flex
+   children of the rail and this reads exactly as it always did. Below 720px
+   the wrapper becomes a real bottom sheet -- see the media query. */
+.lg-rail{position:fixed;left:1.1rem;bottom:1.1rem;z-index:20;max-width:min(46rem,70vw)}
+.lg-rail[hidden]{display:none}
+.lg-sheet{display:contents}
+.lg-head,.lg-toggle,.lg-scrim{display:none}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem}
 .lg{display:inline-flex;align-items:center;gap:.45rem;padding:.3rem .7rem;border-radius:99px;
   font-family:var(--sans);font-size:.74rem;color:#c9d8d2;background:rgba(198,232,218,.06);
   border:1px solid rgba(198,232,218,.1);cursor:pointer;user-select:none;appearance:none;
@@ -70,7 +80,8 @@ a{color:inherit;text-decoration:none}
 .lg i{width:.55rem;height:.55rem;border-radius:99px;background:var(--c)}
 .lg:hover{background:rgba(198,232,218,.12);transform:translateY(-1px)}
 .lg.on{background:rgba(198,232,218,.16);color:#f2faf6;border-color:rgba(198,232,218,.3)}
-.hint{position:fixed;right:1.1rem;bottom:1.1rem;z-index:20;font-size:.72rem;color:rgba(198,232,218,.42)}
+/* --muted, not a .42 wash of --line: that measured 3.38:1 on the stage. */
+.hint{position:fixed;right:1.1rem;bottom:1.1rem;z-index:20;font-size:.72rem;color:var(--muted)}
 
 #stage{position:absolute;inset:0;background:#04100e;cursor:grab}
 #stage:active{cursor:grabbing}
@@ -154,8 +165,62 @@ a{color:inherit;text-decoration:none}
 @media (prefers-reduced-motion:reduce){
   .panel.on,.doc-card{animation:none}
   .lg{transition:none}.lg:hover{transform:none}
+  .lg-sheet,.lg-scrim{transition:none}
 }
-@media (max-width:720px){.crumbs{display:none}.legend{max-width:94vw;bottom:.7rem}.hint{display:none}}
+@media (max-width:720px){
+  .crumbs{display:none}
+  .hint{display:none}
+  /* Twenty subsystems whose labels run to 32 characters cannot share a row on
+     a phone. Wrapped and anchored to the bottom they were roughly 650px of
+     pills growing up over the whole stage, which is the one thing this page
+     is for. Here the list moves into a sheet behind a single pill. */
+  /* The rail stops being a positioned box here, and the pill and the sheet
+     anchor to the viewport themselves. position:fixed creates a stacking
+     context whatever its z-index, so while the rail was fixed the sheet's
+     z-index only ranked it against its siblings inside the rail -- and the
+     rail as a whole sat at 20, under the scrim at 29. The scrim covered the
+     sheet and swallowed every tap on a chip. */
+  .lg-rail{position:static;max-width:none}
+  .lg-toggle{display:inline-flex;align-items:center;gap:.5rem;min-height:2.75rem;
+    position:fixed;left:.7rem;bottom:.7rem;z-index:20;
+    padding:.5rem 1rem;border-radius:99px;cursor:pointer;appearance:none;
+    font-family:var(--sans);font-size:.8rem;color:var(--ink);
+    background:var(--barbg);border:1px solid var(--line);
+    backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3)}
+  .lg-toggle .lg-n{font-family:var(--mono);color:var(--muted);
+    max-width:11rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lg-toggle .lg-n.on{color:var(--accent-ink)}
+
+  .lg-scrim{display:block;position:fixed;inset:0;z-index:29;background:rgba(3,10,9,.6);
+    opacity:0;visibility:hidden;transition:opacity .24s ease,visibility .24s}
+  .lg-scrim.on{opacity:1;visibility:visible}
+
+  .lg-sheet{display:flex;position:fixed;inset:auto 0 0 0;z-index:30;flex-direction:column;
+    max-height:min(62vh,30rem);background:var(--ground);border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;box-shadow:0 -22px 60px -28px rgba(0,0,0,.7);
+    padding-bottom:env(safe-area-inset-bottom);
+    transform:translateY(101%);visibility:hidden;
+    transition:transform .24s cubic-bezier(.16,.84,.3,1),visibility .24s}
+  .lg-sheet.on{transform:none;visibility:visible}
+  .lg-head{display:flex;align-items:center;gap:.6rem;flex:none;
+    padding:.9rem .6rem .7rem 1rem;border-bottom:1px solid var(--hairline);
+    font-family:var(--sans);font-size:.8rem;font-weight:600;color:var(--strong)}
+  .lg-head .sp{flex:1}
+  .lg-x{border:0;background:none;color:var(--faint);font-size:1.2rem;cursor:pointer;
+    min-width:2.75rem;min-height:2.75rem;border-radius:8px}
+  .lg-x:hover{background:var(--raise);color:var(--strong)}
+
+  /* One column, scrolling, so the sheet's height is its own business and not
+     the label lengths'. Selection is the inset marker, as everywhere else. */
+  .legend{flex:1;flex-direction:column;flex-wrap:nowrap;gap:0;overflow-y:auto;
+    padding:.35rem .6rem .8rem;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .lg{width:100%;min-height:2.75rem;padding:.55rem .7rem;border-radius:10px;border:0;
+    background:none;font-size:.85rem;justify-content:flex-start;transition:background .16s ease}
+  .lg i{width:.6rem;height:.6rem;flex:none}
+  .lg:hover{background:var(--raise);transform:none}
+  .lg.on{background:var(--accent-tint);color:var(--strong);
+    box-shadow:inset 2px 0 0 var(--accent)}
+}
 </style>
 </head>
 <body>
@@ -172,7 +237,14 @@ a{color:inherit;text-decoration:none}
 <canvas id="dust"></canvas>
 <div id="labels"></div>
 <div id="vig"></div>
+<div class="lg-scrim" id="lgscrim"></div>
+<div class="lg-rail" id="lgrail">
+<button class="lg-toggle" id="lgtoggle" type="button" aria-expanded="false" aria-controls="lgsheet">Subsystems <span class="lg-n" id="lgn"></span></button>
+<div class="lg-sheet" id="lgsheet" aria-label="Subsystems">
+<div class="lg-head"><span class="sp">Subsystems</span><button class="lg-x" id="lgx" type="button" aria-label="Close subsystem list">&#215;</button></div>
 <div class="legend" id="legend"></div>
+</div>
+</div>
 <div class="hint" id="hint">drag to orbit &middot; right-drag to pan &middot; scroll to zoom &middot; F fits &middot; double-click dives</div>
 <aside class="panel" id="panel">
 <div class="p-head">
@@ -844,12 +916,12 @@ function setMode(){
   if(top){
     var L=layerData(top);
     curNodes=L.nodes;
-    legendEl.style.display="none";
+    setLegendShown(false);
     Graph.graphData(L);
     Graph.cameraPosition({x:0,y:60,z:430},{x:0,y:0,z:0},700);
   }else{
     curNodes=D.nodes;
-    legendEl.style.display="";
+    setLegendShown(true);
     Graph.graphData({nodes:D.nodes,links:D.links});
   }
   document.getElementById("hint").innerHTML=stack.length
@@ -920,7 +992,8 @@ document.getElementById("dcopy").addEventListener("click",function(){
 
 addEventListener("keydown",function(e){
   if(e.key==="Escape"){
-    if(docEl.classList.contains("on"))closeDoc();
+    if(lgOpen())lgSheetOpen(false);
+    else if(docEl.classList.contains("on"))closeDoc();
     else if(sel)select(null);
     else if(stack.length){stack.pop();setMode()}
   }
@@ -939,11 +1012,79 @@ Object.keys(D.slots).sort().forEach(function(g){
       c.classList.remove("on");c.setAttribute("aria-pressed","false")});
     if(iso){el.classList.add("on");el.setAttribute("aria-pressed","true")}
     refresh();
+    lgSync();
+    lgSheetOpen(false);
     if(iso){wake();frameAll(700,function(n){return n.grp===g})}
     else fitAll();
   });
   legend.appendChild(el);
 });
+
+/* Below 720px the chips live in a sheet behind one pill (see the media query),
+   because twenty of them wrapped is taller than a phone. The pill carries the
+   count at rest and the isolated subsystem's name once one is picked, so the
+   thing the graph is currently showing is readable without opening anything.
+   Above that width every rule here is inert: the sheet is display:contents,
+   the pill and the scrim are display:none, and nothing below has an effect. */
+var lgSheet=document.getElementById("lgsheet"),
+    lgScrim=document.getElementById("lgscrim"),
+    lgToggle=document.getElementById("lgtoggle"),
+    lgRail=document.getElementById("lgrail"),
+    lgX=document.getElementById("lgx"),
+    lgN=document.getElementById("lgn");
+
+function lgOpen(){return lgSheet.classList.contains("on")}
+function lgSheetOpen(on){
+  if(on===lgOpen())return;
+  var inside=lgSheet.contains(document.activeElement);
+  lgSheet.classList.toggle("on",on);
+  lgScrim.classList.toggle("on",on);
+  lgToggle.setAttribute("aria-expanded",on?"true":"false");
+  /* Only move focus when it is already in play here, or opening the sheet
+     would yank a mouse user's caret out of the filter field. */
+  if(on&&document.activeElement===lgToggle)lgX.focus();
+  else if(!on&&inside)lgToggle.focus();
+}
+function lgSync(){
+  /* The prefix is what makes these too wide to wrap; inside the pill it is
+     also the least useful half of the name. */
+  lgN.textContent=iso?iso.replace(/^.*\//,""):String(legend.children.length);
+  lgN.classList.toggle("on",!!iso);
+}
+function setLegendShown(on){
+  lgRail.hidden=!on;
+  if(!on)lgSheetOpen(false);
+}
+lgToggle.addEventListener("click",function(){lgSheetOpen(!lgOpen())});
+lgX.addEventListener("click",function(){lgSheetOpen(false)});
+lgScrim.addEventListener("click",function(){lgSheetOpen(false)});
+/* A sheet is a dialog while it is open: Tab stays inside it. */
+lgSheet.addEventListener("keydown",function(e){
+  if(e.key!=="Tab"||!lgOpen())return;
+  var f=lgSheet.querySelectorAll("button:not([disabled])");
+  if(!f.length)return;
+  var first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+});
+/* The dialog role is only true while the sheet is a sheet. Above 720px the
+   wrapper is display:contents and the chips are just a row on the page, so
+   leaving role="dialog" in the markup would announce a dialog that is not one.
+   Rotating a phone into that width also has to put the sheet away. */
+var lgNarrow=matchMedia("(max-width:720px)");
+function lgRole(){
+  if(lgNarrow.matches){
+    lgSheet.setAttribute("role","dialog");
+    lgSheet.setAttribute("aria-modal","true");
+  }else{
+    lgSheetOpen(false);
+    lgSheet.removeAttribute("role");
+    lgSheet.removeAttribute("aria-modal");
+  }
+}
+lgRole();
+try{lgNarrow.addEventListener("change",lgRole)}catch(e){}
+lgSync();
 document.getElementById("q").addEventListener("input",function(){
   q=this.value.trim().toLowerCase();refresh();
 });
