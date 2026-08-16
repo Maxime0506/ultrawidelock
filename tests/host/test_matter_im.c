@@ -1177,6 +1177,11 @@ void test_matter_im_invoke(void)
 		T_OK("no command ref", !inv.has_command_ref);
 
 		T_OK("fail-safe not armed yet", !info.failsafe_armed);
+		/* Existing administrators are the rollback baseline for this new
+		 * transaction. Use nonadjacent slots so this proves a mask rather
+		 * than a count. */
+		info.fabrics[0].index = 1u;
+		info.fabrics[2].index = 3u;
 		T_EQ("encodes a response",
 		     matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &len),
 		     MATTER_OK);
@@ -1184,7 +1189,10 @@ void test_matter_im_invoke(void)
 		/* The command RAN: the effect is the point, and the breadcrumb is
 		 * how the commissioner resumes a half-finished attempt. */
 		T_OK("fail-safe armed", info.failsafe_armed);
+		T_EQ("existing fabric slots captured", info.failsafe_fabric_mask, 0x05u);
 		T_EQ("breadcrumb taken from the request", (long)info.breadcrumb, 3L);
+		info.fabrics[0].index = 0u;
+		info.fabrics[2].index = 0u;
 
 		T_OK("response decodes", walk_invoke_response(out, len, &ir));
 		T_OK("carries a command, not a status", !ir.is_status);

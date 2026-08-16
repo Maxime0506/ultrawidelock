@@ -433,10 +433,36 @@ void test_matter_addnoc(void)
 		T_EQ("and is accepted", dev.last_noc_status, MATTER_NOC_STATUS_OK);
 		T_EQ("on fabric index 1 again", dev.fabrics[0].index, 1);
 
-		/* A FINISHED commissioning is not the fail-safe's to remove. */
+		/* A FINISHED commissioning disarms its fail-safe, so a later expiry
+		 * callback has nothing to roll back. */
 		dev.commissioning_complete = true;
+		dev.failsafe_armed = false;
 		matter_clusters_failsafe_expire(&dev);
 		T_EQ("a completed fabric survives", dev.fabrics[0].index, 1);
+
+		/* A later administrator starts with fabric 1 committed, adds fabric
+		 * 2, then disappears. The transaction mask preserves the old slot and
+		 * rolls back only the newcomer. */
+		dev.failsafe_armed = true;
+		dev.failsafe_fabric_mask = 1u << 0;
+		dev.have_op_key = true;
+		memcpy(dev.op_pub, k_node01_pubkey, sizeof(k_node01_pubkey));
+		dev.fabrics[1].have_root = true;
+		memcpy(dev.fabrics[1].root_public_key, dev.fabrics[0].root_public_key,
+		       sizeof(dev.fabrics[1].root_public_key));
+		T_EQ("the later AddNOC runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("the later fabric is accepted", dev.last_noc_status, MATTER_NOC_STATUS_OK);
+		T_EQ("in slot 2", dev.fabrics[1].index, 2);
+		matter_clusters_failsafe_expire(&dev);
+		T_EQ("the completed fabric still survives", dev.fabrics[0].index, 1);
+		T_EQ("the provisional fabric is removed", dev.fabrics[1].index, 0);
+		T_OK("the later fail-safe is disarmed", !dev.failsafe_armed);
+		/* Keep this scenario independent of the wire-format fixtures below,
+		 * which exercise AddNOC with an armed fail-safe and a pending key. */
+		dev.failsafe_armed = true;
+		dev.have_op_key = true;
+		memcpy(dev.op_pub, k_node01_pubkey, sizeof(k_node01_pubkey));
 		dev.commissioning_complete = false;
 	}
 

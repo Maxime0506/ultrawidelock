@@ -2458,6 +2458,14 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		if (field_u64(inv, 1u, &v)) {
 			info->breadcrumb = v;
 		}
+		if (!info->failsafe_armed) {
+			info->failsafe_fabric_mask = 0u;
+			for (size_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+				if (info->fabrics[i].index != 0u) {
+					info->failsafe_fabric_mask |= (uint8_t)(1u << i);
+				}
+			}
+		}
 		info->failsafe_armed = true;
 		info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 		*response_command = MATTER_CMD_GC_ARM_FAIL_SAFE_RESPONSE;
@@ -2506,6 +2514,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		 */
 		info->commissioning_complete = true;
 		info->failsafe_armed = false;
+		info->failsafe_fabric_mask = 0u;
 		info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 		return MATTER_IM_STATUS_SUCCESS;
 
@@ -2687,25 +2696,31 @@ int matter_clusters_resume(struct matter_device_info *info)
 }
 
 /**
- * Clear all fabric state and credentials when the fail-safe window expires before commissioning
- * completes, wiping each fabric's private key and intermediate certificate.
+ * Roll back fabric state created after the fail-safe was armed, wiping every
+ * provisional fabric's private key and intermediate certificate.
  */
 void matter_clusters_failsafe_expire(struct matter_device_info *info)
 {
-	if (info == NULL || info->commissioning_complete) {
+	if (info == NULL || !info->failsafe_armed) {
 		return;
 	}
 
 	/*
-	 * Every fabric, and the keys their NOCs certify. Wiped rather than
-	 * cleared by index alone: each holds a private key that outlived the
-	 * only thing that was going to use it.
-	 *
-	 * All of them, because the fail-safe covers the whole window and a
-	 * commissioner that abandoned it mid-way may have created more than one.
+	 * Only fabric slots created inside this fail-safe. Slots captured when it
+	 * was armed belong to completed commissioning transactions and must
+	 * survive a later administrator abandoning its own AddNOC. Wipe each new
+	 * slot in full because it holds the private key its NOC certifies.
 	 */
-	memset(info->fabrics, 0, sizeof(info->fabrics));
-	memset(&info->icac, 0, sizeof(info->icac));
+	for (size_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if ((info->failsafe_fabric_mask & (uint8_t)(1u << i)) == 0u) {
+			uint8_t removed_index = info->fabrics[i].index;
+
+			memset(&info->fabrics[i], 0, sizeof(info->fabrics[i]));
+			if (removed_index != 0u && info->icac.owner_index == removed_index) {
+				memset(&info->icac, 0, sizeof(info->icac));
+			}
+		}
+	}
 	memset(info->op_priv, 0, sizeof(info->op_priv));
 	memset(info->op_pub, 0, sizeof(info->op_pub));
 	info->have_op_key = false;
@@ -2713,6 +2728,7 @@ void matter_clusters_failsafe_expire(struct matter_device_info *info)
 
 	/* Not the dataset or the attachment -- see matter_clusters.h. */
 	info->failsafe_armed = false;
+	info->failsafe_fabric_mask = 0u;
 	info->breadcrumb = 0u;
 	info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 }

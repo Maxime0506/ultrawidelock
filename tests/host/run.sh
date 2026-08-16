@@ -150,6 +150,7 @@ stage_cdk_port() {
 		"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prov.c" \
 		-o "$ROOT/build/host_test_cdk"
 	"$ROOT/build/host_test_cdk"
+	"$ROOT/tests/ports/zephyr/matter_srp_lifecycle_check.sh"
 }
 
 # 5) Delta update, both halves, over the ultrawidelock_flash host backend (RAM

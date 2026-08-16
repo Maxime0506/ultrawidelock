@@ -765,23 +765,30 @@ static int begin_session(void)
 	int rc;
 
 	/*
-	 * A new commissioner is starting, so whatever the last one left behind
-	 * is now stale. Doing it here rather than on link loss is what lets a
-	 * commissioner close BLE and carry on over Thread with its fabric
-	 * intact, while a genuine retry still gets a clean table.
+	 * A new commissioner supersedes an unfinished fail-safe transaction.
+	 * Withdraw only the SRP names created by that transaction, then let the
+	 * cluster layer wipe only those fabric slots. Existing completed fabrics
+	 * remain registered and usable while a newcomer retries.
+	 *
+	 * Removal is asynchronous. matter_thread_unadvertise() keeps each service
+	 * object retired until OpenThread returns it through the callback, and a
+	 * replacement name uses another free slot or waits in the desired table.
 	 */
-	if (s_info.fabrics[0].index != 0u && !s_info.commissioning_complete) {
-		LOG_INF("new commissioner; rolling back every fabric");
-		/*
-		 * And the SRP names those fabrics published. Rolling back only
-		 * the table left both registrations pinned to fabrics that no
-		 * longer existed, and the replacement commissioner -- whose
-		 * instance name can never match -- got "no SRP slot left" one
-		 * step after PASE.
-		 */
-		matter_thread_advertise_reset();
+	if (s_info.failsafe_armed) {
+		LOG_INF("new commissioner; rolling back provisional fabrics");
+		for (size_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+			if (s_info.fabrics[i].index != 0u &&
+			    (s_info.failsafe_fabric_mask & (uint8_t)(1u << i)) == 0u) {
+				char instance[MATTER_INSTANCE_NAME_LEN];
+
+				if (matter_fabric_instance_name(&s_info.fabrics[i], instance,
+								sizeof(instance)) == MATTER_OK) {
+					(void)matter_thread_unadvertise(instance);
+				}
+			}
+		}
+		matter_clusters_failsafe_expire(&s_info);
 	}
-	matter_clusters_failsafe_expire(&s_info);
 	fabric_snapshot_refresh_owned();
 
 	if (ultrawidelock_random(responder_random, sizeof(responder_random)) != 0 ||
