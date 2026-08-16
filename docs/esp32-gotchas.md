@@ -557,7 +557,7 @@ once the SDU is opened.
 **VERIFIED.** The reader originally generated a random dev P-256 key at boot, so its
 reader-id (and therefore the salt's reader_group_key) changed each power cycle — the
 phone's stored credential no longer matched. Fixed by a **fixed, non-secret dev
-identity** loaded from NVS (`ultrawidelock_prov` namespace, key `blob`): reader-id = signing
+identity** loaded from NVS (`uwl_prov` namespace, key `blob`): reader-id = signing
 pub.X. (commit `ca937e2`)
 
 ### 8.2 DEV identity is dev-open + loud, not a bypass
@@ -571,6 +571,32 @@ the same blob.
 On the nRF side, a rollback unique-id mirror at Zephyr-reserved NVS id `0xFFFF` wiped
 external NVS every boot (fixed `0xFFFF → 0xFFFE`). If ESP32 external-NVS credentials ever
 vanish across reboot, suspect an id collision with a reserved slot.
+
+### 8.4 An NVS namespace over 15 characters is "never provisioned" on read and `0x1109` on write
+**VERIFIED (2026-08-15).** NVS caps namespace *and* key names at
+`NVS_NS_NAME_MAX_SIZE - 1` = 15 characters, and it does not fail symmetrically. A
+read-only `nvs_open` of a longer name can never match an existing namespace, so it misses
+as `ESP_ERR_NVS_NOT_FOUND` and the loader reports a clean "no provisioning yet"; only the
+read-write open that would *create* the namespace reports `ESP_ERR_NVS_KEY_TOO_LONG`
+(`0x1109`). The project rename took the provisioning namespace to 18 characters, and a
+freshly reset lock then paired "successfully" while UWB never worked:
+
+```
+W ultrawidelock_reader: using DEV reader identity ...; 0 trust anchor(s)      <- read side: silent
+W ultrawidelock_prov: nvs_open(rw) err=0x1109                                 <- SetAliroReaderConfig's store
+W ultrawidelock_reader: advertisement NOT refreshed: GRK is still all-zero
+E chip[ZCL]: [SetAliroReaderConfig] Aliro reader verification key was not read or is not null.
+W ultrawidelock_prov: nvs_open(rw) err=0x1109                                 <- SetCredential's trust store
+```
+
+`ultrawidelock_reader_provision_identity` refuses to commit an identity it could not
+persist, so `s_id` stayed the dev default (all-zero GRK, unresolvable advertisement) even
+though the Matter delegate had accepted the command; the retry then hit `InvalidInState`
+because the delegate's RAM said configured. Fixed by naming the namespace `uwl_prov` and
+`_Static_assert`ing both names against the IDF caps in `ultrawidelock_prov_nvs.c`; the
+host fake (`tests/ports/esp32/sdkfake/fake_nvs.c`) now enforces the same cap the same
+asymmetric way, so the suite fails where the bench used to. Any device provisioned under
+the old namespace re-provisions on its next Apple Home add; nothing migrates.
 
 ---
 

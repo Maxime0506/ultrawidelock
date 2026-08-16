@@ -5,6 +5,13 @@
 
 #include "esp_err.h"
 
+/* Same values as ESP-IDF's nvs.h: the longest namespace or key name NVS stores
+ * is one short of these (15), NUL included. The fake enforces the cap the way the
+ * target does, because ignoring it is how an over-long namespace passed this suite
+ * and then failed every store on hardware. */
+#define NVS_KEY_NAME_MAX_SIZE 16
+#define NVS_NS_NAME_MAX_SIZE  NVS_KEY_NAME_MAX_SIZE
+
 typedef uint32_t nvs_handle_t;
 
 typedef enum {

@@ -137,6 +137,30 @@ int main(void)
 	ts.count = 255;
 	okc("store serialize failure", ultrawidelock_prov_store(&id, &ts) == -1);
 
+	printf("-- NVS name caps (the double's contract) --\n");
+
+	/* NVS names top out at NVS_NS_NAME_MAX_SIZE - 1 (15) characters, and the
+	 * target does not fail this symmetrically: a read-only open of an over-long
+	 * namespace can never match, so it misses as NOT_FOUND ("never provisioned"),
+	 * and only the read-write open that would create it says KEY_TOO_LONG. The
+	 * backend's namespace once outgrew the cap in a rename, this suite passed
+	 * because the fake ignored the name, and every store on hardware failed.
+	 * The backend now static-asserts its own names; this pins the fake so the
+	 * suite would also have caught it. */
+	static const char too_long[] = "sixteen_chars_ns"; /* one over the cap */
+	nvs_handle_t h;
+
+	fake_nvs_reset();
+	okc("cap is 15", NVS_NS_NAME_MAX_SIZE - 1 == 15 && sizeof(too_long) - 1 == 16);
+	okc("over-long ns, ro open -> NOT_FOUND",
+	    nvs_open(too_long, NVS_READONLY, &h) == ESP_ERR_NVS_NOT_FOUND);
+	okc("over-long ns, rw open -> KEY_TOO_LONG",
+	    nvs_open(too_long, NVS_READWRITE, &h) == ESP_ERR_NVS_KEY_TOO_LONG);
+	okc("at-cap ns, rw open -> OK", nvs_open("fifteen_chars_n", NVS_READWRITE, &h) == ESP_OK);
+	okc("over-long key, set -> KEY_TOO_LONG",
+	    nvs_set_blob(h, too_long, "x", 1) == ESP_ERR_NVS_KEY_TOO_LONG);
+	okc("at-cap key, set -> OK", nvs_set_blob(h, "fifteen_chars_k", "x", 1) == ESP_OK);
+
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");
 	return fails == 0 ? 0 : 1;
 }

@@ -394,7 +394,7 @@ static int cmd_factoryreset(int argc, char **argv)
 	printf("factory reset: erasing and rebooting\n");
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 	/* esp_matter::factory_reset() erases only Matter's own NVS namespaces; the
-	 * credential reader identity + trust store live in "ultrawidelock_prov" and would
+	 * credential reader identity + trust store live in "uwl_prov" and would
 	 * survive, so the old home's phones could still authenticate after the
 	 * reset. Revert to the dev identity (RAM + NVS) before rebooting. */
 	ultrawidelock_reader_provision_clear();
