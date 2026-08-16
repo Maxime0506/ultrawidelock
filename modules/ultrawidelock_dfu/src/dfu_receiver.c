@@ -433,6 +433,33 @@ static enum ultrawidelock_dfu_err begin_at(enum ultrawidelock_dfu_owner owner,
 	if (owner == ULTRAWIDELOCK_DFU_OWNER_NONE || transfer_id == 0U) {
 		return ULTRAWIDELOCK_DFU_ERR_MALFORMED;
 	}
+	/*
+	 * THIS CLAIM IS TAKEN BEFORE ANYTHING IS AUTHENTICATED, and that is an
+	 * accepted risk rather than an oversight. The signature over the header is
+	 * only checked once HEAD_LEN bytes have arrived, so whoever sends BEGIN
+	 * first holds the receiver until they disconnect or the window shuts.
+	 *
+	 * Weighed and kept, on four counts:
+	 *
+	 *   - The window is owner-gated. s_open is false until SW2 or the Matter
+	 *     commissioning window opens it (matter_commission.c), so there is
+	 *     nothing to claim outside a gesture the owner just made.
+	 *   - It cannot install anything. head_verifies() still checks the
+	 *     ECDSA-P256 signature, and commit_now() re-checks magic, ABI, CRCs
+	 *     and lengths. This is denial of an update, never a forged one.
+	 *   - CONFIG_BT_MAX_CONN=1. A peer that can send BEGIN has already taken
+	 *     the board's only connection slot, which denies the flasher, the
+	 *     phone and everything else regardless of what DFU does. The claim
+	 *     adds no exposure the connection slot has not already given away.
+	 *   - The obvious fix is barred. Requiring an encrypted link would mean
+	 *     BT_GATT_PERM_WRITE_ENCRYPT and therefore pairing, and the reader
+	 *     deliberately never asks a phone to pair -- the live-iPhone unlock
+	 *     depends on it (apps/dwm3001cdk-lock/prj.conf, CONFIG_BT_SMP block).
+	 *
+	 * The claim is released on transport disconnect via
+	 * ultrawidelock_dfu_rx_reset(), and window_expire() clears everything when
+	 * the window shuts, so it cannot outlive either.
+	 */
 	if (s_rx.owner != ULTRAWIDELOCK_DFU_OWNER_NONE) {
 		if (s_rx.owner == owner && s_rx.transfer_id == transfer_id && s_rx.total == total) {
 			return ULTRAWIDELOCK_DFU_ERR_OK;
