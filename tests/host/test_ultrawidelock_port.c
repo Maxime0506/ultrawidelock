@@ -191,7 +191,7 @@ static void test_sem(void)
 
 static void test_thread_and_init(void)
 {
-	static ULTRAWIDELOCK_THREAD_STACK_DEFINE(stack, 512);
+	ULTRAWIDELOCK_THREAD_STACK_DEFINE(stack, 512);
 	ultrawidelock_thread_t t;
 	int flag = 0;
 
