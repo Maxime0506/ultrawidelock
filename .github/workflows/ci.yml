@@ -38,6 +38,15 @@ name: ci
 on:
   pull_request:
     branches: [main]
+  # Again on main after the merge. A pull request's checks run against a merge
+  # of its head with main *as it was when the check ran*; if main moves before
+  # the merge button is pressed, the commit that actually landed was never
+  # tested. Two pull requests that are each green can still break `drift`
+  # together -- one edits a constant, the other edits its twin -- and only a run
+  # on main sees that. The gates cost about two minutes and need no toolchain,
+  # so the repeat is close to free.
+  push:
+    branches: [main]
   # So a run can be repeated without pushing an empty commit to the branch.
   workflow_dispatch:
 
@@ -47,9 +56,15 @@ permissions:
 # Supersede the previous run when a pull request is updated: only the newest
 # commit's result is worth waiting for. This is the opposite of pages.yml, where
 # cancelling mid-deployment would leave a half-published site.
+#
+# On main it is the opposite again, and cancel-in-progress is false there: every
+# commit on main wants its own verdict. Cancelling the older run when a second
+# merge lands minutes later would leave the first commit permanently untested,
+# which is the one thing this trigger was added to prevent. The group keys on
+# the ref, so a main run and a pull request run never queue behind each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gates:
