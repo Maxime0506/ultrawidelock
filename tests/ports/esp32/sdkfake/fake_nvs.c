@@ -73,11 +73,23 @@ esp_err_t nvs_flash_erase(void)
 	return ESP_OK;
 }
 
+/* The name caps, enforced the way ESP-IDF enforces them (nvs_storage.cpp /
+ * nvs_page.cpp): a lookup never matches an over-long name, so reads and read-only
+ * opens miss with NOT_FOUND; only a write -- creating the namespace, or setting the
+ * key -- reports ESP_ERR_NVS_KEY_TOO_LONG. Both halves matter: the read-side silence
+ * is what makes an over-long namespace look like "never provisioned" on the bench. */
+static int name_too_long(const char *name)
+{
+	return strlen(name) > NVS_KEY_NAME_MAX_SIZE - 1;
+}
+
 esp_err_t nvs_open(const char *ns, nvs_open_mode_t mode, nvs_handle_t *out)
 {
-	(void)ns;
 	if (fake_nvs_open_rc != ESP_OK) {
 		return fake_nvs_open_rc;
+	}
+	if (name_too_long(ns)) {
+		return mode == NVS_READWRITE ? ESP_ERR_NVS_KEY_TOO_LONG : ESP_ERR_NVS_NOT_FOUND;
 	}
 	if (mode == NVS_READONLY && !s_have_namespace) {
 		return ESP_ERR_NVS_NOT_FOUND;
@@ -92,11 +104,10 @@ esp_err_t nvs_open(const char *ns, nvs_open_mode_t mode, nvs_handle_t *out)
 esp_err_t nvs_get_blob(nvs_handle_t h, const char *key, void *out, size_t *len)
 {
 	(void)h;
-	(void)key;
 	if (fake_nvs_get_rc != ESP_OK) {
 		return fake_nvs_get_rc;
 	}
-	if (!s_have_blob) {
+	if (name_too_long(key) || !s_have_blob) {
 		return ESP_ERR_NVS_NOT_FOUND;
 	}
 	if (*len < s_blob_len) {
@@ -110,9 +121,11 @@ esp_err_t nvs_get_blob(nvs_handle_t h, const char *key, void *out, size_t *len)
 esp_err_t nvs_set_blob(nvs_handle_t h, const char *key, const void *val, size_t len)
 {
 	(void)h;
-	(void)key;
 	if (fake_nvs_set_rc != ESP_OK) {
 		return fake_nvs_set_rc;
+	}
+	if (name_too_long(key)) {
+		return ESP_ERR_NVS_KEY_TOO_LONG;
 	}
 	if (len > sizeof(s_blob)) {
 		return ESP_FAIL;

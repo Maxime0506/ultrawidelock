@@ -20,8 +20,23 @@
 
 static const char *TAG = "ultrawidelock_prov";
 
-#define ULTRAWIDELOCK_PROV_NS  "ultrawidelock_prov"
+/* NVS caps a namespace at NVS_NS_NAME_MAX_SIZE - 1 (15) characters, and a name
+ * over the cap does not fail loudly on both sides. nvs_open(NVS_READONLY) can
+ * never match it, so a load reads "never provisioned" and falls back to the dev
+ * identity; only nvs_open(NVS_READWRITE) reports ESP_ERR_NVS_KEY_TOO_LONG. The
+ * reader then keeps its dev identity through a whole pairing: SetAliroReaderConfig
+ * cannot persist the identity, so the GRK stays all-zero and the phone can't resolve
+ * the advertisement, and SetCredential cannot persist the trust anchor. The
+ * project rename made this namespace 18 characters and did exactly that. `uwl` is
+ * the tree's short form of the project name; the static asserts below are what
+ * make the next rename fail at compile time instead of on the bench. */
+#define ULTRAWIDELOCK_PROV_NS  "uwl_prov"
 #define ULTRAWIDELOCK_PROV_KEY "blob"
+
+_Static_assert(sizeof(ULTRAWIDELOCK_PROV_NS) - 1 <= NVS_NS_NAME_MAX_SIZE - 1,
+	       "NVS namespace name is longer than NVS allows (NVS_NS_NAME_MAX_SIZE - 1)");
+_Static_assert(sizeof(ULTRAWIDELOCK_PROV_KEY) - 1 <= NVS_KEY_NAME_MAX_SIZE - 1,
+	       "NVS key name is longer than NVS allows (NVS_KEY_NAME_MAX_SIZE - 1)");
 
 /* Idempotent NVS bring-up. ultrawidelock_ble also calls nvs_flash_init() later; the
  * second call returns ESP_OK, so ordering between the two is irrelevant. */
