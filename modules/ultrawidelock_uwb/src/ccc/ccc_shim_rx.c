@@ -233,7 +233,6 @@ static int16_t g_final_sts_index;
 static bool g_final_evidence_valid;
 static uint32_t g_final_evidence_index;
 static uint32_t g_final_evidence_poll_index;
-static uint16_t g_final_evidence_block;
 
 /* Authenticated SP0 anti-replay and context state. Counters are independent by
  * message class because CCC may allocate them from distinct sender streams. */
@@ -259,10 +258,50 @@ static bool counter_newer(uint32_t next, uint32_t previous)
 
 static bool mhr_context_ok(const struct ccc_mhr_fields *mhr)
 {
-	uint16_t dest = (uint16_t)g_c_dest[0] | ((uint16_t)g_c_dest[1] << 8);
+	/* BOTH fields here are the byte-REVERSE of the UAD-derived arrays.
+	 * ccc_uad_addresses() emits them most-significant byte first, while the
+	 * frame carries them least-significant byte first (ccc_parse_mhr reads
+	 * DestShort with get_le16 and copies KeySource verbatim). So DestShort is
+	 * assembled MSB-first here, and KeySource is compared reversed below.
+	 *
+	 * Assembling DestShort little-endian instead rejected every Pre-POLL on a
+	 * DWM3001CDK, and the DIAGK trace hid it by printing the two halves in
+	 * different formats: "uad dest=02ff | hdr dest=02ff" is bytes 02,ff on the
+	 * left against the u16 0x02ff on the right, and those bytes read
+	 * little-endian are 0xff02. They were never equal.
+	 */
+	uint16_t dest = ((uint16_t)g_c_dest[0] << 8) | (uint16_t)g_c_dest[1];
+	size_t i;
 
-	return mhr->dest_short_addr == dest &&
-	       memcmp(mhr->key_source, g_c_keysource, sizeof(g_c_keysource)) == 0;
+	if (mhr->dest_short_addr != dest) {
+		return false;
+	}
+	/* KeySource is compared REVERSED, and that is not a workaround.
+	 *
+	 * ccc_uad_addresses() assembles g_c_keysource most-significant half first
+	 * (KeySourceHigh || KeySourceLow, ccc_kdf.c), while ccc_parse_mhr() copies
+	 * the Aux Security Header field in transmission order, which is LSB-first.
+	 * The two are therefore byte-reverses of each other by construction.
+	 *
+	 * A straight memcmp here compiled fine, passed every host test, and then
+	 * rejected every Pre-POLL on air -- the walk-up stopped ranging entirely,
+	 * because this gate sits ahead of the whole DS-TWR chain. Observed on a
+	 * DWM3001CDK: uad ks=0f3795ed against hdr ks=ed95370f.
+	 * The host fakes never caught it because nothing in tests/ built an MHR the
+	 * way the radio delivers one; the fixture filled both sides from the same
+	 * helper, so it agreed with itself. tests/host/test_prepoll_round.c now
+	 * builds the frame in transmission order and fails without this function.
+	 *
+	 * Reverse here rather than in ccc_uad_addresses(): g_c_keysource has no
+	 * other consumer, whereas that helper's output order is asserted by the
+	 * KDF tests and is the order the CCC spec defines.
+	 */
+	for (i = 0u; i < sizeof(g_c_keysource); i++) {
+		if (mhr->key_source[i] != g_c_keysource[sizeof(g_c_keysource) - 1u - i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 /** @brief Pre-POLL frame stashed at RX for a DEFERRED decode: the ~2 ms decrypt+derive must not run
@@ -317,7 +356,6 @@ void ccc_shim_rx_log_reset(void)
 	g_final_evidence_valid = false;
 	g_final_evidence_index = 0u;
 	g_final_evidence_poll_index = 0u;
-	g_final_evidence_block = 0u;
 	g_have_prepoll_counter = false;
 	g_prepoll_counter = 0u;
 	g_have_final_counter = false;
@@ -648,8 +686,22 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		}
 		return;
 	}
+	/* Deliberately NOT comparing fd.ranging_block against a snapshot of the
+	 * Pre-POLL's block number. That number reaches us through the DEFERRED
+	 * Pre-POLL decode (g_session_block, set in prepoll_decode), while the Final
+	 * evidence is snapshotted synchronously in the Final RFRAME callback, so the
+	 * two are one block apart whenever the stashed Pre-POLL has not been decoded
+	 * yet. On a DWM3001CDK that raced every round: "blk=2 want=1" with the
+	 * session id and the STS index both matching exactly, and no range ever
+	 * latched.
+	 *
+	 * Nothing is lost by dropping it. final_sts_index is derived from
+	 * g_armed_index, increments once per block, and is checked below, so it
+	 * already binds this Final_Data to one specific round -- more tightly than a
+	 * 16-bit block counter does. Session binding and replay protection are the
+	 * other two terms, both kept.
+	 */
 	if (fd.uwb_session_id != fira_session_id() ||
-	    fd.ranging_block != g_final_evidence_block ||
 	    fd.final_sts_index != g_final_evidence_index ||
 	    (g_have_final_counter && !counter_newer(mhr.frame_counter, g_final_counter))) {
 		if (lg) {
@@ -778,6 +830,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			 * travelled with the range instead of being dropped here. */
 			fira_session_set_ccc_range_sts(g_final_sts_verdict, g_final_sts_index);
 
+
 			/* Feed the range into fira_session_last_range ->
 			 * UltraWideBandImpl::ReportRange -> AccessManager -> BoltLockMgr -> Matter
 			 * DoorLock cluster. */
@@ -795,7 +848,6 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		 * capture, even when its timestamps fail the DS-TWR estimator. */
 		g_final_evidence_valid = false;
 		g_final_evidence_poll_index = 0u;
-		g_final_evidence_block = 0u;
 		g_final_sts_verdict = -1;
 		g_final_sts_index = 0;
 #if defined(ESP_PLATFORM) || defined(CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT)
@@ -1670,7 +1722,6 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 			g_final_evidence_index =
 				g_armed_index + ULTRAWIDELOCK_FINAL_SLOT_OFFSET;
 			g_final_evidence_poll_index = g_armed_index;
-			g_final_evidence_block = g_session_block;
 			g_final_evidence_valid = g_have_session_block;
 		}
 		/* Time-critical FIRST: revert to SP0 and re-open RX before the (blocking) UART

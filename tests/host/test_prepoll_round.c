@@ -29,6 +29,22 @@ extern int32_t ultrawidelock_uwb_arm_rx(int32_t mode);
 static uint8_t g_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t g_mupsk1[CCC_MUPSK1_LEN];
 static uint8_t g_ks[CCC_KEYSOURCE_LEN];
+
+/* The Aux Security Header carries KeySource in transmission order, which is the
+ * byte-reverse of the KeySourceHigh||KeySourceLow layout ccc_uad_addresses()
+ * returns (ccc_kdf.c). Copying g_ks in verbatim made both sides of the receiver's
+ * context check come from the same helper, so the fixture agreed with itself
+ * while a real DWM3001CDK rejected every Pre-POLL and never ranged: observed
+ * uad ks=0f3795ed against on-air ks=ed95370f, dest matching. Build the frame the
+ * way the radio actually delivers it. */
+static void mhr_set_keysource(uint8_t dst[CCC_KEYSOURCE_LEN])
+{
+	size_t i;
+
+	for (i = 0u; i < CCC_KEYSOURCE_LEN; i++) {
+		dst[i] = g_ks[CCC_KEYSOURCE_LEN - 1u - i];
+	}
+}
 static uint8_t g_dest[CCC_DEST_SHORT_ADDR_LEN];
 static uint8_t g_src_long[CCC_SRC_LONG_ADDR_LEN];
 
@@ -47,9 +63,9 @@ static uint16_t mk_prepoll_for(uint8_t *out, uint32_t fc, uint32_t poll_idx,
 	ccc_pre_poll_pack(&pp, plain);
 
 	memset(&f, 0, sizeof(f));
-	f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+	f.dest_short_addr = (uint16_t)(((uint16_t)g_dest[0] << 8) | g_dest[1]);
 	f.frame_counter = fc;
-	memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+	mhr_set_keysource(f.key_source);
 	f.msg_id = CCC_MSG_ID_PRE_POLL;
 	f.payload_len = CCC_PRE_POLL_LEN;
 	T_EQ("mk_pp.mhr", ccc_build_mhr(&f, out), 0);
@@ -87,9 +103,9 @@ static uint16_t mk_final_data_for(uint8_t *out, uint32_t fc, uint32_t armed_idx,
 	T_EQ("mk_fd.pack", ccc_final_data_pack(&fd, plain, sizeof(plain), &pl), 0);
 
 	memset(&f, 0, sizeof(f));
-	f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+	f.dest_short_addr = (uint16_t)(((uint16_t)g_dest[0] << 8) | g_dest[1]);
 	f.frame_counter = fc;
-	memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+	mhr_set_keysource(f.key_source);
 	f.msg_id = CCC_MSG_ID_FINAL_DATA;
 	f.payload_len = (uint8_t)pl;
 	T_EQ("mk_fd.mhr", ccc_build_mhr(&f, out), 0);
@@ -292,9 +308,9 @@ void test_prepoll_round(void)
 		struct ccc_mhr_fields f;
 
 		memset(&f, 0, sizeof(f));
-		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.dest_short_addr = (uint16_t)(((uint16_t)g_dest[0] << 8) | g_dest[1]);
 		f.frame_counter = fc++;
-		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		mhr_set_keysource(f.key_source);
 		f.msg_id = 0x07u;
 		f.payload_len = CCC_PRE_POLL_LEN;
 		memset(frame, 0, sizeof(frame));
@@ -328,9 +344,9 @@ void test_prepoll_round(void)
 		struct ccc_mhr_fields f;
 
 		memset(&f, 0, sizeof(f));
-		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.dest_short_addr = (uint16_t)(((uint16_t)g_dest[0] << 8) | g_dest[1]);
 		f.frame_counter = fc++;
-		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		mhr_set_keysource(f.key_source);
 		f.msg_id = CCC_MSG_ID_FINAL_DATA;
 		f.payload_len = 100u;
 		memset(frame, 0, sizeof(frame));
@@ -351,9 +367,9 @@ void test_prepoll_round(void)
 
 		memset(plain, 0, sizeof(plain));
 		memset(&f, 0, sizeof(f));
-		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.dest_short_addr = (uint16_t)(((uint16_t)g_dest[0] << 8) | g_dest[1]);
 		f.frame_counter = fc;
-		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		mhr_set_keysource(f.key_source);
 		f.msg_id = CCC_MSG_ID_FINAL_DATA;
 		f.payload_len = sizeof(plain);
 		T_EQ("mk_fd0.mhr", ccc_build_mhr(&f, frame), 0);
