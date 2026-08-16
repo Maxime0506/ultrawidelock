@@ -49,7 +49,7 @@ this one.
 | ID | Procedure | Pass criterion | Recorded |
 |---|---|---|---|
 | CDK-1 | `make test` on the release commit | Exit 0, all host KATs pass | CI gate |
-| CDK-2 | `make dfu-key`, then `make rebuild` (pristine) | Exit 0; the image links and fits the 433,664 B `app` partition | yes: 409,988 B (94.54%), 125,012 B RAM (95.38%), 6,060 B of RAM spare |
+| CDK-2 | `make dfu-key`, then `make rebuild` (pristine) | Exit 0; the image links and fits the 433,664 B `app` partition | yes: 417,684 B (96.32%), 118,312 B RAM (90.26%), ~15.6 KB of flash spare |
 | CDK-3 | `make reader PRISTINE=1` | Exit 0; the reader-only image links and fits | yes: 285,664 B (65.87%), 79,908 B RAM (60.96%) |
 | CDK-4 | Flash a `make selftest` build, boot with no phone present | `DW3000 raw DEV_ID = 0xdeca0302` on the RTT console | yes |
 | CDK-5 | `make flash-erase` with the release image, then boot | Clean boot, `ECDH self-test: PASS`, BLE advertising starts, no faults | yes |
@@ -58,17 +58,20 @@ this one.
 | CDK-8 | Relock, then approach from well outside ranging distance, phone pocketed | Wallet animation plays and the bolt opens, with no phone interaction | yes: four unlocks in one session, 2026-08-02 |
 | CDK-9 | Walk away | Bolt relocks past the hysteresis margin and does not oscillate at the boundary | no recorded result; run it |
 | CDK-10 | Power-cycle the board, wait for boot, repeat CDK-8 | Unlock works without re-commissioning or re-provisioning | no recorded result; run it |
-| CDK-11 | Change something in the tree, then `make dfu`, pressing SW2 when it asks | The delta goes over Bluetooth and the board's flash comes out byte for byte identical to the target image, with a matching CRC | yes, 2026-08-03 (`bca7534`, `ed1780c`); the apply takes 17 to 31 s |
+| CDK-11 | Change something in the tree, then `make dfu`, pressing SW2 when it asks | The delta goes over Bluetooth and the board's flash comes out byte for byte identical to the target image, with a matching CRC | **needs a re-run**: last passed 2026-08-03 (`bca7534`, `ed1780c`) at 17 to 31 s, but that predates the version-2 wire protocol |
 | CDK-12 | Repeat CDK-11, opening the window from Apple Home's "Turn On Pairing Mode" instead of pressing SW2 | D10, the blue LED, blinks at 2 Hz while the window is open, and the push is accepted | yes, on a live commissioned lock, for both openers |
 | CDK-13 | `make fota`, push the file from a phone with nRF Device Manager's **Images** tab, then `make fota-done` | The board comes back reporting the target image's SHA-256 | yes, on the commissioned lock (`53b2fe1`, `8447e91`) |
 | CDK-14 | 100 walk-ups, counting the ones that unlock | 95% or better | **open, never run**; the sample so far is single digits |
 | CDK-15 | Cut the power in the middle of a CDK-11 apply, then restore it | The board resumes at the right step and boots the target image | **open, never run** |
+| CDK-16 | Hold SW2 for 5 s while the application runs, then upload with `scripts/cdk-dfu.sh` | The board warm-reboots into MCUboot serial recovery and accepts the image | **open**; serial recovery has completed exactly one real upload and is not yet reproducible |
+| CDK-17 | Record a walk-up with the flight recorder, histogram the STS quality index, pick a floor above the noise | `ULTRAWIDELOCK_STS_QUALITY_MIN` is set from data rather than left at 0 | **open, never run.** The DWM3001CDK now *enforces* this gate, so an untuned floor is a door that can refuse to open |
+| CDK-18 | Walk-up in NLOS: phone pocketed on the far side of the body, and through an interior door | The gate still publishes a range and the bolt opens | **open, never run.** One LOS walk-up passed at `sts_ok=1`, STS index 62, verdict 24, d=107 mm; that is not a calibration |
 
 CDK-8 is this target's EV-7, and it is faked the same way: the bolt moving is not a
 pass. The Wallet animation is, because that is what proves the reader told the phone
 it granted access rather than just actuating locally.
 
-CDK-14 and CDK-15 are the two open rows, and neither has ever been run. CDK-14 is
+CDK-14, CDK-15, CDK-16, CDK-17 and CDK-18 are the open rows, and none has ever been run to completion. CDK-14 is
 the only rate on this list: everything above it has been demonstrated at least once,
 and none of it at a rate. CDK-15 is the resumable apply, whose step counter is
 exercised by design and by host test but has never met a real power cut.

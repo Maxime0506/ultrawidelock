@@ -4,7 +4,7 @@
 
 **Portable firmware for NFC and UWB smart locks.**
 
-<img src="assets/badges.svg" width="880" alt="v0.3.0 · ISC license · Zephyr, ESP-IDF and FreeRTOS ports · 7,375 host tests"/>
+<img src="assets/badges.svg" width="880" alt="v0.3.0 · ISC license · Zephyr, ESP-IDF and FreeRTOS ports · 7,766 host tests"/>
 
 <img src="assets/divider.svg" width="880" alt=""/>
 
@@ -23,7 +23,7 @@ reader, initiator, and anchor examples.
 ```sh
 git clone https://github.com/ultrawidelock/ultrawidelock.git
 cd ultrawidelock
-make check                  # 7 host suites, about 2 minutes
+make check                  # 8 host suites, about 2 minutes
 ```
 
 **With a board.** Default is the Qorvo DWM3001CDK: nRF52833, DW3110 radio, and
