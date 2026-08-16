@@ -72,6 +72,7 @@ void test_prepoll_round(void);
 void test_rssi_gate(void);
 void test_flight_recorder(void);
 void test_approach(void);
+void test_grant(void);
 void test_ultrawidelock_door(void);
 void test_ultrawidelock_fusion(void);
 void test_ultrawidelock_report(void);

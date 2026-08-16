@@ -29,6 +29,12 @@ unit_srcs_from_role() {
 }
 
 UNIT_SRCS=(
+	# App-layer, deliberately: the grant decision is the only piece of the
+	# reader loop that was extracted into a pure function, and it is the one
+	# the three firmwares each write out by hand. Testing the FreeRTOS copy
+	# where it stands describes the behaviour all three are supposed to have,
+	# without moving anything yet.
+	"$ROOT/apps/dwm3001cdk-lock-freertos/src/grant.c"
 	"$ROOT/modules/ultrawidelock_cred_stack/src/advertising_core.c"
 	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/ble_message.c"
 	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/ble_timeout.c"
@@ -135,6 +141,7 @@ TEST_SRCS=(
 	"$HOST/test_prepoll_round.c"
 	"$HOST/test_rssi_gate.c"
 	"$HOST/test_approach.c"
+	"$HOST/test_grant.c"
 	"$HOST/test_ultrawidelock_door.c"
 	"$HOST/test_ultrawidelock_fusion.c"
 	"$HOST/test_ultrawidelock_report.c"
@@ -189,6 +196,8 @@ INCS=(
 	-I"$ROOT/modules/ultrawidelock_ml/src"
 	-I"$ROOT/modules/ultrawidelock_anchor/include"
 	-I"$ROOT/modules/ultrawidelock_dw3000/include"
+	# grant.h, still in the FreeRTOS app tree. See the note on UNIT_SRCS.
+	-I"$ROOT/apps/dwm3001cdk-lock-freertos/src"
 )
 
 # The credential path is Kconfig-gated in-tree; the normal build has it on.

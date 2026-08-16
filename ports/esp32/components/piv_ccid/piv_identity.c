@@ -23,6 +23,16 @@
 #define PIV_KEY_MANAGEMENT_KEY "key9d"
 #define PIV_KEY_MANAGEMENT_MAGIC 0x5049564du
 #define PIV_KEY_MANAGEMENT_VERSION 1u
+
+/* The NVS name caps, asserted where the names are written rather than trusted to
+ * stay short -- see ultrawidelock_prov_nvs.c for what an over-long one costs.
+ * PORTING.md's storage table lists these three. */
+_Static_assert(sizeof(PIV_IDENTITY_NS) - 1 <= NVS_NS_NAME_MAX_SIZE - 1,
+	       "NVS namespace name is longer than NVS allows (NVS_NS_NAME_MAX_SIZE - 1)");
+_Static_assert(sizeof(PIV_IDENTITY_KEY) - 1 <= NVS_KEY_NAME_MAX_SIZE - 1,
+	       "NVS key name is longer than NVS allows (NVS_KEY_NAME_MAX_SIZE - 1)");
+_Static_assert(sizeof(PIV_KEY_MANAGEMENT_KEY) - 1 <= NVS_KEY_NAME_MAX_SIZE - 1,
+	       "NVS key name is longer than NVS allows (NVS_KEY_NAME_MAX_SIZE - 1)");
 #define PIV_CERT_MAX 768u
 #define PIV_PIN_SALT_BYTES 16u
 #define PIV_PIN_RETRIES 3u
