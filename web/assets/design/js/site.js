@@ -345,6 +345,82 @@
     });
   }
 
+  /* ------------------------------------------------------ step rail ----- */
+  /* The active rail is a pure function of scroll position: a viewport guide
+   * crosses the marker centres and the line grows by the same fraction. One
+   * rAF coalesces wheel/touch events; cached geometry and a physical fill
+   * height avoid re-scaling the whole rail around every marker. */
+  function stepRails() {
+    var rails = $$(".steps");
+    if (!rails.length) return;
+    var queued = false;
+    var needsMeasure = true;
+    var guideOffset = 0;
+    var states = rails.map(function (rail) {
+      return { rail: rail, start: 0, height: 1, fill: -1 };
+    });
+
+    function measure() {
+      guideOffset = document.documentElement.clientHeight * .68;
+      states.forEach(function (state) {
+        var items = $$(":scope > li", state.rail);
+        if (items.length < 2) {
+          state.start = 0;
+          state.height = 1;
+          return;
+        }
+        var firstBox = items[0].getBoundingClientRect();
+        var lastBox = items[items.length - 1].getBoundingClientRect();
+        var marker = getComputedStyle(items[0], "::before");
+        var markerTop = parseFloat(marker.top);
+        var markerHeight = parseFloat(marker.height);
+        var markerCentre = markerTop + markerHeight / 2;
+        if (!isFinite(markerCentre)) markerCentre = 13;
+
+        state.start = window.scrollY + firstBox.top + markerCentre;
+        state.height = Math.max(1, lastBox.top - firstBox.top);
+      });
+      needsMeasure = false;
+    }
+
+    function render() {
+      queued = false;
+      if (needsMeasure) measure();
+      var guide = window.scrollY + guideOffset;
+      states.forEach(function (state) {
+        var progress = reduced ? 1 : Math.max(0, Math.min(1,
+          (guide - state.start) / state.height));
+        var fill = state.height * progress;
+        if (Math.abs(fill - state.fill) < .25) return;
+        state.fill = fill;
+        state.rail.style.setProperty("--step-rail-fill", fill.toFixed(1) + "px");
+      });
+    }
+
+    function requestRender() {
+      if (queued) return;
+      queued = true;
+      window.requestAnimationFrame(render);
+    }
+
+    function requestMeasure() {
+      needsMeasure = true;
+      requestRender();
+    }
+
+    window.addEventListener("scroll", requestRender, { passive: true });
+    window.addEventListener("resize", requestMeasure);
+    window.addEventListener("pageshow", requestMeasure);
+    if ("ResizeObserver" in window) {
+      var resizeObserver = new ResizeObserver(requestMeasure);
+      rails.forEach(function (rail) { resizeObserver.observe(rail); });
+    }
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(requestMeasure);
+    }
+    render();
+  }
+
   /* --------------------------------------------------------------- go ----- */
   function init() {
     reveal();
@@ -354,6 +430,7 @@
     tabs();
     tocSpy();
     search();
+    stepRails();
   }
 
   if (document.readyState === "loading") {

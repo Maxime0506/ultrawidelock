@@ -458,7 +458,7 @@
   --glass-fill:color-mix(in srgb,var(--surface) 70%,transparent);
   --glass-fill-strong:color-mix(in srgb,var(--surface) 84%,transparent);
   --glass-spec:color-mix(in srgb,var(--strong) 20%,transparent);
-  --glass-glow:color-mix(in srgb,var(--accent) 10%,transparent);
+  --glass-glow:color-mix(in srgb,var(--accent) 4%,transparent);
   --glass-blur:24px;
 }
 

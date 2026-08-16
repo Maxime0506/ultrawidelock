@@ -743,21 +743,35 @@ a[data-ext]::after{content:"";display:inline-block;width:.5em;height:.5em;
 /* -------------------------------------------------------------- steps ---- */
 /* A numbered procedure. Numbered because the order is the content: doing step
    three before step one flashes a board whose radio is not wired yet. */
-.steps{list-style:none;counter-reset:step;margin:0 0 var(--sp-8);padding:0}
+.steps{--step-rail-x:var(--sp-4);--step-rail-fill:calc(100% - var(--sp-4));
+  position:relative;
+  isolation:isolate;list-style:none;counter-reset:step;
+  margin:0 0 var(--sp-8);padding:0}
+.js .steps{--step-rail-fill:0px}
+/* The faint rail is the stable guide. A measured fill grows over it as the
+   viewport crosses the marker centres; site.js writes its physical height. */
+.steps::before,.steps::after{content:"";position:absolute;
+  left:var(--step-rail-x);top:calc(var(--sp-4) - .15em);
+  width:var(--bw-hair);border-radius:var(--r-pill);z-index:0}
+.steps::before{bottom:0;background:var(--hairline)}
+.steps::after{height:var(--step-rail-fill);background:var(--accent)}
 .steps > li{counter-increment:step;position:relative;
-  padding:0 0 var(--sp-8) var(--sp-12);border-left:var(--border-hair);
-  margin-left:var(--sp-4)}
-.steps > li:last-child{border-left-color:transparent;padding-bottom:0}
+  padding:0 0 var(--sp-8) var(--sp-12);margin-left:var(--sp-4)}
+.steps > li:last-child{padding-bottom:0}
+.steps > li:last-child::after{content:"";position:absolute;left:-1px;
+  top:calc(var(--sp-4) - .15em);bottom:0;width:3px;
+  background:var(--ground);z-index:1}
 .steps > li::before{content:counter(step);position:absolute;
   left:calc(-1 * var(--sp-4));top:-.15em;
   display:grid;place-items:center;width:var(--sp-8);height:var(--sp-8);
   border:var(--border-accent);border-radius:var(--r-pill);
   background:var(--ground);color:var(--accent-ink);
   font-family:var(--font-mono);font-size:var(--fs-200);
-  font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;z-index:2}
 .steps h2,.steps h3{margin-top:0}
 .steps > li > :last-child{margin-bottom:0}
 @media (max-width:40rem){
+  .steps{--step-rail-x:var(--sp-3)}
   .steps > li{padding-left:var(--sp-8);margin-left:var(--sp-3)}
 }
 
