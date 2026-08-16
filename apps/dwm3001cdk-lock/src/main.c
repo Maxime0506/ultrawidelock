@@ -21,6 +21,7 @@
 #include <zephyr/usb/usb_device.h>
 
 #include "ultrawidelock_approach.h"
+#include "ultrawidelock_lat.h"
 #include "ultrawidelock_prov.h" /* ultrawidelock_prov_erase, for the factory-reset button */
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
@@ -135,6 +136,7 @@ static struct k_sem s_range_sig;
  */
 static void on_range_latched(void)
 {
+	(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_FIRST_RANGE);
 	k_sem_give(&s_range_sig);
 }
 
@@ -405,6 +407,7 @@ int main(void)
 	 * far out in this session, so a phone that was already at the door when
 	 * ranging started does not open it. See ultrawidelock_approach_cfg::approach_cm. */
 	ultrawidelock_approach_init(&approach, NULL);
+	approach.cfg.near_dwell = CONFIG_ULTRAWIDELOCK_APPROACH_NEAR_DWELL;
 
 	/* Same seam the ESP32 matter-lock uses (app_main.cpp on_uwb_range): the engine
 	 * signals, this thread decides. Both lines run before the listener can fire --
@@ -571,6 +574,7 @@ int main(void)
 			last_gen = gen;
 			last_obs_gen = gen;
 			present = true;
+			(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_TRUSTED_RANGE);
 			act = ml_feed_range(&approach, now, cm);
 		} else {
 			/*
@@ -600,6 +604,10 @@ int main(void)
 		}
 
 		ml_feed_vote_trace(&approach, now);
+		if (act == ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT ||
+		    act == ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD) {
+			(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_NEAR_DWELL);
+		}
 
 		switch (act) {
 		case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
@@ -652,6 +660,11 @@ int main(void)
 			ultrawidelock_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
+			if (ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_BOLT_DRIVEN)) {
+				/* This CDK has no motor. BOLT_DRIVEN means the software grant
+				 * and its visible output have both been committed. */
+				ultrawidelock_lat_report();
+			}
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 			heap_peak_log("unlock");
 #endif

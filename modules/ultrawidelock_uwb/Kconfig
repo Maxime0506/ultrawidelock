@@ -103,6 +103,25 @@ config ULTRAWIDELOCK_RANGE_GATE_STRICT
 	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
 	  (consensus) are always active in fira_session.c regardless of this option.
 
+config ULTRAWIDELOCK_STS_QUALITY_MIN
+	int "Minimum accepted DW3000 STS quality index"
+	depends on ULTRAWIDELOCK_CRED
+	default 0
+	range -32768 32767
+	help
+	  Require dwt_readstsquality() to succeed and its signed quality index to
+	  meet this floor. Zero preserves the driver's pass/fail verdict. Calibrate
+	  a higher value from LOS/NLOS and interference captures before shipping it.
+
+config ULTRAWIDELOCK_RANGE_TRUST_K
+	int "Consecutive agreeing ranges required for trust"
+	depends on ULTRAWIDELOCK_CRED
+	default 3
+	range 2 3
+	help
+	  Three is the shipping evidence floor. Two removes one roughly 192 ms
+	  ranging block but must only be used as a strict-STS hardware experiment.
+
 config ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT
 	bool "Responder ToF: use the same-round Final-capture timestamp snapshot"
 	depends on ULTRAWIDELOCK_CRED

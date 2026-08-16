@@ -61,13 +61,13 @@ struct rep {
 };
 
 /**
- * What apps/dwm3001cdk-lock/src/matter_commission.c gives the encoder.
+ * What apps/dwm3001cdk-lock/src/matter_commission.c gives one report chunk.
  *
  * Duplicated rather than shared because the module must not depend on a port.
  * If the two drift apart the assertion below stops meaning anything, so they
  * are named the same thing on purpose.
  */
-#define PORT_REPORT_MAX 3072u
+#define PORT_REPORT_MAX 1180u
 
 /* Room for every attribute of the widest cluster this node has, plus slack.
  * BasicInformation alone reports 16, which is exactly where this used to sit --
@@ -339,6 +339,65 @@ static void fill_info(struct matter_device_info *info)
 	info->supports_concurrent_connection = true;
 }
 
+static void test_read_cursor_owner(void)
+{
+	struct matter_im_read_state slots[2];
+	struct matter_im_read_pool pool;
+	struct matter_im_read_state *a = NULL;
+	struct matter_im_read_state *b = NULL;
+	struct matter_im_read_state *again = NULL;
+
+	t_group("bounded chunked-Read cursor owner");
+	T_EQ("cursor pool initializes", matter_im_read_pool_init(&pool, slots, 2u), MATTER_OK);
+	T_EQ("first Read acquires",
+	     matter_im_read_pool_acquire(&pool, 0x1001u, 0x2001u, true, &a), MATTER_OK);
+	T_EQ("second Read acquires",
+	     matter_im_read_pool_acquire(&pool, 0x1002u, 0x2002u, true, &b), MATTER_OK);
+	T_OK("two Reads own distinct cursors", a != NULL && b != NULL && a != b);
+	a->sent = 7u;
+	T_EQ("retransmit is identified",
+	     matter_im_read_pool_acquire(&pool, 0x1001u, 0x2001u, true, &again), MATTER_E_DUP);
+	T_OK("retransmit keeps the same cursor", again == a && again->sent == 7u);
+	T_EQ("third live Read is bounded",
+	     matter_im_read_pool_acquire(&pool, 0x1003u, 0x2003u, true, &again),
+	     MATTER_E_NOSPACE);
+
+	T_EQ("wrong session cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x9999u, 0x2001u, true, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong exchange cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x9999u, true, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong transport cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, false, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong completions leave cursor untouched", a->sent, 7u);
+	T_EQ("accepted intermediate chunk advances once",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 3u, true, MATTER_OK),
+	     MATTER_OK);
+	T_OK("intermediate cursor stays live", a->in_use && a->more && a->sent == 10u);
+	T_EQ("accepted final chunk releases",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 2u, false, MATTER_OK),
+	     MATTER_OK);
+	T_OK("final cursor is free", !a->in_use);
+	T_EQ("duplicate completion cannot advance a freed cursor",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 2u, false, MATTER_OK),
+	     MATTER_E_STATE);
+
+	T_EQ("released cursor can be reused",
+	     matter_im_read_pool_acquire(&pool, 0x1004u, 0x2004u, false, &a), MATTER_OK);
+	T_EQ("transport rejection releases its cursor",
+	     matter_im_read_pool_finish(&pool, 0x1004u, 0x2004u, false, 0u, false,
+					MATTER_E_STATE),
+	     MATTER_OK);
+	T_OK("rejected cursor is gone",
+	     matter_im_read_pool_find(&pool, 0x1004u, 0x2004u, false) == NULL);
+	matter_im_read_pool_drop_session(&pool, 0x1002u, false);
+	T_OK("wrong-transport cleanup preserves cursor", b->in_use);
+	matter_im_read_pool_drop_session(&pool, 0x1002u, true);
+	T_OK("matching session cleanup releases cursor", !b->in_use);
+}
+
 void test_matter_im(void)
 {
 	struct matter_im_read req;
@@ -352,6 +411,8 @@ void test_matter_im(void)
 	uint64_t revision = 0u;
 	const struct rep *r;
 	int n;
+
+	test_read_cursor_owner();
 
 	/* ------------------------------------------------ decoding the read --- */
 
@@ -659,8 +720,34 @@ void test_matter_im(void)
 							  &stats),
 			     MATTER_OK);
 			T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
-			T_OK("every endpoint's model fits the port's buffer",
-			     len <= PORT_REPORT_MAX);
+			T_OK("full wildcard needs the chunked Read path", len > PORT_REPORT_MAX);
+			{
+				uint16_t sent = 0u;
+				uint16_t emitted = 0u;
+				bool more = true;
+				int chunks = 0;
+				int total = 0;
+				int full = walk_report(big, len, sreps, &suppress, &revision);
+
+				while (more && chunks < 24) {
+					T_EQ("real-cap chunk encodes",
+					     matter_im_report_data_chunk(&srv, &one, sent, big,
+									 PORT_REPORT_MAX, &len, &more,
+									 &emitted, &stats),
+					     MATTER_OK);
+					T_OK("real-cap chunk stayed within Thread payload",
+					     len <= PORT_REPORT_MAX);
+					T_OK("real-cap chunk carried something", emitted > 0);
+					total += walk_report(big, len, sreps, &suppress, &revision);
+					T_OK("only the final Read chunk suppresses StatusResponse",
+					     suppress == !more);
+					sent = (uint16_t)(sent + emitted);
+					chunks++;
+				}
+				T_OK("real Thread cap split the full wildcard", chunks > 1);
+				T_OK("real-cap chunking stopped", !more);
+				T_EQ("real-cap chunks delivered every report once", total, full);
+			}
 			one.paths[0].have_endpoint = true;
 			one.paths[0].endpoint = MATTER_ENDPOINT_ROOT;
 
@@ -706,6 +793,8 @@ void test_matter_im(void)
 					T_OK("chunk carried something", emitted > 0);
 					total += walk_report(big, len, sreps, &suppress,
 							     &revision);
+					T_OK("only final swept chunk suppresses StatusResponse",
+					     suppress == !more);
 					sent = (uint16_t)(sent + emitted);
 					chunks++;
 				}
@@ -740,6 +829,7 @@ void test_matter_im(void)
 		uint16_t timeout_ms = 0u;
 		uint8_t sr[32];
 		size_t sr_len = 0u;
+		uint8_t decoded_status = 0xffu;
 		struct matter_tlv_reader rd;
 		uint64_t v = 0u;
 
@@ -773,6 +863,29 @@ void test_matter_im(void)
 		T_EQ("is the status", (long)matter_tlv_tag(&rd), (long)MATTER_TLV_CTX(0));
 		T_EQ("reads", matter_tlv_get_u64(&rd, &v), MATTER_OK);
 		T_EQ("SUCCESS", (long)v, (long)MATTER_IM_STATUS_SUCCESS);
+		T_EQ("status response decodes",
+		     matter_im_status_response_decode(sr, sr_len, &decoded_status), MATTER_OK);
+		T_EQ("decoded SUCCESS", decoded_status, MATTER_IM_STATUS_SUCCESS);
+		T_OK("truncated status response is refused",
+		     matter_im_status_response_decode(sr, sr_len - 1u, &decoded_status) != MATTER_OK);
+		T_EQ("null status buffer refused",
+		     matter_im_status_response_decode(NULL, sr_len, &decoded_status), MATTER_E_INVAL);
+		T_EQ("null status output refused",
+		     matter_im_status_response_decode(sr, sr_len, NULL), MATTER_E_INVAL);
+		{
+			static const uint8_t missing_status[] = {
+				0x15, 0x24, 0xff, MATTER_IM_REVISION, 0x18,
+			};
+			uint8_t empty = 0u;
+
+			T_EQ("missing mandatory status refused",
+			     matter_im_status_response_decode(missing_status,
+						      sizeof(missing_status), &decoded_status),
+			     MATTER_E_INVAL);
+			T_EQ("empty status response refused",
+			     matter_im_status_response_decode(&empty, 0u, &decoded_status),
+			     MATTER_E_INVAL);
+		}
 	}
 
 	/* --------------------------------------------------------- refusals --- */
@@ -1064,6 +1177,11 @@ void test_matter_im_invoke(void)
 		T_OK("no command ref", !inv.has_command_ref);
 
 		T_OK("fail-safe not armed yet", !info.failsafe_armed);
+		/* Existing administrators are the rollback baseline for this new
+		 * transaction. Use nonadjacent slots so this proves a mask rather
+		 * than a count. */
+		info.fabrics[0].index = 1u;
+		info.fabrics[2].index = 3u;
 		T_EQ("encodes a response",
 		     matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &len),
 		     MATTER_OK);
@@ -1071,7 +1189,10 @@ void test_matter_im_invoke(void)
 		/* The command RAN: the effect is the point, and the breadcrumb is
 		 * how the commissioner resumes a half-finished attempt. */
 		T_OK("fail-safe armed", info.failsafe_armed);
+		T_EQ("existing fabric slots captured", info.failsafe_fabric_mask, 0x05u);
 		T_EQ("breadcrumb taken from the request", (long)info.breadcrumb, 3L);
+		info.fabrics[0].index = 0u;
+		info.fabrics[2].index = 0u;
 
 		T_OK("response decodes", walk_invoke_response(out, len, &ir));
 		T_OK("carries a command, not a status", !ir.is_status);
@@ -1915,18 +2036,10 @@ void test_matter_im_events(void)
 		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_E_NOSPACE);
 	}
 
-	/*
-	 * The buffer matter_commission.c reports from. A full ring plus the
-	 * LockState attribute has to fit, or a walk-up during a busy minute
-	 * silently reports nothing at all.
-	 */
-	t_group("a full ring still fits the notify buffer");
+	/* Keep the complete event ring compact even though the application now
+	 * encodes directly into an owned full-size packet. */
+	t_group("a full event ring remains compact");
 	{
-		/* The size of s_notify_tlv in matter_commission.c. Stated here
-		 * rather than shared, because the app header is not on this
-		 * suite's include path -- and a mismatch shows up as this test
-		 * passing while the board's buffer is smaller, so the number is
-		 * named in both comments. */
 		uint8_t notify[256];
 		unsigned int i;
 

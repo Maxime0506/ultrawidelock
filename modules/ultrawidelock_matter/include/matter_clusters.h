@@ -843,13 +843,21 @@ struct matter_device_info {
 	/**
 	 * True once ArmFailSafe has been accepted and not yet expired.
 	 *
-	 * No timer behind it yet. Matter says the fail-safe disarms itself after
-	 * ExpiryLengthSeconds and undoes whatever the half-finished commissioning
-	 * changed; nothing here changes anything that would need undoing, so the
-	 * flag records the state without pretending to enforce it. That becomes a
-	 * real timer when there is provisioning to roll back.
+	 * The application currently enforces rollback at the next commissioning
+	 * session boundary, not from an ExpiryLengthSeconds timer. The rollback is
+	 * real: fabric slots created after this flag was armed and their pending
+	 * operational key are wiped. A wall-clock expiry remains a port-level gap.
 	 */
 	bool failsafe_armed;
+	/**
+	 * Fabric slots that existed when the current fail-safe was armed.
+	 *
+	 * A later administrator commissions against an already working node. If
+	 * that attempt dies after AddNOC, only its newly added slots are
+	 * provisional; erasing the pre-existing slots would revoke every working
+	 * administrator because a newcomer disappeared mid-flow.
+	 */
+	uint8_t failsafe_fabric_mask;
 	/**
 	 * The CommissioningErrorEnum the last GeneralCommissioning command
 	 * produced, held between running it and serialising its response --
@@ -1057,11 +1065,12 @@ size_t matter_clusters_event_count(const struct matter_device_info *info);
  * to undo -- so the flag recorded the state without enforcing it. Now a
  * commissioner that gives up half way leaves a fabric behind, and the next
  * attempt is answered TableFull for a reason that has nothing to do with what
- * went wrong. The caller decides when: on this port, when the commissioning
- * link drops.
+ * went wrong. The caller decides when: this port rolls the transaction back at
+ * the beginning of the next commissioning session.
  *
- * Does nothing once commissioning_complete is set -- a finished fabric is not
- * the fail-safe's to remove.
+ * Fabric slots that existed when ArmFailSafe ran survive. Only slots added by
+ * the unfinished transaction are wiped. Once CommissioningComplete disarms the
+ * fail-safe, this function does nothing.
  *
  * The THREAD attachment is deliberately kept. Strictly the fail-safe owns the
  * network config too, but the commissioner re-sends the identical dataset on
