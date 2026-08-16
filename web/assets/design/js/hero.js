@@ -77,7 +77,10 @@
     truth: document.getElementById("hs-true"),
     verdict: document.getElementById("hs-verdict"),
     relayBtn: document.getElementById("hs-relay-btn"),
-    scope: svg
+    scope: svg,
+    phaseUwb: document.getElementById("hs-phase-uwb"),
+    phaseGate: document.getElementById("hs-phase-gate"),
+    phaseMatter: document.getElementById("hs-phase-matter")
   };
 
   var relayOn = false;
@@ -104,6 +107,20 @@
        crossing, never during one. */
     void band.offsetWidth;
     band.classList.add("granted");
+  }
+
+  function setPhase(node, state) {
+    if (!node) return;
+    node.classList.toggle("is-done", state === "done");
+    node.classList.toggle("is-active", state === "active");
+    node.classList.toggle("is-alert", state === "alert");
+  }
+
+  function drawPhases(state) {
+    setPhase(el.phaseUwb, state === "grant" ? "done" : "active");
+    setPhase(el.phaseGate, state === "grant" ? "done" :
+      state === "relay" ? "alert" : "active");
+    setPhase(el.phaseMatter, state === "grant" ? "active" : "idle");
   }
 
   function xToM(x) { return (x - LOCK_X) / PX_PER_M; }
@@ -155,6 +172,7 @@
     var state = relayOn ? "relay" : granted ? "grant" : "hold";
     el.scope.setAttribute("data-state", state);
     markState(state);
+    drawPhases(state);
 
     if (relayOn) {
       el.verdict.textContent = "refused · added delay";
@@ -227,4 +245,139 @@
   slider.value = mToX(0.82);
   draw();
   svg.classList.add("live");
+
+  /* ---- glass field ----------------------------------------------------- */
+  /* Decorative ranging rings are active only while the hero is visible.
+     The live SVG remains the semantic and interactive representation. */
+  var canvas = document.getElementById("uwb-field");
+  var hero = document.querySelector(".hero");
+  var lock = svg.querySelector(".hs-lock");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var finePointer = window.matchMedia("(pointer: fine)").matches;
+  var nav = document.querySelector(".topbar");
+
+  function materializeNav() {
+    if (nav) nav.classList.toggle("is-scrolled", window.scrollY > 24);
+  }
+  window.addEventListener("scroll", materializeNav, { passive: true });
+  materializeNav();
+
+  if (finePointer && !reduced) {
+    var panels = document.querySelectorAll(".glass-panel, #main > .page, .cardgrid .card");
+    var pointerX = 0, pointerY = 0, pointerQueued = false;
+    window.addEventListener("pointermove", function (event) {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (pointerQueued) return;
+      pointerQueued = true;
+      window.requestAnimationFrame(function () {
+        pointerQueued = false;
+        for (var p = 0; p < panels.length; p++) {
+          var rect = panels[p].getBoundingClientRect();
+          if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+          panels[p].style.setProperty("--gx",
+            ((pointerX - rect.left) / rect.width * 100).toFixed(1) + "%");
+          panels[p].style.setProperty("--gy",
+            ((pointerY - rect.top) / rect.height * 100).toFixed(1) + "%");
+        }
+      });
+    }, { passive: true });
+  }
+
+  if (canvas && hero && lock && !reduced) {
+    var ctx = canvas.getContext("2d");
+    var fieldW = 0, fieldH = 0, fieldDpr = 1;
+    var fieldVisible = true, fieldFrame = 0, fieldLast = 0, fieldSpawn = 0;
+    var rings = [], flashes = [];
+
+    function fieldColour(alpha) {
+      var value = window.getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent").trim();
+      var match = /^#([0-9a-f]{6})$/i.exec(value);
+      if (!match) return "rgba(46,230,184," + alpha + ")";
+      var number = parseInt(match[1], 16);
+      return "rgba(" + (number >> 16) + "," + ((number >> 8) & 255) + "," +
+        (number & 255) + "," + alpha + ")";
+    }
+
+    function resizeField() {
+      fieldDpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      fieldW = window.innerWidth;
+      fieldH = window.innerHeight;
+      canvas.width = Math.round(fieldW * fieldDpr);
+      canvas.height = Math.round(fieldH * fieldDpr);
+      canvas.style.width = fieldW + "px";
+      canvas.style.height = fieldH + "px";
+      ctx.setTransform(fieldDpr, 0, 0, fieldDpr, 0, 0);
+    }
+
+    function fieldOrigin() {
+      var rect = lock.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+
+    function fieldLoop(now) {
+      fieldFrame = 0;
+      if (!fieldVisible || document.hidden) return;
+      var dt = Math.min(34, now - (fieldLast || now));
+      fieldLast = now;
+      var origin = fieldOrigin();
+      var maxRadius = Math.hypot(fieldW, fieldH) * .78;
+      if (now - fieldSpawn > 1450) {
+        rings.push({ radius: 28 });
+        fieldSpawn = now;
+      }
+      ctx.clearRect(0, 0, fieldW, fieldH);
+      rings = rings.filter(function (ring) {
+        ring.radius += dt * .055;
+        var alpha = Math.max(0, 1 - ring.radius / maxRadius) * .13;
+        if (alpha < .004) return false;
+        ctx.beginPath();
+        ctx.arc(origin.x, origin.y, ring.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = fieldColour(alpha);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        return true;
+      });
+      flashes = flashes.filter(function (flash) {
+        flash.radius += dt * .42;
+        flash.alpha *= Math.pow(.92, dt / 16.7);
+        if (flash.alpha < .008) return false;
+        ctx.beginPath();
+        ctx.arc(origin.x, origin.y, flash.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = fieldColour(flash.alpha);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        return true;
+      });
+      fieldFrame = window.requestAnimationFrame(fieldLoop);
+    }
+
+    function startField() {
+      if (!fieldVisible || document.hidden || fieldFrame) return;
+      fieldLast = 0;
+      fieldFrame = window.requestAnimationFrame(fieldLoop);
+    }
+
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        fieldVisible = entries[0].isIntersecting;
+        if (fieldVisible) startField();
+      }, { rootMargin: "15% 0px" }).observe(hero);
+    }
+    document.addEventListener("visibilitychange", startField);
+    window.addEventListener("resize", function () { resizeField(); startField(); });
+    new MutationObserver(function () { startField(); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    var oldMarkState = markState;
+    markState = function (state) {
+      var wasGrant = lastState === "grant";
+      oldMarkState(state);
+      if (state === "grant" && !wasGrant) flashes.push({ radius: 30, alpha: .48 });
+    };
+
+    resizeField();
+    startField();
+  }
 })();
