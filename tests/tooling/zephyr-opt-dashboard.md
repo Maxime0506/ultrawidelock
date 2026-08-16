@@ -18,6 +18,50 @@ toolchain, or recorded Kconfig axes differ.
 Synthetic data under `tests/tooling/fixtures/zephyr-opt/` exists only for tests
 and visual verification. It must not be cited as a product measurement.
 
+## One command on real hardware
+
+From an interactive terminal with the DWM3001CDK connected through its J-Link
+USB port, run:
+
+```sh
+make instrument
+```
+
+The target performs the complete bench lifecycle:
+
+1. Generate the ignored P-256 signing key without overwriting an existing key,
+   and bootstrap Zephyr only when `workspace/` is absent. An incomplete existing
+   workspace is refused so this command cannot discard workspace edits.
+2. Build a pristine `thread+lto` bench image with latency, UWB histogram, and
+   DW3000 SPI instrumentation, then measure its linker flash and RAM.
+3. Flash without erasing commissioned state and start RTT with the exact ELF.
+4. Stream the raw capture under ignored `internal/zephyr-opt/captures/` until
+   Enter is pressed, then ask for the honest physical-attempt denominator.
+5. Collect Zephyr reports, optional `pahole` output, render the dashboard, bind
+   it to `127.0.0.1`, and open the default browser. Press Enter again to stop
+   the server and exit successfully.
+
+The command refuses a non-interactive terminal before building or flashing.
+If several probes are attached, set `PROBE_RS_PROBE=<VID:PID:Serial>` first.
+`probe-rs` must already be on `PATH`. On a fresh checkout the bootstrap step can
+download the pinned NCS workspace and toolchain, so the first run is much longer
+than later runs. Useful overrides are:
+
+```sh
+make instrument \
+  INSTRUMENT_ATTEMPTS=1000 \
+  INSTRUMENT_WARMUP=20 \
+  INSTRUMENT_REJECTED=0 \
+  INSTRUMENT_TIMED_OUT=0 \
+  INSTRUMENT_PORT=8765
+```
+
+Leaving `INSTRUMENT_ATTEMPTS` empty prompts after capture. An empty response
+keeps the denominator explicitly unknown rather than inferring that every
+physical attempt produced a log record. The command does not fabricate runtime
+stack or CPU evidence; those still require the separate debugger snapshot
+described below.
+
 ## Collect static evidence
 
 Build the profile in its own pristine directory, then use the existing size
