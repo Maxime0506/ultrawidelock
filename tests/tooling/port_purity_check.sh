@@ -712,6 +712,141 @@ check_build_paths() {
 	printf '%s  ok   build-file paths: %d literal(s) resolve in the tree%s\n' "$G" "$n" "$Z"
 }
 
+# ---- persistent storage names ------------------------------------------------
+#
+# Every framework caps the names of its persistent records, and ESP-IDF's NVS is
+# the one that does not say so: a read-only open of an over-long namespace misses
+# as NOT_FOUND, indistinguishable from "never stored", and only the write side
+# reports KEY_TOO_LONG. A rename took the provisioning namespace to 18 characters
+# and that asymmetry carried it through the host suite and a release to a bench
+# session (docs/esp32-gotchas.md 8.4).
+#
+# The names are declared in the ports, listed in PORTING.md's storage table, and
+# bound together here: over the cap fails, listed-but-absent fails, and a call
+# site in a file the table does not list fails. Compile-time asserts guard the
+# ESP32 names too, but only on a bench that has ESP-IDF; this runs anywhere.
+STORAGE_TABLE=PORTING.md
+
+storage_cap_for() { # port -> the longest name it may store, empty if unknown
+	case "$1" in
+	# NVS_NS_NAME_MAX_SIZE - 1 and NVS_KEY_NAME_MAX_SIZE - 1, ESP-IDF nvs.h.
+	esp32) printf '15' ;;
+	# SETTINGS_MAX_NAME_LEN = 8 * SETTINGS_MAX_DIR_DEPTH, zephyr settings.h.
+	zephyr) printf '64' ;;
+	*) printf '' ;;
+	esac
+}
+
+# The freertos-nrf52833 port is absent on purpose: its records are numeric ids in
+# windowed ranges, so it has no name to measure. It also implements the settings
+# API for Matter, and those definitions are not call sites.
+STORAGE_ZEPHYR_SCOPE=(ports apps examples ':!ports/freertos-nrf52833')
+
+storage_name_bad() { # port, name -> reason on stdout, 0 if the name is unusable
+	local port="$1" name="$2" cap depth
+	cap="$(storage_cap_for "$port")"
+	if [ -z "$cap" ]; then
+		printf 'no cap known for port %s' "$port"
+		return 0
+	fi
+	if [ "${#name}" -gt "$cap" ]; then
+		printf '%d characters, over the %s cap of %s' "${#name}" "$port" "$cap"
+		return 0
+	fi
+	if [ "$port" = zephyr ]; then
+		# SETTINGS_MAX_DIR_DEPTH levels, separators included in the name.
+		depth=$(printf '%s' "$name" | tr -cd '/' | wc -c | tr -d ' ')
+		if [ "$((depth + 1))" -gt 8 ]; then
+			printf '%d levels, over the settings depth of 8' "$((depth + 1))"
+			return 0
+		fi
+	fi
+	return 1
+}
+
+storage_rows() { # -> "port|kind|name|cap|file" for each listed record
+	sed -n '/<!-- storage-names:begin -->/,/<!-- storage-names:end -->/p' "$STORAGE_TABLE" |
+		grep -E '^\| *(esp32|zephyr) *\|' |
+		sed -E 's/^\| *//; s/ *\|[[:space:]]*$//; s/ *\| */|/g; s/`//g'
+}
+
+storage_call_sites() { # -> every file that names a persistent record
+	git grep -lE 'nvs_open\(' -- ports apps examples
+	# Call sites, not the freertos shim's definitions of the same symbols.
+	git grep -lE '(settings_save_one|settings_delete|settings_load_subtree|SETTINGS_STATIC_HANDLER_DEFINE)\(' \
+		-- "${STORAGE_ZEPHYR_SCOPE[@]}"
+}
+
+storage_inline_keys() { # -> "path:line:name" for keys written at the call site
+	git grep -nEo 'nvs_(get|set)_(str|blob|u8|i8|u16|i16|u32|i32|u64|i64)\([^,]+, *"[^"]*"' \
+		-- ports apps examples |
+		sed -E 's/^([^:]+:[0-9]+):.*, *"([^"]*)"$/\1:\2/'
+}
+
+check_storage_names() {
+	local fails=0 rows=0 sites=0 inline=0 row port kind name cap file why f
+	while IFS='|' read -r port kind name cap file; do
+		[ -n "$port" ] || continue
+		rows=$((rows + 1))
+		if [ "$cap" != "$(storage_cap_for "$port")" ]; then
+			printf '%s  %s "%s": table says cap %s, the port says %s%s\n' \
+				"$R" "$port" "$name" "$cap" "$(storage_cap_for "$port")" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+		if why="$(storage_name_bad "$port" "$name")"; then
+			printf '%s  %s "%s": %s%s\n' "$R" "$port" "$name" "$why" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+		if [ ! -f "$file" ]; then
+			printf '%s  %s "%s": declared in %s, which is not in the tree%s\n' \
+				"$R" "$port" "$name" "$file" "$Z" >&2
+			fails=$((fails + 1))
+		elif ! grep -qF "\"$name\"" "$file"; then
+			printf '%s  %s "%s": %s no longer spells it — renamed in code, not in %s%s\n' \
+				"$R" "$port" "$name" "$file" "$STORAGE_TABLE" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done < <(storage_rows)
+
+	# The other direction: a port that starts storing something has to say so.
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		sites=$((sites + 1))
+		if ! storage_rows | grep -qF "|$f"; then
+			printf '%s  %s stores a record under a name %s does not list%s\n' \
+				"$R" "$f" "$STORAGE_TABLE" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done < <(storage_call_sites | sort -u)
+
+	# Keys written at the call site are never declared, so the table cannot hold
+	# them; the cap still does.
+	while IFS= read -r row; do
+		[ -n "$row" ] || continue
+		inline=$((inline + 1))
+		name="${row##*:}"
+		if why="$(storage_name_bad esp32 "$name")"; then
+			printf '%s  %s: inline NVS key "%s": %s%s\n' \
+				"$R" "${row%:*}" "$name" "$why" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done < <(storage_inline_keys)
+
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d persistent storage name(s) the flash would not hold or %s does not list%s\n' \
+			"$R" "$fails" "$STORAGE_TABLE" "$Z" >&2
+		return 1
+	fi
+	# Each selector counted apart: a table that stops parsing still leaves the
+	# call-site scan green, and that combination is exactly the silence this
+	# check exists to break.
+	selector_live "storage table rows" "$rows" || return 1
+	selector_live "storage call sites" "$sites" || return 1
+	selector_live "inline NVS keys" "$inline" || return 1
+	printf '%s  ok   storage names: %d listed record(s) + %d inline key(s) fit their caps, %d call site(s) listed%s\n' \
+		"$G" "$rows" "$inline" "$sites" "$Z"
+}
+
 # ---- patch-symbol tripwire ---------------------------------------------------
 #
 # Identifier shapes a Nordic-add-on patch grafts in. A rename in modules/ or
@@ -1036,6 +1171,44 @@ self_test() {
 	fi
 	rm -f "$halfix"
 	[ "$fails" -ne 0 ] || printf '%s  self-test: HAL contract rejects missing and extra seams%s\n' "$G" "$Z"
+
+	# Storage caps: the boundary in both directions, per port. "at the cap" is
+	# the case worth pinning -- an off-by-one here reads as a passing gate, and
+	# the whole point of the check is that the flash will not say so.
+	local storage_bad=('esp32|sixteen_chars_ns' 'esp32|blob_with_a_long_name'
+		'zephyr|a/b/c/d/e/f/g/h/i'
+		'zephyr|0123456789012345678901234567890123456789012345678901234567890123456789'
+		'nrf9160|anything')
+	local storage_ok=('esp32|uwl_prov' 'esp32|fifteen_chars_n' 'esp32|blob'
+		'zephyr|ultrawidelock/prov' 'zephyr|a/b/c/d/e/f/g/h')
+	local port name
+	for line in "${storage_bad[@]}"; do
+		port="${line%%|*}"
+		name="${line#*|}"
+		if ! storage_name_bad "$port" "$name" >/dev/null; then
+			printf '%s  self-test FAILED: storage cap accepted %s "%s"%s\n' \
+				"$R" "$port" "$name" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	for line in "${storage_ok[@]}"; do
+		port="${line%%|*}"
+		name="${line#*|}"
+		if storage_name_bad "$port" "$name" >/dev/null; then
+			printf '%s  self-test FAILED: storage cap rejected a usable %s "%s"%s\n' \
+				"$R" "$port" "$name" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	# The table has to parse into the five fields the check reads, or every row
+	# check above quietly compares empty strings and passes.
+	if [ "$(storage_rows | awk -F'|' 'NF == 5' | wc -l | tr -d ' ')" != \
+		"$(storage_rows | wc -l | tr -d ' ')" ]; then
+		printf '%s  self-test FAILED: %s rows do not parse into 5 fields%s\n' \
+			"$R" "$STORAGE_TABLE" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	[ "$fails" -ne 0 ] || printf '%s  self-test: storage caps hold at 15/64 and the table parses%s\n' "$G" "$Z"
 
 	# Comment filter: drops prose, keeps code with a trailing comment.
 	local drop=('12: * uses k_work_reschedule under the hood' '7://	k_msleep(5);')
@@ -1374,6 +1547,7 @@ case "${1-}" in
 	check_manifests || rc=1
 	check_hal_contract || rc=1
 	check_build_paths || rc=1
+	check_storage_names || rc=1
 	check_patch_symbols || rc=1
 	check_brand || rc=1
 	check_patch_upstream || rc=1

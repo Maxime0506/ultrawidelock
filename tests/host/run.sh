@@ -24,6 +24,22 @@ if [ -n "${SAN:-}" ]; then
   san_flags='-g -fsanitize=address,undefined -fno-sanitize-recover=all'
 fi
 
+# Shapes clang merely warns about and GCC rejects outright, promoted so a local
+# run fails where CI would. `static ULTRAWIDELOCK_THREAD_STACK_DEFINE(...)` on a
+# macro that already says static is the one that got through: every macOS run
+# green, the Linux gate unable to compile the suite at all. Probed rather than
+# assumed, because GCC errors on an unknown -Werror= name and does not need
+# these anyway -- it already treats them as errors.
+# A string, not an array, for the same reason san_flags is one: bash 3.2 is still
+# what /usr/bin/env bash finds on a stock mac, and it treats an empty array under
+# `set -u` as an unbound variable.
+gcc_parity=
+for f in -Werror=duplicate-decl-specifier; do
+  if "${CC:-cc}" "$f" -x c -fsyntax-only /dev/null 2>/dev/null; then
+    gcc_parity="$gcc_parity $f"
+  fi
+done
+
 # --- target-only sources, separate small binaries --------------------------
 # These compile production sources whose exported symbols the main binary
 # already fakes (dw_rx_stub.c) or that need incompatible fakes, so they cannot
@@ -40,7 +56,7 @@ HOSTD="$ROOT/tests/host"
 # is a no-op, which is why this only ever breaks in CI.
 stage_core_build() {
 	# shellcheck disable=SC2086  # san_flags is a deliberate word-split flag list
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags "${DEFS[@]}" "${INCS[@]}" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags "${DEFS[@]}" "${INCS[@]}" \
 	   "${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" \
 	   -lm -o "$OUT/host_test"
 }
@@ -55,7 +71,7 @@ stage_core_run() {
 #    the drvfake radio + logfake zephyr surface.
 stage_uwb_driver() {
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags \
 		-DULTRAWIDELOCK_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 		-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS=250 \
 		-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
@@ -102,7 +118,7 @@ stage_crypto_backends() {
 # 3) NFC ECP emitter (C++) over fake RFAL/reader-storage headers (ecpfake/).
 stage_nfc_ecp() {
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_c.o"
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_c.o"
 	# shellcheck disable=SC2086
 	"${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 		-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
@@ -122,7 +138,7 @@ stage_nfc_ecp() {
 #    Real port source, not a host copy -- the point is to test what ships.
 stage_cdk_port() {
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra $san_flags \
+	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra $gcc_parity $san_flags \
 		-DCONFIG_LOG_DEFAULT_LEVEL=3 \
 		-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
 		-I"$ROOT/modules/ultrawidelock_matter/include" -I"$ROOT/ports/zephyr/store" \
@@ -142,7 +158,7 @@ stage_cdk_port() {
 #    checked.
 stage_delta_update() {
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags \
 		-DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
 		-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 		-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
@@ -175,17 +191,17 @@ stage_nfc_transport() {
 	NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
 		-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/ultrawidelock_port/include")
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
 		-I"$ROOT/modules/ultrawidelock_nfc/src" \
 		-c "$ROOT/modules/ultrawidelock_nfc/src/pn532.c" -o "$OUT/pn532_nfc.o"
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
 		-I"$ROOT/modules/ultrawidelock_nfc/src" \
 		-c "$ROOT/modules/ultrawidelock_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 		-c "$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi.o"
 	# shellcheck disable=SC2086
 	"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
@@ -214,7 +230,7 @@ stage_nfc_transport() {
 #    inside one binary maps the same lines twice. See the file for the rest.
 stage_uwb_seam() {
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags \
 		-I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
 		-I"$ROOT/modules/ultrawidelock_uwb/include" -I"$SRC/driver" \
 		-I"$ROOT/modules/ultrawidelock_dw3000/include" \
@@ -241,12 +257,12 @@ stage_cred_stack() {
 		-I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_cred/src")
 	STK_OBJS=()
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
 	for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
 		protocol/nfc_select protocol/nfc_auth; do
 		stk_obj="$OUT/stk_$(basename "$stk_src").o"
 		# shellcheck disable=SC2086
-		"${CC:-cc}" -std=c11 -O1 -w $san_flags "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
+		"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
 			-I"$ROOT/modules/ultrawidelock_cred/include" -c "$STK/$stk_src.c" -o "$stk_obj"
 		STK_OBJS+=("$stk_obj")
 	done
@@ -255,7 +271,7 @@ stage_cred_stack() {
 	for ultrawidelock_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepup_parse; do
 		stk_obj="$OUT/stk_$ultrawidelock_src.o"
 		# shellcheck disable=SC2086
-		"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+		"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 			-I"$ROOT/modules/ultrawidelock_cred/src" \
 			-c "$ROOT/modules/ultrawidelock_cred/src/$ultrawidelock_src.c" -o "$stk_obj"
 		STK_OBJS+=("$stk_obj")
@@ -264,11 +280,11 @@ stage_cred_stack() {
 	# test_ultrawidelock_hash.c) and the reference AES-GCM in ultrawidelock_prim_host.c (pinned by
 	# test_ultrawidelock_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 		-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_hash.c" \
 		-o "$OUT/stk_ultrawidelock_hash.o"
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+	"${CC:-cc}" -std=c11 -O1 -w $gcc_parity $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 		-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/tests/shared/ultrawidelock_prim_host.c" \
 		-o "$OUT/stk_ultrawidelock_prim_host.o"
 	# shellcheck disable=SC2086

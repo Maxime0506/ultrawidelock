@@ -24,6 +24,14 @@
 #define PRESENCE_NS     "presence"
 #define PRESENCE_DEVKEY "kdev"
 
+/* Both names are capped by NVS, and an over-long one fails silently on the read
+ * side -- see ultrawidelock_prov_nvs.c, where a rename spent a bench session
+ * proving it. PORTING.md's storage table lists these two. */
+_Static_assert(sizeof(PRESENCE_NS) - 1 <= NVS_NS_NAME_MAX_SIZE - 1,
+	       "NVS namespace name is longer than NVS allows (NVS_NS_NAME_MAX_SIZE - 1)");
+_Static_assert(sizeof(PRESENCE_DEVKEY) - 1 <= NVS_KEY_NAME_MAX_SIZE - 1,
+	       "NVS key name is longer than NVS allows (NVS_KEY_NAME_MAX_SIZE - 1)");
+
 #if !defined(CONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS)
 #define CONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS 8000
 #endif

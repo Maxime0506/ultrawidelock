@@ -64,6 +64,59 @@ If an existing backend already works for the chipset, do not fork it. Supply
 pins and bus instances through the framework's board configuration. Add a new
 backend file only when the hardware API is genuinely different.
 
+## Persistent storage names
+
+Each port names its own persistent records, and each framework caps those names
+differently. The caps are not advisory: ESP-IDF's NVS silently reports "never
+stored" when a read-only open names something too long, and only the write side
+says so out loud, which is how an 18-character namespace survived a rename, a
+test suite and a release before a bench session found it (docs/esp32-gotchas.md
+§8.4).
+
+This table is the source of truth for every declared record name. The purity gate
+reads it: a name here that outgrows its port's cap fails, a name here that no
+longer appears in the file named fails, and a storage call site in a file this
+table does not list fails. Adding a record means adding a row. Key names written
+inline at the call site rather than declared are not listed; the same gate
+length-checks those where they are written.
+
+<!-- storage-names:begin -->
+
+| Port | Kind | Name | Cap | Declared in |
+|---|---|---|---|---|
+| esp32 | namespace | `uwl_prov` | 15 | `ports/esp32/components/ultrawidelock_reader/ultrawidelock_prov_nvs.c` |
+| esp32 | key | `blob` | 15 | `ports/esp32/components/ultrawidelock_reader/ultrawidelock_prov_nvs.c` |
+| esp32 | namespace | `presence` | 15 | `ports/esp32/components/ultrawidelock_reader/presence_link.c` |
+| esp32 | key | `kdev` | 15 | `ports/esp32/components/ultrawidelock_reader/presence_link.c` |
+| esp32 | namespace | `piv` | 15 | `ports/esp32/components/piv_ccid/piv_identity.c` |
+| esp32 | key | `auth9a` | 15 | `ports/esp32/components/piv_ccid/piv_identity.c` |
+| esp32 | key | `key9d` | 15 | `ports/esp32/components/piv_ccid/piv_identity.c` |
+| esp32 | namespace | `ha_mqtt` | 15 | `apps/esp32-matter-lock/main/ha_mqtt.c` |
+| zephyr | subtree | `ultrawidelock` | 64 | `ports/zephyr/store/ultrawidelock_prov_settings.c` |
+| zephyr | key | `ultrawidelock/prov` | 64 | `ports/zephyr/store/ultrawidelock_prov_settings.c` |
+| zephyr | subtree | `mfab` | 64 | `ports/zephyr/store/matter_fab_settings.c` |
+| zephyr | subtree | `msub` | 64 | `apps/dwm3001cdk-lock/src/matter_commission.c` |
+| zephyr | key | `srp/hid` | 64 | `ports/zephyr/matter/matter_thread_port.c` |
+
+<!-- storage-names:end -->
+
+Where the caps come from, and why they differ:
+
+- **esp32** — `NVS_NS_NAME_MAX_SIZE - 1` and `NVS_KEY_NAME_MAX_SIZE - 1`, both 15,
+  from ESP-IDF's `nvs.h`. Each name is also `_Static_assert`ed against the cap
+  where it is defined, so a bench build fails before the flash does.
+- **zephyr** — `SETTINGS_MAX_NAME_LEN`, `8 * SETTINGS_MAX_DIR_DEPTH` = 64, from
+  `zephyr/include/zephyr/settings/settings.h`, with at most 8 `/`-separated
+  levels. Roomy enough that no name here is close to it.
+- **freertos-nrf52833** — no row, because that port has no name to cap. Records
+  are numeric ids (`ULTRAWIDELOCK_KV_KEY_CRED_PROV` = `0x0001u`) in windowed
+  ranges declared in `ports/freertos-nrf52833/include/ultrawidelock_freertos_kv.h`.
+  A new record there takes an id from the right window, not a string.
+
+The three ports share `ultrawidelock_prov.h` and the portable serializer, not
+these names. A single spelling across all three is neither possible nor wanted;
+what has to hold is that each name is declared once, listed once, and gated.
+
 ## Build integration
 
 Zephyr applications add the required `modules/<name>` directories and

@@ -36,6 +36,13 @@ static const char *TAG = "ha_mqtt";
 #define HA_CA_MAX        4096
 #define HA_DEFAULT_PORT  8883
 
+/* NVS caps a namespace at 15 characters and an over-long one is only loud on the
+ * write side; ultrawidelock_prov_nvs.c is the writeup. The keys here are written
+ * inline at each call and are four characters or fewer, so the purity gate's
+ * storage-name check is what holds those, not an assert. */
+_Static_assert(sizeof(HA_NVS_NAMESPACE) - 1 <= NVS_NS_NAME_MAX_SIZE - 1,
+	       "NVS namespace name is longer than NVS allows (NVS_NS_NAME_MAX_SIZE - 1)");
+
 /* The Home Assistant device model, "<target> credential lock". The agent publishes
  * the nRF5340 form of the same string (ultrawidelock_ha.mqtt.DEFAULT_MODEL); the
  * shape is the contract, the target is what tells two boards apart in HA. */
