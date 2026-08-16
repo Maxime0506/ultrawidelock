@@ -49,18 +49,37 @@ REPO = "https://github.com/ultrawidelock/ultrawidelock/blob/main/"
 # side effect of a build, and diffable because it is indented and key-sorted.
 PAYLOAD = Path(__file__).with_name("files.json")
 
-# Slot palette. The design system's syntax colours, which are a categorical
-# spread already tuned for a dark surface -- and the stage here is always dark,
-# so one set serves. Every node also carries its name and its group, so colour
-# is never the only channel.
-# Cool only. The earlier set borrowed the syntax palette wholesale, which
-# dragged an orange and a warm yellow onto a mint-on-teal stage and read as
-# the old warm-paper theme. These are the theme's own mints, teals, blues and
-# violets; every node still carries its name and group as text, so colour
-# stays a second channel rather than the only one.
-COLORS = ["#2ee6b8", "#7fb8ff", "#8fd6a8", "#d5a8f0", "#5fecc4",
-          "#a9d6ff", "#41c98a", "#63e0f0", "#b8e6c8", "#9fd0ff",
-          "#8ff5d8", "#c8b3f0", "#7ff0d4", "#6fd7c0"]
+# Slot palette: one colour per subsystem, in sorted group order.
+#
+# This replaced a 14-entry cool-only set that the page indexed with `% len`.
+# There are 20 subsystems, so six of them rendered in a colour already spoken
+# for -- ports/zephyr was modules/README.md's blue exactly -- and the fourteen
+# that were distinct were all mints, teals and blues, chosen to sit quietly on
+# a mint-on-teal stage. Quiet was the problem: the point of colouring by group
+# is telling groups apart.
+#
+# Built by maximising the weakest adjacent pair under normal vision and under
+# simulated deuteranopia, protanopia and tritanopia at once, inside OKLCH
+# lightness 0.48-0.67 and a 0.19 chroma ceiling, then ordered so neighbouring
+# slots are the pair that separates best. Measured against the near-black
+# stage this is drawn on:
+#
+#   adjacent, normal vision   dE 26.9   (floor 15)
+#   adjacent, worst CVD       dE 14.4   (target 8)
+#   contrast vs #04100e       all 20 >= 3:1
+#
+# Twenty mutually distinguishable colours do not exist -- the all-pairs worst
+# case is dE 8.8, and no palette of this size beats it. Colour is a first
+# guess here, not the answer: every node carries its filename, the legend
+# names every subsystem, and tapping one isolates it.
+#
+# Re-check after any edit:
+#   node <dataviz-skill>/scripts/validate_palette.js "$(python3 -c '...')" \
+#        --mode dark --surface "#04100e"
+COLORS = ["#f25761", "#668bff", "#976705", "#236ade", "#c82c4a",
+          "#017ca7", "#c38608", "#7e50d1", "#57ac17", "#bb3285",
+          "#8c9006", "#dc5cb8", "#288802", "#ad4ec2", "#07ac8b",
+          "#ba4900", "#0ba2d1", "#e86904", "#ae6ff0", "#03856a"]
 
 # A file's header comment. Sources here open with an SPDX line, then the real
 # description in a // run or a /** @file */ block, so the FIRST comment is
@@ -127,8 +146,25 @@ def build(graph: dict, root: Path) -> dict:
     # Slots in sorted group order, so a rebuild does not reshuffle the colours.
     groups = sorted({n["grp"] for n in nodes})
     slots = {g: i for i, g in enumerate(groups)}
+    check_palette(slots)
     return {"nodes": nodes, "links": links, "syms": symbols(graph, set(files)),
             "slots": slots, "colors": COLORS}
+
+
+def check_palette(slots: dict) -> None:
+    """Fail the build when a subsystem would have to borrow another's colour.
+
+    The page indexes COLORS with `slots[g] % colors.length`, so a palette
+    shorter than the group list does not error -- it silently paints two
+    subsystems the same, which is how six of them came to share a colour with
+    another. Adding a directory under apps/, modules/ or ports/ is the way
+    this recurs, and it should stop the build rather than the reader.
+    """
+    if len(slots) > len(COLORS):
+        raise SystemExit(
+            f"graph3d: {len(slots)} subsystems but only {len(COLORS)} colours; "
+            f"{len(slots) - len(COLORS)} would reuse another subsystem's colour. "
+            "Extend COLORS and re-run the palette validator (see its comment).")
 
 
 # What the page shows as a file's API surface: one row per symbol, badged by
@@ -192,6 +228,7 @@ def load(source: Path, root: Path) -> dict:
         return build(data, root)
     # The palette is code, not data: a colour edit here should show on the next
     # build rather than waiting for someone to re-extract the graph.
+    check_palette(data["slots"])
     return data | {"colors": COLORS}
 
 
