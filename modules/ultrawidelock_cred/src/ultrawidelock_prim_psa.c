@@ -44,12 +44,19 @@ int ultrawidelock_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce
 	psa_aead_operation_t op = PSA_AEAD_OPERATION_INIT;
 	psa_key_id_t k = 0;
 	psa_algorithm_t alg = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, tag_len);
-	/* PSA permits a block backend to delay up to one block. Send the aligned
-	 * prefix straight to the caller and retain only the two possible tails;
-	 * the former one-shot path kept a 1040-byte ciphertext||tag scratch. */
-	uint8_t pending[ULTRAWIDELOCK_AES_BLOCK];
-	uint8_t final[ULTRAWIDELOCK_AES_BLOCK];
-	size_t bulk_len = pt_len & ~(size_t)(ULTRAWIDELOCK_AES_BLOCK - 1u);
+	/* PSA permits a block backend to delay up to one block, so every update
+	 * must be offered input_length + one block of output room -- not
+	 * input_length, which a strictly conforming backend refuses with
+	 * BUFFER_TOO_SMALL. ct holds exactly pt_len bytes, so the direct prefix
+	 * stops one block short of the end and that block is the headroom; the
+	 * remainder (under two blocks) goes through scratch. Still no
+	 * message-sized buffer: the former one-shot path kept 1040 bytes. */
+	uint8_t pending[3u * ULTRAWIDELOCK_AES_BLOCK];
+	uint8_t final[2u * ULTRAWIDELOCK_AES_BLOCK];
+	size_t bulk_len = (pt_len >= ULTRAWIDELOCK_AES_BLOCK)
+				  ? ((pt_len - ULTRAWIDELOCK_AES_BLOCK) &
+				     ~(size_t)(ULTRAWIDELOCK_AES_BLOCK - 1u))
+				  : 0u;
 	size_t tail_len = pt_len - bulk_len;
 	size_t bulk_out = 0;
 	size_t pending_len = 0;
@@ -72,8 +79,8 @@ int ultrawidelock_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce
 	    psa_aead_set_nonce(&op, nonce, nonce_len) == PSA_SUCCESS &&
 	    psa_aead_update_ad(&op, aad, aad_len) == PSA_SUCCESS &&
 	    (bulk_len == 0u ||
-	     psa_aead_update(&op, pt, bulk_len, ct, bulk_len, &bulk_out) == PSA_SUCCESS) &&
-	    bulk_out <= bulk_len &&
+	     psa_aead_update(&op, pt, bulk_len, ct, pt_len, &bulk_out) == PSA_SUCCESS) &&
+	    bulk_out <= pt_len &&
 	    (tail_len == 0u ||
 	     psa_aead_update(&op, pt + bulk_len, tail_len, pending, sizeof(pending),
 			     &pending_len) == PSA_SUCCESS) &&
@@ -103,11 +110,15 @@ int ultrawidelock_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce
 	psa_aead_operation_t op = PSA_AEAD_OPERATION_INIT;
 	psa_key_id_t k = 0;
 	psa_algorithm_t alg = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, tag_len);
-	/* See encrypt: an aligned direct prefix plus two block-sized tails meets
-	 * PSA's portable output-size contract without a message-sized scratch. */
-	uint8_t pending[ULTRAWIDELOCK_AES_BLOCK];
-	uint8_t final[ULTRAWIDELOCK_AES_BLOCK];
-	size_t bulk_len = ct_len & ~(size_t)(ULTRAWIDELOCK_AES_BLOCK - 1u);
+	/* See encrypt: the direct prefix stops one block short of the end so every
+	 * update has input_length + one block of output room, which is what PSA's
+	 * portable contract requires -- and still no message-sized scratch. */
+	uint8_t pending[3u * ULTRAWIDELOCK_AES_BLOCK];
+	uint8_t final[2u * ULTRAWIDELOCK_AES_BLOCK];
+	size_t bulk_len = (ct_len >= ULTRAWIDELOCK_AES_BLOCK)
+				  ? ((ct_len - ULTRAWIDELOCK_AES_BLOCK) &
+				     ~(size_t)(ULTRAWIDELOCK_AES_BLOCK - 1u))
+				  : 0u;
 	size_t tail_len = ct_len - bulk_len;
 	size_t bulk_out = 0;
 	size_t pending_len = 0;
@@ -129,8 +140,8 @@ int ultrawidelock_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce
 	    psa_aead_set_nonce(&op, nonce, nonce_len) == PSA_SUCCESS &&
 	    psa_aead_update_ad(&op, aad, aad_len) == PSA_SUCCESS &&
 	    (bulk_len == 0u ||
-	     psa_aead_update(&op, ct, bulk_len, pt, bulk_len, &bulk_out) == PSA_SUCCESS) &&
-	    bulk_out <= bulk_len &&
+	     psa_aead_update(&op, ct, bulk_len, pt, ct_len, &bulk_out) == PSA_SUCCESS) &&
+	    bulk_out <= ct_len &&
 	    (tail_len == 0u ||
 	     psa_aead_update(&op, ct + bulk_len, tail_len, pending, sizeof(pending),
 			     &pending_len) == PSA_SUCCESS) &&

@@ -328,6 +328,35 @@ void test_ultrawidelock_prim_psa(void)
 	psafake.verify_ret = PSA_ERROR_GENERIC;
 	T_EQ("bad signature -> -1", ultrawidelock_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
 	T_EQ("destroy after verify fail", (long)psafake.destroy_calls, 1L);
+
+	/* Against a backend that holds a block back, every psa_aead_update() must
+	 * be offered input_length + one block. Sizing the bulk output to the input
+	 * -- the obvious way to write this -- fails here at every length past one
+	 * block, which is why the direct prefix stops a block short of the end.
+	 * Lengths straddle each block boundary in both directions. */
+	{
+		static const size_t LENS[] = { 0u,	1u,   15u,  16u,   17u,	  31u,
+					       32u,	33u,  47u,  48u,   63u,	  64u,
+					       255u,	256u, 257u, 1023u, 1024u, 1025u };
+		uint8_t big[1025 + 16], big_ct[1025 + 16], big_pt[1025 + 16];
+
+		memset(big, 0xa5, sizeof(big));
+		for (size_t i = 0; i < sizeof(LENS) / sizeof(LENS[0]); i++) {
+			psafake_reset();
+			psafake.block_hold = 16u;
+			T_EQ("block-holding backend: encrypt",
+			     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, AAD, sizeof(AAD), big,
+						      LENS[i], big_ct, tag, 16),
+			     0);
+			psafake_reset();
+			psafake.block_hold = 16u;
+			T_EQ("block-holding backend: decrypt",
+			     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, AAD, sizeof(AAD),
+						      big_ct, LENS[i], tag, 16, big_pt),
+			     0);
+		}
+		psafake_reset();
+	}
 }
 
 int main(void)

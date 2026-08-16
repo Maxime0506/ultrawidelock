@@ -203,6 +203,10 @@ psa_status_t psa_aead_update(psa_aead_operation_t *operation, const uint8_t *inp
 	(void)operation;
 	psafake.aead_update_calls++;
 	psafake.last_in_len = input_length;
+	if (psafake.block_hold != 0u && output_size < input_length + psafake.block_hold) {
+		*output_length = 0u;
+		return PSA_ERROR_BUFFER_TOO_SMALL;
+	}
 	if (input_length <= output_size) {
 		memcpy(output, input, input_length);
 	}

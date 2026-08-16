@@ -18,6 +18,7 @@ typedef uint32_t psa_key_usage_t;
 
 #define PSA_SUCCESS       ((psa_status_t)0)
 #define PSA_ERROR_GENERIC ((psa_status_t)-132)
+#define PSA_ERROR_BUFFER_TOO_SMALL ((psa_status_t)-138)
 #define PSA_KEY_ID_NULL   ((psa_key_id_t)0)
 
 #define PSA_KEY_USAGE_ENCRYPT        ((psa_key_usage_t)0x00000100u)

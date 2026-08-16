@@ -79,6 +79,21 @@ struct psafake_state {
 	uint8_t replay_sig[64];
 	unsigned verify_rejects;
 
+	/* ---- portable output-size contract -----------------------------------
+	 *
+	 * The default fake copies input to output verbatim, so it accepts an
+	 * output buffer sized exactly to the input -- which a real backend need
+	 * not. PSA sizes psa_aead_update() output as
+	 * PSA_AEAD_UPDATE_OUTPUT_SIZE(), and for a block-buffering backend that
+	 * is input_length rounded up PLUS a block, because up to one block held
+	 * from an earlier call can flush on this one.
+	 *
+	 * With block_hold set, the fake demands that headroom and returns
+	 * BUFFER_TOO_SMALL without it, standing in for the conforming backend
+	 * this host build does not have. Only this knob catches a caller that
+	 * passes output_size == input_length. */
+	size_t block_hold;
+
 	uint32_t last_destroyed; /* key id handed to psa_destroy_key */
 	uint32_t last_alg;       /* alg argument of the last operation call */
 	size_t last_nonce_len, last_aad_len, last_in_len, last_random_len;

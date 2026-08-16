@@ -506,6 +506,15 @@ static enum ultrawidelock_dfu_err commit_now(bool reboot)
 	struct ultrawidelock_dfu_hdr hdr;
 
 	if (s_rx.staged) {
+		/* A COMMIT whose ack was lost gets retried. The header is already
+		 * written, so there is nothing to re-validate -- but returning OK
+		 * without re-arming the reboot leaves the host waiting forever for
+		 * an update it has in fact delivered. Scheduling is a no-op while
+		 * the work is armed, so the original deadline still stands and a
+		 * host repeating COMMIT cannot push the reboot out. */
+		if (reboot) {
+			(void)ultrawidelock_dwork_schedule(&s_reboot, 500);
+		}
 		return ULTRAWIDELOCK_DFU_ERR_OK;
 	}
 	if (!s_rx.active || !s_rx.erased || s_rx.got != s_rx.total) {
