@@ -23,6 +23,11 @@ struct psafake_state {
 	int32_t cipher_ret;
 	int32_t aead_enc_ret;
 	int32_t aead_dec_ret;
+	int32_t aead_setup_ret;
+	int32_t aead_lengths_ret;
+	int32_t aead_nonce_ret;
+	int32_t aead_ad_ret;
+	int32_t aead_update_ret;
 	int32_t generate_key_ret;
 	int32_t export_key_ret;
 	int32_t export_pub_ret;
@@ -33,6 +38,10 @@ struct psafake_state {
 	long cipher_olen;
 	long aead_enc_olen;
 	long aead_dec_olen;
+	long aead_update_olen;
+	long aead_finish_olen;
+	long aead_tag_olen;
+	long aead_verify_olen;
 	long export_olen;
 	long export_pub_olen;
 	long raw_ka_olen;
@@ -48,6 +57,8 @@ struct psafake_state {
 	size_t key_len;
 	unsigned init_calls, random_calls, import_calls, cipher_calls;
 	unsigned aead_enc_calls, aead_dec_calls, generate_calls;
+	unsigned aead_lengths_calls, aead_nonce_calls, aead_ad_calls, aead_update_calls;
+	unsigned aead_finish_calls, aead_verify_calls, aead_abort_calls;
 	unsigned export_calls, export_pub_calls, raw_ka_calls;
 	unsigned sign_calls, verify_calls, destroy_calls;
 	/* ---- replayed ECDSA verification -------------------------------------

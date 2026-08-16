@@ -25,3 +25,10 @@ missing colour, UTF-8, width or `$TERM`.
 Prefer a documented Make target when one exists. Run `make help` to see the
 supported interface and required variables. Use `make hitl` for `hitl-run.sh`;
 pass its optional flags through `HITL_ARGS`.
+
+The native BLE delta-update protocol is version 2. Every request carries a
+nonzero transfer ID, DATA also carries its absolute offset, and each successful
+reply echoes the transfer ID plus the receiver's next offset. Retrying an
+unchanged frame after a lost notification is therefore safe. Version-2 request
+opcodes are `0x11` through `0x14`; they intentionally do not overlap the old
+transfer-blind protocol, so a mixed host and firmware pair fails loudly.

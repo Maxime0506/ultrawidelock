@@ -50,6 +50,12 @@ bool matter_commission_has_fabric(void);
  */
 bool matter_commission_window_open(void);
 
+/**
+ * Finish the one packet previously accepted by the Matter BLE transport.
+ * Called exactly once by the transport after final confirmation or failure.
+ */
+void matter_commission_ble_tx_complete(int status);
+
 #ifdef __cplusplus
 }
 #endif

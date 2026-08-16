@@ -339,6 +339,65 @@ static void fill_info(struct matter_device_info *info)
 	info->supports_concurrent_connection = true;
 }
 
+static void test_read_cursor_owner(void)
+{
+	struct matter_im_read_state slots[2];
+	struct matter_im_read_pool pool;
+	struct matter_im_read_state *a = NULL;
+	struct matter_im_read_state *b = NULL;
+	struct matter_im_read_state *again = NULL;
+
+	t_group("bounded chunked-Read cursor owner");
+	T_EQ("cursor pool initializes", matter_im_read_pool_init(&pool, slots, 2u), MATTER_OK);
+	T_EQ("first Read acquires",
+	     matter_im_read_pool_acquire(&pool, 0x1001u, 0x2001u, true, &a), MATTER_OK);
+	T_EQ("second Read acquires",
+	     matter_im_read_pool_acquire(&pool, 0x1002u, 0x2002u, true, &b), MATTER_OK);
+	T_OK("two Reads own distinct cursors", a != NULL && b != NULL && a != b);
+	a->sent = 7u;
+	T_EQ("retransmit is identified",
+	     matter_im_read_pool_acquire(&pool, 0x1001u, 0x2001u, true, &again), MATTER_E_DUP);
+	T_OK("retransmit keeps the same cursor", again == a && again->sent == 7u);
+	T_EQ("third live Read is bounded",
+	     matter_im_read_pool_acquire(&pool, 0x1003u, 0x2003u, true, &again),
+	     MATTER_E_NOSPACE);
+
+	T_EQ("wrong session cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x9999u, 0x2001u, true, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong exchange cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x9999u, true, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong transport cannot advance",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, false, 3u, true, MATTER_OK),
+	     MATTER_E_STATE);
+	T_EQ("wrong completions leave cursor untouched", a->sent, 7u);
+	T_EQ("accepted intermediate chunk advances once",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 3u, true, MATTER_OK),
+	     MATTER_OK);
+	T_OK("intermediate cursor stays live", a->in_use && a->more && a->sent == 10u);
+	T_EQ("accepted final chunk releases",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 2u, false, MATTER_OK),
+	     MATTER_OK);
+	T_OK("final cursor is free", !a->in_use);
+	T_EQ("duplicate completion cannot advance a freed cursor",
+	     matter_im_read_pool_finish(&pool, 0x1001u, 0x2001u, true, 2u, false, MATTER_OK),
+	     MATTER_E_STATE);
+
+	T_EQ("released cursor can be reused",
+	     matter_im_read_pool_acquire(&pool, 0x1004u, 0x2004u, false, &a), MATTER_OK);
+	T_EQ("transport rejection releases its cursor",
+	     matter_im_read_pool_finish(&pool, 0x1004u, 0x2004u, false, 0u, false,
+					MATTER_E_STATE),
+	     MATTER_OK);
+	T_OK("rejected cursor is gone",
+	     matter_im_read_pool_find(&pool, 0x1004u, 0x2004u, false) == NULL);
+	matter_im_read_pool_drop_session(&pool, 0x1002u, false);
+	T_OK("wrong-transport cleanup preserves cursor", b->in_use);
+	matter_im_read_pool_drop_session(&pool, 0x1002u, true);
+	T_OK("matching session cleanup releases cursor", !b->in_use);
+}
+
 void test_matter_im(void)
 {
 	struct matter_im_read req;
@@ -352,6 +411,8 @@ void test_matter_im(void)
 	uint64_t revision = 0u;
 	const struct rep *r;
 	int n;
+
+	test_read_cursor_owner();
 
 	/* ------------------------------------------------ decoding the read --- */
 
@@ -1967,18 +2028,10 @@ void test_matter_im_events(void)
 		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_E_NOSPACE);
 	}
 
-	/*
-	 * The buffer matter_commission.c reports from. A full ring plus the
-	 * LockState attribute has to fit, or a walk-up during a busy minute
-	 * silently reports nothing at all.
-	 */
-	t_group("a full ring still fits the notify buffer");
+	/* Keep the complete event ring compact even though the application now
+	 * encodes directly into an owned full-size packet. */
+	t_group("a full event ring remains compact");
 	{
-		/* The size of s_notify_tlv in matter_commission.c. Stated here
-		 * rather than shared, because the app header is not on this
-		 * suite's include path -- and a mismatch shows up as this test
-		 * passing while the board's buffer is smaller, so the number is
-		 * named in both comments. */
 		uint8_t notify[256];
 		unsigned int i;
 

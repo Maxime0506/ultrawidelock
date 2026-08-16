@@ -510,7 +510,7 @@ int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *
 	otMessageInfo info;
 	otMessage *out;
 
-	if (peer == NULL || !peer->valid || msg == NULL || len == 0u || ot == NULL || !s_udp_open) {
+	if (peer == NULL || !peer->valid || msg == NULL || len == 0u || ot == NULL) {
 		return MATTER_E_STATE;
 	}
 
@@ -524,8 +524,18 @@ int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *
 	 * source is how a datagram leaves and is never answered.
 	 */
 
+	/* Zephyr's OpenThread contract requires its mutex around every OT API.
+	 * The socket-open flag is protected by that same mutex when bind publishes
+	 * it, so read it only after acquiring the lock too. Owner -> OT is safe:
+	 * the OT receive callback never waits for the Matter owner. */
+	openthread_mutex_lock();
+	if (!s_udp_open) {
+		openthread_mutex_unlock();
+		return MATTER_E_STATE;
+	}
 	out = otUdpNewMessage(ot, NULL);
 	if (out == NULL) {
+		openthread_mutex_unlock();
 		LOG_ERR("no message buffer for an unsolicited send");
 		return MATTER_E_NOSPACE;
 	}
@@ -533,9 +543,11 @@ int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *
 	    otUdpSend(ot, &s_udp, out, &info) != OT_ERROR_NONE) {
 		/* otUdpSend takes ownership on success only. */
 		otMessageFree(out);
+		openthread_mutex_unlock();
 		LOG_ERR("unsolicited %u B send failed", (unsigned int)len);
 		return MATTER_E_STATE;
 	}
+	openthread_mutex_unlock();
 	LOG_DBG("sent %u B unsolicited", (unsigned int)len);
 	return MATTER_OK;
 }
@@ -546,6 +558,38 @@ int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *
  * buffers sized for Sigma3 (RX) and full subscription reports (reply) respectively. Temporarily
  * publishes the peer address so the Matter handler can discover where traffic arrived from.
  */
+static int udp_reply_send(void *ctx, const uint8_t *reply, size_t reply_len)
+{
+	const otMessageInfo *request_info = ctx;
+	otMessageInfo reply_info;
+	otMessage *out;
+
+	if (request_info == NULL) {
+		return MATTER_E_STATE;
+	}
+	/* Reply to where the datagram came from. The source address is copied too,
+	 * so a commissioner reached through a border router gets an answer on the
+	 * same route. This runs inside udp_rx while request_info is still valid. */
+	memset(&reply_info, 0, sizeof(reply_info));
+	reply_info.mPeerAddr = request_info->mPeerAddr;
+	reply_info.mPeerPort = request_info->mPeerPort;
+	reply_info.mSockAddr = request_info->mSockAddr;
+	out = otUdpNewMessage(openthread_get_default_instance(), NULL);
+	if (out == NULL) {
+		LOG_ERR("  no message buffer for the reply");
+		return MATTER_E_NOSPACE;
+	}
+	if (otMessageAppend(out, reply, (uint16_t)reply_len) != OT_ERROR_NONE ||
+	    otUdpSend(openthread_get_default_instance(), &s_udp, out, &reply_info) !=
+		    OT_ERROR_NONE) {
+		/* otUdpSend takes ownership on success only. */
+		otMessageFree(out);
+		LOG_ERR("  reply could not be sent");
+		return MATTER_E_STATE;
+	}
+	return MATTER_OK;
+}
+
 static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 {
 	/*
@@ -568,8 +612,6 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 	 * copy it out, which reads in the log as "needs 1513 B, have 1024".
 	 */
 	static uint8_t reply[MATTER_THREAD_REPLY_MAX];
-	otMessageInfo reply_info;
-	otMessage *out;
 	size_t reply_len;
 	uint16_t len = otMessageGetLength(msg) - otMessageGetOffset(msg);
 
@@ -596,7 +638,8 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 	s_cur_peer.port = info->mPeerPort;
 	s_cur_peer.valid = true;
 
-	reply_len = matter_thread_on_datagram(buf, len, reply, sizeof(reply));
+	reply_len = matter_thread_on_datagram(buf, len, reply, sizeof(reply), udp_reply_send,
+					      (void *)info);
 
 	s_cur_peer.valid = false;
 
@@ -604,31 +647,6 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 		return;
 	}
 
-	/*
-	 * Replying to where it came FROM, rather than to the address SRP
-	 * published. They are the same today and need not be: a commissioner
-	 * behind a border router reaches this node from whichever of its
-	 * addresses routes, and answering anywhere else answers a different
-	 * peer.
-	 */
-	memset(&reply_info, 0, sizeof(reply_info));
-	reply_info.mPeerAddr = info->mPeerAddr;
-	reply_info.mPeerPort = info->mPeerPort;
-	reply_info.mSockAddr = info->mSockAddr;
-
-	out = otUdpNewMessage(openthread_get_default_instance(), NULL);
-	if (out == NULL) {
-		LOG_ERR("  no message buffer for the reply");
-		return;
-	}
-	if (otMessageAppend(out, reply, (uint16_t)reply_len) != OT_ERROR_NONE ||
-	    otUdpSend(openthread_get_default_instance(), &s_udp, out, &reply_info) !=
-		    OT_ERROR_NONE) {
-		/* otUdpSend takes ownership on success only. */
-		otMessageFree(out);
-		LOG_ERR("  reply could not be sent");
-		return;
-	}
 	LOG_DBG("  replied %u B", (unsigned int)reply_len);
 }
 

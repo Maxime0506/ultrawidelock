@@ -16,6 +16,7 @@
  */
 
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/uuid.h>
@@ -77,7 +78,8 @@ static int dfu_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	size_t rsp_len = 0;
 	struct net_buf *out;
 
-	(void)ultrawidelock_dfu_rx_frame(buf->data, buf->len, rsp, &rsp_len);
+	(void)ultrawidelock_dfu_rx_frame(ULTRAWIDELOCK_DFU_OWNER_L2CAP, buf->data, buf->len,
+					 rsp, &rsp_len);
 	if (rsp_len == 0U) {
 		return 0;
 	}
@@ -117,7 +119,7 @@ static void dfu_disconnected(struct bt_l2cap_chan *chan)
 	/* A dropped connection mid-transfer leaves staged bytes with no header
 	 * in front of them, which the bootloader ignores. Reset anyway so the
 	 * next attempt starts clean rather than resuming someone else's. */
-	ultrawidelock_dfu_rx_reset();
+	ultrawidelock_dfu_rx_reset(ULTRAWIDELOCK_DFU_OWNER_L2CAP);
 	LOG_INF("update channel closed");
 }
 
@@ -174,9 +176,9 @@ static struct bt_l2cap_server s_dfu_server = {
  * only cross-platform option -- wraps neither. So a bench tool on a Mac cannot
  * drive the CoC at all, and an update path nobody can invoke is not one.
  *
- * This costs almost nothing because the receiver was written transport-blind:
- * both paths hand the same bytes to ultrawidelock_dfu_rx_frame() and neither knows the
- * other exists.
+ * This costs almost nothing because both paths use the same parser. They pass
+ * distinct owner IDs so one endpoint cannot reset or overwrite the other's
+ * in-progress transfer.
  *
  * ONE HONEST DIFFERENCE. The CoC refuses the connection outright when no window
  * is open, so none of the receiver's state is reachable. A GATT write always
@@ -224,12 +226,23 @@ static ssize_t dfu_gatt_write(struct bt_conn *conn, const struct bt_gatt_attr *a
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
 	}
 
-	(void)ultrawidelock_dfu_rx_frame(buf, len, rsp, &rsp_len);
+	(void)ultrawidelock_dfu_rx_frame(ULTRAWIDELOCK_DFU_OWNER_GATT, buf, len, rsp, &rsp_len);
 	if (rsp_len > 0U) {
 		(void)bt_gatt_notify(conn, &s_dfu_gatt.attrs[1], rsp, rsp_len);
 	}
 	return (ssize_t)len;
 }
+
+static void dfu_gap_disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	ARG_UNUSED(conn);
+	ARG_UNUSED(reason);
+	ultrawidelock_dfu_rx_reset(ULTRAWIDELOCK_DFU_OWNER_GATT);
+}
+
+BT_CONN_CB_DEFINE(dfu_conn_callbacks) = {
+	.disconnected = dfu_gap_disconnected,
+};
 
 /* ---- the trigger ---------------------------------------------------------- */
 /*

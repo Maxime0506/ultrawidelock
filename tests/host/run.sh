@@ -139,12 +139,15 @@ stage_nfc_ecp() {
 stage_cdk_port() {
 	# shellcheck disable=SC2086
 	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra $gcc_parity $san_flags \
-		-DCONFIG_LOG_DEFAULT_LEVEL=3 \
+		-DCONFIG_LOG_DEFAULT_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_PROV_CLEAR_ON_BOOT=0 \
 		-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
-		-I"$ROOT/modules/ultrawidelock_matter/include" -I"$ROOT/ports/zephyr/store" \
+		-I"$ROOT/modules/ultrawidelock_matter/include" \
+		-I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/ports/zephyr/store" \
 		"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
 		"$HOSTD/settingsfake/settingsfake.c" \
 		"$ROOT/ports/zephyr/store/matter_fab_settings.c" \
+		"$ROOT/ports/zephyr/store/ultrawidelock_prov_settings.c" \
+		"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prov.c" \
 		-o "$ROOT/build/host_test_cdk"
 	"$ROOT/build/host_test_cdk"
 }
