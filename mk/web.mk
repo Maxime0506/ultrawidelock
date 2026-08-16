@@ -158,7 +158,8 @@ docs-deps:
 GRAPH3D_URL ?= https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js
 docs-graph3d:
 	@mkdir -p $(REPO_ROOT)/web/vendor
-	@curl -sSLf -o $(REPO_ROOT)/web/vendor/3d-force-graph.min.js '$(GRAPH3D_URL)'
+	@curl -sSLf --retry 3 --retry-connrefused --retry-delay 2 \
+	  -o $(REPO_ROOT)/web/vendor/3d-force-graph.min.js '$(GRAPH3D_URL)'
 	@printf '  vendored web/vendor/3d-force-graph.min.js (%s KB)\n' \
 	  "$$(( $$(wc -c <$(REPO_ROOT)/web/vendor/3d-force-graph.min.js) / 1024 ))"
 	@printf '  `make docs` now builds the 3D graph from web/graph/files.json\n'
