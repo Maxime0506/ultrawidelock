@@ -3,9 +3,12 @@
 <head>
 @@HEAD@@
 </head>
-<body>
+<body class="landing-page">
 <a class="skip" href="#main">Skip to content</a>
 @@NAV@@
+
+<canvas id="uwb-field" class="uwb-field" aria-hidden="true"></canvas>
+<div class="uwb-vignette" aria-hidden="true"></div>
 
 <main id="main">
 
@@ -17,12 +20,11 @@
   <div class="hero-copy">
     <div>
       <span class="eyebrow">UWB &middot; NFC &middot; Matter</span>
-      <h1>A lock that measures the distance instead of trusting it.</h1>
+      <h1 class="hero-wordmark" aria-label="UltraWideLock">
+        <span class="word-ultra">UltraWide</span><span class="word-lock">Lock</span>
+      </h1>
+      <p class="hero-tagline">Walk up. <strong>It Unlocks.</strong></p>
     </div>
-    <p class="lede">UltraWideLock implements Aliro, the CSA's door-lock credential standard:
-    BLE, NFC over ECP, and UWB ranging. Distance comes from time of flight
-    under a rotating STS session, so a relay cannot shorten it. One nRF52833 runs the
-    reader, the radio and a Matter node at once.</p>
     <div class="cta">
       <a class="btn btn-primary" href="#install">Get started</a>
       <a class="btn" href="docs/index.html">Read the guides</a>
@@ -31,9 +33,11 @@
   </div>
 
   <div class="scope-band">
-    <div class="scope-in">
+    <div class="scope-in glass-panel">
       <div class="scope-head">
-        <span>DS-TWR round</span><span class="sp"></span>
+        <span>DS-TWR round</span>
+        <span class="scope-live"><i aria-hidden="true"></i>live measurement</span>
+        <span class="sp"></span>
         <span class="hide-narrow">drag the phone &middot; or use the slider</span>
       </div>
 
@@ -123,6 +127,14 @@
 
         <rect id="hs-hit" x="0" y="0" width="960" height="268" fill="transparent"/>
       </svg>
+      </div>
+
+      <div class="phase-track" aria-hidden="true">
+        <span class="phase-chip is-done" id="hs-phase-ble"><i>01</i> BLE</span>
+        <span class="phase-chip is-done" id="hs-phase-auth"><i>02</i> authenticate</span>
+        <span class="phase-chip is-done" id="hs-phase-uwb"><i>03</i> range</span>
+        <span class="phase-chip is-done" id="hs-phase-gate"><i>04</i> gate</span>
+        <span class="phase-chip is-active" id="hs-phase-matter"><i>05</i> Matter</span>
       </div>
 
       <div class="scope-ctl">
