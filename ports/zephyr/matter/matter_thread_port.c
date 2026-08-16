@@ -912,6 +912,45 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	err = srp_host_register(ot);
 	if (err == OT_ERROR_NONE) {
 		err = otSrpClientAddService(ot, &reg->service);
+		if (err == OT_ERROR_ALREADY) {
+			/*
+			 * THE SLOT IS STILL IN OPENTHREAD'S OWN LIST, and without
+			 * this nothing ever gets it out again.
+			 *
+			 * matter_thread_advertise_reset() memsets s_regs while the
+			 * retraction it just started is still in flight, so the
+			 * otSrpClientService living inside each slot is zeroed while
+			 * mServices still points at it. Reusing the slot refills that
+			 * same struct, and AddService then compares the entry against
+			 * ITSELF -- Client::Service::Matches is service+instance name
+			 * equality, and both sides are the name just written here --
+			 * so it returns ALREADY (srp_client.cpp:765).
+			 *
+			 * Nothing recovers on its own. The error path below leaves
+			 * `used` false, the slot search above therefore hands the NEXT
+			 * fabric the same struct, and every registration for the rest
+			 * of the boot is refused identically.
+			 *
+			 * MEASURED 2026-08-16: five "SRP registration refused (24)"
+			 * and not one _matter._tcp instance published, on a node that
+			 * had just committed a fabric over a healthy CASE session.
+			 * The commissioner could not resolve what it had just added,
+			 * so the Home app sat on "Adding to Home" until the board was
+			 * rebooted -- which cured it only because a boot starts with
+			 * an empty client list.
+			 *
+			 * otSrpClientClearService is the documented way back: it drops
+			 * the entry locally BY POINTER (mServices.Remove) and the
+			 * header explicitly blesses reusing the same struct in a
+			 * following AddService (srp_client.h:566). It costs nothing on
+			 * the server -- the retraction for the OLD name was already
+			 * sent by otSrpClientRemoveHostAndServices(..., true, true).
+			 */
+			LOG_WRN("SRP entry for %s was still held; clearing and re-adding",
+				reg->instance_name);
+			(void)otSrpClientClearService(ot, &reg->service);
+			err = otSrpClientAddService(ot, &reg->service);
+		}
 	}
 	if (err == OT_ERROR_NONE) {
 		/* Finds the border router's SRP server itself, from the network
