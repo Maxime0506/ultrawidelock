@@ -66,6 +66,7 @@ int main(void)
 		{ "ultrawidelock_side_replay", test_ultrawidelock_side_replay },
 		{ "ultrawidelock_slam", test_ultrawidelock_slam },
 		{ "approach", test_approach },
+		{ "grant", test_grant },
 		{ "logfmt", test_ultrawidelock_logfmt },
 		{ "trace", test_trace },
 		{ "ccc_shim_wrap", test_ccc_shim_wrap },
