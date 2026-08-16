@@ -22,6 +22,10 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_GESTURE)
+#include <zephyr/retention/bootmode.h>
+#include <zephyr/sys/reboot.h>
+#endif
 
 #include "ultrawidelock_dfu_rx.h"
 
@@ -247,6 +251,33 @@ static ssize_t dfu_gatt_write(struct bt_conn *conn, const struct bt_gatt_attr *a
 static const struct gpio_dt_spec s_button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static struct gpio_callback s_button_cb;
 
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_GESTURE)
+/**
+ * Enter MCUboot only if SW2 stayed active for the complete hold. The delayed
+ * work never sleeps the system queue. A released short press simply leaves the
+ * application DFU window open.
+ */
+static void recovery_hold_work_fn(struct k_work *work)
+{
+	int rc;
+
+	ARG_UNUSED(work);
+	if (gpio_pin_get_dt(&s_button) != 1) {
+		return;
+	}
+
+	rc = bootmode_set(BOOT_MODE_TYPE_BOOTLOADER);
+	if (rc != 0) {
+		LOG_ERR("cannot request MCUboot recovery (%d)", rc);
+		return;
+	}
+
+	LOG_WRN("SW2 held: entering MCUboot serial recovery");
+	sys_reboot(SYS_REBOOT_WARM);
+}
+static K_WORK_DELAYABLE_DEFINE(s_recovery_hold_work, recovery_hold_work_fn);
+#endif
+
 /**
  * Work item handler for the DFU button press. Opens a DFU window for the duration specified by
  * CONFIG_ULTRAWIDELOCK_DFU_WINDOW_MS.
@@ -270,6 +301,10 @@ static void button_pressed(const struct device *dev, struct gpio_callback *cb,
 	ARG_UNUSED(pins);
 	/* Off the ISR: opening the window logs and touches a work queue. */
 	(void)k_work_submit(&s_button_work);
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_GESTURE)
+	(void)k_work_reschedule(&s_recovery_hold_work,
+				K_MSEC(CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_HOLD_MS));
+#endif
 }
 
 /**
@@ -306,5 +341,9 @@ int dfu_ble_start(void)
 
 	LOG_INF("update channel ready on PSM 0x%04x, press SW2 to open a window",
 		DFU_L2CAP_PSM);
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_GESTURE)
+	LOG_INF("hold SW2 for %u ms to enter MCUboot recovery",
+		(unsigned int)CONFIG_ULTRAWIDELOCK_MCUBOOT_RECOVERY_HOLD_MS);
+#endif
 	return 0;
 }

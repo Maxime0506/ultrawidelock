@@ -1223,6 +1223,47 @@ int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, s
 	return matter_tlv_writer_finish(&w, out_len);
 }
 
+int matter_im_status_response_decode(const uint8_t *buf, size_t len, uint8_t *status)
+{
+	struct matter_tlv_reader r;
+	bool found = false;
+	int rc;
+
+	if (buf == NULL || status == NULL || len == 0u) {
+		return MATTER_E_INVAL;
+	}
+	matter_tlv_reader_init(&r, buf, len);
+	rc = matter_tlv_next(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		uint64_t v;
+
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_STATUS_STATUS)) {
+			rc = matter_tlv_get_u64(&r, &v);
+			if (rc != MATTER_OK || v > UINT8_MAX) {
+				return MATTER_E_INVAL;
+			}
+			*status = (uint8_t)v;
+			found = true;
+		}
+	}
+	rc = matter_tlv_exit(&r);
+	return rc == MATTER_OK && found ? MATTER_OK : (rc != MATTER_OK ? rc : MATTER_E_INVAL);
+}
+
 /* TimedRequestMessage.h: one field, the timeout in milliseconds. */
 #define TAG_TIMED_TIMEOUT_MS 0u
 

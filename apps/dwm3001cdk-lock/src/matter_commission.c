@@ -112,34 +112,6 @@ static struct matter_im_server s_im;
  * 128 bytes. Encryption adds MATTER_TAG_LEN on top of the cleartext.
  */
 /*
- * Sized by the whole data model in one message, not by any single attribute: a
- * controller reads and subscribes to everything the moment it owns the node.
- * A report that does not fit is not truncated, it is refused -- so undersizing
- * this produces a subscription that establishes and then never reports, and a
- * read that is answered with nothing at all.
- *
- * Raised 1536 -> 2048 when endpoint 1 landed. The host assertion that used to
- * guard this named ENDPOINT 0, so it measured part of the answer and passed
- * while the real full-wildcard report -- every endpoint, which is what a
- * controller actually asks for -- had already outgrown the buffer.
- * tests/host/test_matter_im.c now asserts the wildcard with no endpoint too.
- *
- * The subscription path chunks and so survives any size; the READ path
- * (on_read_request) does not, and this buffer is the whole of its ceiling.
- * Chunking reads is the real fix and is still owed.
- *
- * Raised 2048 -> 3072 when the Door Lock globals and the Approach Direction
- * cluster landed: the uncommissioned full-wildcard report measured 2069 B on
- * the host, and a commissioned node's fabric data has previously added ~420 B
- * on top of the fixture's number.
- */
-#define MATTER_REPORT_MAX 3072u
-static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
-
-/** The Interaction Model payload, before framing. */
-static uint8_t s_report[MATTER_REPORT_MAX];
-
-/*
  * The largest IM payload that still fits one Thread datagram.
  *
  * MATTER_MAX_MESSAGE_LEN is the ceiling for the WHOLE message -- the 1280 byte
@@ -155,6 +127,15 @@ static uint8_t s_report[MATTER_REPORT_MAX];
  */
 #define MATTER_IM_PAYLOAD_MAX                                                                      \
 	(MATTER_MAX_MESSAGE_LEN - MATTER_EXCHANGE_HEADER_MAX - MATTER_TAG_LEN)
+
+/* Reads and subscriptions both stream through the portable report cursor, so
+ * neither scratch buffer needs to hold the whole data model. Together these
+ * exact ceilings replace the former pair of 3072-byte buffers. */
+#define MATTER_REPORT_MAX MATTER_IM_PAYLOAD_MAX
+static uint8_t s_out[MATTER_MAX_MESSAGE_LEN];
+
+/** One Interaction Model payload, before framing. */
+static uint8_t s_report[MATTER_REPORT_MAX];
 
 /*
  * The Thread transport's reply buffer is exactly this ceiling, and it is sized
@@ -833,6 +814,7 @@ static uint8_t s_case_next_victim;
  * table below; declared here because eviction is what makes it necessary.
  */
 static void sub_drop_session(uint16_t session_id);
+static void read_drop_session(uint16_t session_id, bool over_thread);
 
 /** The slot holding @p session_id, or MATTER_CASE_SESSIONS if none does. */
 static uint8_t case_slot_of(uint16_t session_id)
@@ -872,6 +854,7 @@ static uint8_t case_alloc_slot(void)
 	 * subscription behind would hold a slot for a peer that can no longer be
 	 * reached, and answer its StatusResponses to a session that is gone. */
 	sub_drop_session(s_case_x[i].local_session_id);
+	read_drop_session(s_case_x[i].local_session_id, true);
 	return i;
 }
 
@@ -1023,7 +1006,7 @@ static void fab_store_work_fn(struct k_work *w)
  * BLE, send via matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors
  * if framing fails or the buffer is too small.
  */
-static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
+static int send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
 	struct matter_exchange *x =
 		(s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange;
@@ -1034,36 +1017,130 @@ static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 				  sizeof(s_out), &framed);
 	if (rc != MATTER_OK) {
 		LOG_ERR("framing IM opcode 0x%02x rc=%d (%u B)", opcode, rc, (unsigned int)len);
-		return;
+		return rc;
 	}
 
 	if (s_thread_reply != NULL) {
 		if (framed > s_thread_reply_cap) {
 			LOG_ERR("IM opcode 0x%02x needs %u B, have %u", opcode, (unsigned int)framed,
 				(unsigned int)s_thread_reply_cap);
-			return;
+			return MATTER_E_NOSPACE;
 		}
 		memcpy(s_thread_reply, s_out, framed);
 		s_thread_reply_len = framed;
 		LOG_DBG("  IM opcode 0x%02x staged over CASE, %u B", opcode, (unsigned int)framed);
-		return;
+		return MATTER_OK;
 	}
 
 	rc = matter_ble_send(s_out, framed);
 	LOG_DBG("IM opcode 0x%02x: %u B payload, %u B sealed, rc=%d", opcode, (unsigned int)len,
 		(unsigned int)framed, rc);
+	return rc;
 }
 
+static uint16_t current_session_id(void);
+
 /**
- * Answer a ReadRequest.
+ * A plain Read that spans multiple ReportData messages.
  *
- * Kept static rather than on the stack: the request holds up to
- * MATTER_IM_MAX_PATHS paths and the report another half kilobyte, and this runs
- * on the Matter work queue, whose size is still an argument rather than a
- * measurement (see CONFIG_ULTRAWIDELOCK_MATTER_BLE_WQ_STACK). Only one commissioner is
- * ever served at a time, so one of each is enough.
+ * Slots are keyed by secure session and exchange. Two simultaneous chunked
+ * reads are bounded explicitly; a third receives RESOURCE_EXHAUSTED instead
+ * of choosing the amount of static RAM this lock spends.
  */
-static struct matter_im_read s_read;
+struct read_state {
+	struct matter_im_read read;
+	uint16_t session_id;
+	uint16_t exchange_id;
+	uint16_t sent;
+	bool more;
+	bool in_use;
+	bool over_thread;
+};
+
+#define MATTER_READ_SLOTS 2u
+static struct read_state s_reads[MATTER_READ_SLOTS];
+
+static struct read_state *read_state_find(uint16_t session_id, uint16_t exchange_id,
+					  bool over_thread)
+{
+	for (uint8_t i = 0u; i < MATTER_READ_SLOTS; i++) {
+		if (s_reads[i].in_use && s_reads[i].session_id == session_id &&
+		    s_reads[i].exchange_id == exchange_id &&
+		    s_reads[i].over_thread == over_thread) {
+			return &s_reads[i];
+		}
+	}
+	return NULL;
+}
+
+static struct read_state *read_state_alloc(uint16_t session_id, uint16_t exchange_id,
+					   bool over_thread)
+{
+	struct read_state *s = read_state_find(session_id, exchange_id, over_thread);
+
+	if (s != NULL) {
+		return s;
+	}
+	for (uint8_t i = 0u; i < MATTER_READ_SLOTS; i++) {
+		if (!s_reads[i].in_use) {
+			return &s_reads[i];
+		}
+	}
+	return NULL;
+}
+
+static void read_drop_session(uint16_t session_id, bool over_thread)
+{
+	for (uint8_t i = 0u; i < MATTER_READ_SLOTS; i++) {
+		if (s_reads[i].in_use && s_reads[i].session_id == session_id &&
+		    s_reads[i].over_thread == over_thread) {
+			s_reads[i].in_use = false;
+		}
+	}
+}
+
+/** Send the next bounded ReportData message for a plain Read. */
+static void send_read_chunk(struct read_state *s)
+{
+	struct matter_im_report_stats stats;
+	size_t report_len = 0u;
+	uint16_t emitted = 0u;
+	bool more = false;
+	int rc;
+
+	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, s_report,
+					 MATTER_IM_PAYLOAD_MAX, &report_len, &more, &emitted,
+					 &stats);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot build Read ReportData chunk (%d)", rc);
+		s->in_use = false;
+		return;
+	}
+	if (emitted == 0u && more) {
+		LOG_ERR("a single Read attribute does not fit one Matter message");
+		s->in_use = false;
+		return;
+	}
+	if (stats.unexpanded_wildcard > 0u) {
+		LOG_WRN("%u wildcard path(s) not expanded; Read report is incomplete",
+			stats.unexpanded_wildcard);
+	}
+	LOG_INF("  Read chunk %u B, %u report(s), %u total, %s",
+		(unsigned int)report_len, emitted, (unsigned int)(s->sent + emitted),
+		more ? "MORE" : "last");
+	if (send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len) != MATTER_OK) {
+		LOG_ERR("Read ReportData was not accepted by its transport");
+		s->in_use = false;
+		return;
+	}
+	s->sent = (uint16_t)(s->sent + emitted);
+	s->more = more;
+	if (!more) {
+		/* The final plain-Read report suppresses StatusResponse, so no later
+		 * message is expected to release this slot. */
+		s->in_use = false;
+	}
+}
 
 /**
  * Handle an incoming Matter ReadRequest. Decodes the paths being read, logs them per session type
@@ -1072,21 +1149,40 @@ static struct matter_im_read s_read;
  */
 static void on_read_request(const struct matter_exchange_in *in)
 {
-	struct matter_im_report_stats stats;
-	size_t report_len = 0u;
+	struct read_state *s;
+	uint16_t session_id;
+	bool over_thread = s_thread_reply != NULL;
+	size_t status_len = 0u;
 	int rc;
 
-	rc = matter_im_read_request_decode(in->payload, in->payload_len, &s_read);
+	session_id = current_session_id();
+	s = read_state_alloc(session_id, in->exchange_id, over_thread);
+	if (s == NULL) {
+		LOG_WRN("two chunked Reads are already live; refusing another");
+		if (matter_im_status_response_encode(MATTER_IM_STATUS_RESOURCE_EXHAUSTED,
+						     s_report, sizeof(s_report), &status_len) ==
+		    MATTER_OK) {
+			(void)send_im(MATTER_IM_OP_STATUS_RESPONSE, s_report, status_len);
+		}
+		return;
+	}
+	memset(s, 0, sizeof(*s));
+	s->session_id = session_id;
+	s->exchange_id = in->exchange_id;
+	s->over_thread = over_thread;
+	s->in_use = true;
+	rc = matter_im_read_request_decode(in->payload, in->payload_len, &s->read);
 	if (rc != MATTER_OK) {
 		LOG_WRN("unreadable ReadRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		s->in_use = false;
 		return;
 	}
 
 	/* What was asked, not just how much. Which paths a commissioner reads is
 	 * the specification for what to implement next, and reading it out of a
 	 * hexdump by hand has already cost more than this line does. */
-	for (uint8_t i = 0; i < s_read.n_paths; i++) {
-		const struct matter_im_path *p = &s_read.paths[i];
+	for (uint8_t i = 0; i < s->read.n_paths; i++) {
+		const struct matter_im_path *p = &s->read.paths[i];
 
 		/*
 		 * Loud only over CASE. The BLE phase is settled and its three
@@ -1106,22 +1202,7 @@ static void on_read_request(const struct matter_exchange_in *in)
 			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
 	}
 
-	rc = matter_im_report_data_encode(&s_im, &s_read, s_report, sizeof(s_report), &report_len,
-					  &stats);
-	if (rc != MATTER_OK) {
-		LOG_ERR("cannot build ReportData for %u paths (%d)", s_read.n_paths, rc);
-		return;
-	}
-	if (stats.unexpanded_wildcard > 0u) {
-		/* Loud on purpose: the answer went out short, and to the
-		 * commissioner that is indistinguishable from an empty cluster. */
-		LOG_WRN("%u wildcard path(s) not expanded; report is incomplete",
-			stats.unexpanded_wildcard);
-	}
-
-	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
-	LOG_DBG("ReportData: %u paths asked, %u B report", s_read.n_paths,
-		(unsigned int)report_len);
+	send_read_chunk(s);
 }
 
 /**
@@ -2259,15 +2340,34 @@ static void on_timed_request(const struct matter_exchange_in *in)
 static void on_status_response(const struct matter_exchange_in *in)
 {
 	size_t resp_len = 0u;
+	uint8_t status = MATTER_IM_STATUS_FAILURE;
+	uint16_t session_id = current_session_id();
+	struct read_state *read =
+		read_state_find(session_id, in->exchange_id, s_thread_reply != NULL);
 	/*
 	 * WHOSE StatusResponse. With one subscription this was implicit, and it
 	 * was wrong the moment a second controller arrived: the acknowledgement
 	 * belongs to the session it came in on, and answering it out of another
 	 * subscriber's state chunks the wrong report to the wrong peer.
 	 */
-	struct sub_state *s = sub_of_session(current_session_id());
+	struct sub_state *s = sub_of_session(session_id);
 
-	ARG_UNUSED(in);
+	if (matter_im_status_response_decode(in->payload, in->payload_len, &status) != MATTER_OK ||
+	    status != MATTER_IM_STATUS_SUCCESS) {
+		LOG_WRN("invalid or unsuccessful StatusResponse");
+		if (read != NULL) {
+			read->in_use = false;
+		}
+		return;
+	}
+
+	/* Intermediate plain-Read chunks ask for a StatusResponse. Match both
+	 * session and exchange before advancing, so an unrelated interaction
+	 * cannot consume this cursor. */
+	if (read != NULL && read->more) {
+		send_read_chunk(read);
+		return;
+	}
 
 	if (s == NULL) {
 		return;
@@ -3334,6 +3434,7 @@ static void on_message(const uint8_t *msg, size_t len)
 static void on_link_reset(void)
 {
 	s_stale = true;
+	read_drop_session(0u, false);
 
 	/*
 	 * NOT the place to roll the fail-safe back, which is what this used to

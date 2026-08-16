@@ -32,6 +32,7 @@
 
 #include "ultrawidelock_advtag.h"
 #include "ultrawidelock_ble.h"
+#include "ultrawidelock_lat.h"
 #include "ultrawidelock_prov.h" /* ULTRAWIDELOCK_GRK_LEN */
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 #include "matter_ble_zephyr.h"
@@ -191,6 +192,7 @@ static void side_emit_clear(void)
 static void coc_connected(struct bt_l2cap_chan *chan)
 {
 	LOG_INF("L2CAP CoC open (SPSM 0x%04x)", (unsigned)ULTRAWIDELOCK_L2CAP_SPSM);
+	(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_L2CAP_OPEN);
 	side_emit_peer(chan->conn);
 	if (s_cb.on_connected != NULL) {
 		s_cb.on_connected(conn_to_handle(chan->conn));
@@ -301,6 +303,7 @@ static ssize_t reader_spsm_read(struct bt_conn *conn, const struct bt_gatt_attr 
 				uint16_t len, uint16_t offset)
 {
 	ARG_UNUSED(conn);
+	(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_GATT_SPSM_READ);
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, s_read_payload, s_read_payload_len);
 }
 
@@ -318,6 +321,7 @@ static ssize_t device_ver_write(struct bt_conn *conn, const struct bt_gatt_attr 
 	if (offset != 0) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
 	}
+	(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_GATT_VER_WRITE);
 	return len;
 }
 
@@ -636,6 +640,7 @@ static void on_connected(struct bt_conn *conn, uint8_t err)
 	 */
 	if (err == 0u) {
 		s_conn_up = true;
+		ultrawidelock_lat_begin();
 	}
 }
 

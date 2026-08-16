@@ -43,8 +43,37 @@ LOG_MODULE_REGISTER(matter_thread, CONFIG_ULTRAWIDELOCK_MATTER_BLE_LOG_LEVEL);
 #include <stdio.h>
 #include <string.h>
 
-/** How often to look at the role while waiting. */
-#define ATTACH_POLL_MS 250u
+/* Attachment completion is event-driven. The callback runs on OpenThread's
+ * thread with its API lock held, so it may only signal this semaphore. */
+static K_SEM_DEFINE(s_attach_changed, 0, 1);
+
+static void attach_state_changed(otChangedFlags flags, void *context)
+{
+	ARG_UNUSED(context);
+	if ((flags & (OT_CHANGED_THREAD_ROLE | OT_CHANGED_IP6_ADDRESS_ADDED |
+		      OT_CHANGED_IP6_ADDRESS_REMOVED | OT_CHANGED_THREAD_NETDATA)) != 0u) {
+		k_sem_give(&s_attach_changed);
+	}
+}
+
+static struct openthread_state_changed_callback s_attach_cb = {
+	.otCallback = attach_state_changed,
+};
+
+static bool s_attach_cb_registered;
+
+static int attach_callback_ensure(void)
+{
+	if (s_attach_cb_registered) {
+		return MATTER_OK;
+	}
+	if (openthread_state_changed_callback_register(&s_attach_cb) != 0) {
+		LOG_ERR("cannot register Thread attachment notification");
+		return MATTER_E_STATE;
+	}
+	s_attach_cb_registered = true;
+	return MATTER_OK;
+}
 
 /**
  * A per-lifetime suffix on the SRP host name, and the reason it exists.
@@ -99,6 +128,9 @@ int matter_thread_start(const uint8_t *dataset, size_t len)
 	if (err != OT_ERROR_NONE) {
 		LOG_ERR("dataset rejected by OpenThread (%d)", err);
 		return MATTER_E_INVAL;
+	}
+	if (attach_callback_ensure() != MATTER_OK) {
+		return MATTER_E_STATE;
 	}
 
 	/*
@@ -277,17 +309,25 @@ void matter_thread_dump_active_dataset(void)
 int matter_thread_wait_attached(uint32_t timeout_ms)
 {
 	otInstance *ot = openthread_get_default_instance();
-	uint32_t waited = 0u;
+	int64_t started_ms = k_uptime_get();
 	bool announced = false;
+
+	if (ot == NULL || attach_callback_ensure() != MATTER_OK) {
+		return MATTER_E_STATE;
+	}
 
 	for (;;) {
 		otDeviceRole role;
 		int offmesh;
+		int64_t now_ms;
+		uint32_t waited;
 
 		openthread_mutex_lock();
 		role = otThreadGetDeviceRole(ot);
 		offmesh = count_offmesh(ot);
 		openthread_mutex_unlock();
+		now_ms = k_uptime_get();
+		waited = now_ms > started_ms ? (uint32_t)(now_ms - started_ms) : 0u;
 
 		if (role == OT_DEVICE_ROLE_CHILD || role == OT_DEVICE_ROLE_ROUTER ||
 		    role == OT_DEVICE_ROLE_LEADER) {
@@ -326,8 +366,7 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
 			return MATTER_E_TIMEOUT;
 		}
 
-		k_msleep(ATTACH_POLL_MS);
-		waited += ATTACH_POLL_MS;
+		(void)k_sem_take(&s_attach_changed, K_MSEC(timeout_ms - waited));
 	}
 }
 

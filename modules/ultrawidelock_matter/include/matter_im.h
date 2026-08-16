@@ -219,6 +219,14 @@ int matter_im_subscribe_response_encode(uint32_t subscription_id, uint16_t max_i
 int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, size_t *out_len);
 
 /**
+ * Decode a bare StatusResponseMessage.
+ *
+ * @return MATTER_OK with @p status set, or a parse error when the structure is
+ *         malformed or omits its mandatory Status field.
+ */
+int matter_im_status_response_decode(const uint8_t *buf, size_t len, uint8_t *status);
+
+/**
  * Decode a TimedRequestMessage, whose only field is the timeout.
  *
  * The timeout is the peer's own deadline for sending the invoke that follows,

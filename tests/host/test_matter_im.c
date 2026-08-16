@@ -61,13 +61,13 @@ struct rep {
 };
 
 /**
- * What apps/dwm3001cdk-lock/src/matter_commission.c gives the encoder.
+ * What apps/dwm3001cdk-lock/src/matter_commission.c gives one report chunk.
  *
  * Duplicated rather than shared because the module must not depend on a port.
  * If the two drift apart the assertion below stops meaning anything, so they
  * are named the same thing on purpose.
  */
-#define PORT_REPORT_MAX 3072u
+#define PORT_REPORT_MAX 1180u
 
 /* Room for every attribute of the widest cluster this node has, plus slack.
  * BasicInformation alone reports 16, which is exactly where this used to sit --
@@ -659,8 +659,34 @@ void test_matter_im(void)
 							  &stats),
 			     MATTER_OK);
 			T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
-			T_OK("every endpoint's model fits the port's buffer",
-			     len <= PORT_REPORT_MAX);
+			T_OK("full wildcard needs the chunked Read path", len > PORT_REPORT_MAX);
+			{
+				uint16_t sent = 0u;
+				uint16_t emitted = 0u;
+				bool more = true;
+				int chunks = 0;
+				int total = 0;
+				int full = walk_report(big, len, sreps, &suppress, &revision);
+
+				while (more && chunks < 24) {
+					T_EQ("real-cap chunk encodes",
+					     matter_im_report_data_chunk(&srv, &one, sent, big,
+									 PORT_REPORT_MAX, &len, &more,
+									 &emitted, &stats),
+					     MATTER_OK);
+					T_OK("real-cap chunk stayed within Thread payload",
+					     len <= PORT_REPORT_MAX);
+					T_OK("real-cap chunk carried something", emitted > 0);
+					total += walk_report(big, len, sreps, &suppress, &revision);
+					T_OK("only the final Read chunk suppresses StatusResponse",
+					     suppress == !more);
+					sent = (uint16_t)(sent + emitted);
+					chunks++;
+				}
+				T_OK("real Thread cap split the full wildcard", chunks > 1);
+				T_OK("real-cap chunking stopped", !more);
+				T_EQ("real-cap chunks delivered every report once", total, full);
+			}
 			one.paths[0].have_endpoint = true;
 			one.paths[0].endpoint = MATTER_ENDPOINT_ROOT;
 
@@ -706,6 +732,8 @@ void test_matter_im(void)
 					T_OK("chunk carried something", emitted > 0);
 					total += walk_report(big, len, sreps, &suppress,
 							     &revision);
+					T_OK("only final swept chunk suppresses StatusResponse",
+					     suppress == !more);
 					sent = (uint16_t)(sent + emitted);
 					chunks++;
 				}
@@ -740,6 +768,7 @@ void test_matter_im(void)
 		uint16_t timeout_ms = 0u;
 		uint8_t sr[32];
 		size_t sr_len = 0u;
+		uint8_t decoded_status = 0xffu;
 		struct matter_tlv_reader rd;
 		uint64_t v = 0u;
 
@@ -773,6 +802,29 @@ void test_matter_im(void)
 		T_EQ("is the status", (long)matter_tlv_tag(&rd), (long)MATTER_TLV_CTX(0));
 		T_EQ("reads", matter_tlv_get_u64(&rd, &v), MATTER_OK);
 		T_EQ("SUCCESS", (long)v, (long)MATTER_IM_STATUS_SUCCESS);
+		T_EQ("status response decodes",
+		     matter_im_status_response_decode(sr, sr_len, &decoded_status), MATTER_OK);
+		T_EQ("decoded SUCCESS", decoded_status, MATTER_IM_STATUS_SUCCESS);
+		T_OK("truncated status response is refused",
+		     matter_im_status_response_decode(sr, sr_len - 1u, &decoded_status) != MATTER_OK);
+		T_EQ("null status buffer refused",
+		     matter_im_status_response_decode(NULL, sr_len, &decoded_status), MATTER_E_INVAL);
+		T_EQ("null status output refused",
+		     matter_im_status_response_decode(sr, sr_len, NULL), MATTER_E_INVAL);
+		{
+			static const uint8_t missing_status[] = {
+				0x15, 0x24, 0xff, MATTER_IM_REVISION, 0x18,
+			};
+			uint8_t empty = 0u;
+
+			T_EQ("missing mandatory status refused",
+			     matter_im_status_response_decode(missing_status,
+						      sizeof(missing_status), &decoded_status),
+			     MATTER_E_INVAL);
+			T_EQ("empty status response refused",
+			     matter_im_status_response_decode(&empty, 0u, &decoded_status),
+			     MATTER_E_INVAL);
+		}
 	}
 
 	/* --------------------------------------------------------- refusals --- */
