@@ -459,6 +459,12 @@ static enum ultrawidelock_dfu_err begin_at(enum ultrawidelock_dfu_owner owner,
 	 * The claim is released on transport disconnect via
 	 * ultrawidelock_dfu_rx_reset(), and window_expire() clears everything when
 	 * the window shuts, so it cannot outlive either.
+	 *
+	 * REVISIT IF CONFIG_BT_MAX_CONN EVER EXCEEDS 1. That is the load-bearing
+	 * leg above: with two connection slots a second peer can claim the
+	 * receiver without denying the first, and the argument stops holding. The
+	 * fix that needs no pairing is to preempt a claim that has taken no DATA
+	 * bytes after an idle timeout.
 	 */
 	if (s_rx.owner != ULTRAWIDELOCK_DFU_OWNER_NONE) {
 		if (s_rx.owner == owner && s_rx.transfer_id == transfer_id && s_rx.total == total) {
