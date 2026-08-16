@@ -51,6 +51,49 @@ selected by the options above:
 - `sysbuild/mcuboot.conf`: the bootloader's own configuration, which is a
   separate image and does not inherit the application's.
 
+### Overlays no `make` target selects
+
+The rest are applied by hand, because they exist to answer a question rather
+than to build a shipping image. There is no `make` option for them: override
+`CDK_CONF`, which is what `make build` hands to `-DEXTRA_CONF_FILE`, and repeat
+the overlays you still want (`;`-separated, later files win). A pristine build is
+needed because west does not re-run CMake when these change:
+
+```sh
+make build PRISTINE=1 \
+  CDK_CONF="overlay-thread.conf;overlay-lto.conf;overlays/bench.conf;overlays/bench-uwb-k2.conf"
+```
+
+- `overlays/bench.conf` plus the `bench-*` family: the A/B arms for the
+  speed work — `bench-ble-dle251.conf`, `bench-ble-phy2m.conf`,
+  `bench-ble-dle251-phy2m.conf`, `bench-cred-o2.conf`, `bench-uwb-dwell1.conf`,
+  `bench-uwb-k2.conf`, `bench-uwb-spi-fused.conf`, `bench-uwb-spi-metrics.conf`.
+  Their savings are hypotheses, not measurements.
+- `overlays/latency.conf`: the `ULTRAWIDELOCK_LAT_TRACE` timing histograms.
+- `overlays/dw3110-spi-8.overlay`, `-16`, `-32`: SPI clock arms for the DW3110.
+- `overlays/cirdiag.conf`, `overlays/mlgate.conf`: selected by `make cirdiag`
+  and `make mlgate` respectively, listed here because they are easy to miss.
+- `overlays/ble-verbose.conf`, `overlays/thread-dataset-dump.conf`: debug aids.
+
+**`ULTRAWIDELOCK_BENCH` is a required acknowledgement, not a convenience.**
+Two of the bench arms weaken the range-integrity evidence — `RANGE_TRUST_K` below
+3 and `APPROACH_NEAR_DWELL` below 2 — and `apps/dwm3001cdk-lock/CMakeLists.txt`
+fails configuration outright unless `ULTRAWIDELOCK_BENCH` *and*
+`ULTRAWIDELOCK_RANGE_GATE_STRICT` are both set. A bench image is not a shipping
+image; see [`range-integrity.md`](range-integrity.md).
+
+### Kconfig worth knowing about
+
+| Symbol | Where | What it does |
+|---|---|---|
+| `ULTRAWIDELOCK_RANGE_GATE_STRICT` | `prj.conf`, **on** for this board | Drops a block that fails the STS-quality floor instead of latching it |
+| `ULTRAWIDELOCK_STS_QUALITY_MIN` | `modules/ultrawidelock_uwb` | The floor itself. 0 means "defer to the driver"; never yet sized from captures |
+| `ULTRAWIDELOCK_RANGE_TRUST_K` | `modules/ultrawidelock_uwb` | Consensus blocks, 2-3. **3 is the shipping floor** |
+| `ULTRAWIDELOCK_APPROACH_NEAR_DWELL` | `apps/dwm3001cdk-lock` | Blocks held near before the lock opens |
+| `ULTRAWIDELOCK_MCUBOOT_RECOVERY_HOLD_MS` | `apps/dwm3001cdk-lock` | SW2 hold that reboots into MCUboot serial recovery |
+| `ULTRAWIDELOCK_CRED_DEV_TRUST` | `modules/ultrawidelock_cred` | **LAB ONLY.** Lets the built-in development identity authenticate against an empty trust store. Must be off in anything you ship |
+| `DW3000_SPI_METRICS`, `DW3000_STS_BULK_WRITE_EXPERIMENT` | `modules/ultrawidelock_dw3000` | Instrumentation and an unproven fast path. Both default `n` |
+
 ## Build options (nRF5340 DK)
 
 Set on the command line, e.g. `make nrf-build PRETTY=1 CHIP=dw3720`:
