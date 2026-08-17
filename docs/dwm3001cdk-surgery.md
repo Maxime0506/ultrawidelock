@@ -28,6 +28,13 @@ the ESP32 port — see §9.2).
 work: **126,760 B of 131,072 B (96.7%)**, 4,312 B free. Flash was never close —
 442 KB of 504 KB (85%).
 
+**That is no longer the shape of the problem.** After the speed/robustness work
+the same image measures **118,312 B RAM (90.3%)** and **417,684 B of the 433,664 B
+`app` partition (96.3%)** — roughly 12.8 KB of RAM spare against 15.6 KB of flash.
+RAM was reclaimed and flash was spent, so **flash is now the binding constraint**,
+and it is the one to check first. Everything below about *how* to measure RAM
+still applies; only which number is closest to the wall has changed.
+
 **127,352 B has been recorded as unrunnable on this board.** That is an observation, not
 a spec, but treat it as a ceiling: builds above it have failed to come up. Every RAM
 change needs a boot check (§8.4), and the ECDH self-test line is the cheap proof the
@@ -462,7 +469,50 @@ invisible. Write to a file and test `$?`.
   a symbol added 22 lines later in the same file applies fine. The symbol has no
   `depends on` and no enclosing `if`/`menu`. Unexplained. Workaround: force the
   `#if IS_ENABLED(...)` to `#if 1` for one boot, then revert.
-- **SRP slot exhaustion when re-pairing without a rollback.** Slots are released when
-  fabrics roll back, but a node that is genuinely commissioned and re-paired can still
-  run out.
-- **RAM at 96.7%.** Any further work starts by measuring, not by adding.
+- **RAM at 90.3%, flash at 96.4%.** Flash is now the tighter of the two: about
+  15 KB spare in the `app` partition against roughly 13 KB of RAM. Any further
+  work starts by measuring, not by adding, and a new static allocation is now a
+  smaller decision than a new code path.
+
+## 11. Three bugs the host suite could not see
+
+All three shipped in the speed/robustness work, all three passed `make check`
+with thousands of assertions green, and all three stopped the walk-up dead on a
+real DWM3001CDK. They share one root cause, so they are worth reading together.
+
+**The pattern: a fixture that agrees with itself proves nothing.** Each bug was a
+comparison between a value derived by a helper and the same value as it arrives
+on air. The host tests built *both sides* from that same helper, so the fixture
+agreed with itself no matter which byte order the code chose. The radio does not
+have that luxury.
+
+1. **KeySource compared in the wrong byte order.** `ccc_uad_addresses()` emits
+   `KeySourceHigh || KeySourceLow`; `ccc_parse_mhr()` copies the Aux Security
+   Header field in transmission order, which is the reverse. A straight `memcmp`
+   rejected every Pre-POLL. Observed: `uad ks=0f3795ed` against `hdr ks=ed95370f`.
+2. **DestShort assembled little-endian instead of MSB-first.** Same function, same
+   root cause, and it survived the first fix because the diagnostic printed the
+   two halves in different formats: `uad dest=02ff | hdr dest=02ff` is the byte
+   pair `02 ff` against the u16 `0x02ff`, which read the other way is `0xff02`.
+   They were never equal. **If you print two things to compare them, print them
+   the same way.**
+3. **`ranging_block` compared against a stale snapshot.** The block number reaches
+   the receiver through the *deferred* Pre-POLL decode, while the Final evidence
+   is snapshotted synchronously in the Final RFRAME callback. The two are one
+   block apart whenever the stash has not drained: `blk=2 want=1`, with session id
+   and STS index both matching exactly. The check was dropped rather than
+   repaired -- `final_sts_index` derives from `g_armed_index`, increments once per
+   block, and binds the round more tightly than a 16-bit counter does.
+
+**Symptom to remember.** Bugs 1 and 2 present as `tx0` in the `⟐` heartbeat with
+`sts●`: frames arrive, none are answered, no `· NNcm` ever appears, and the
+session dies on `credential phase deadline expired`. `tx0` means the Response was
+never armed, which puts the fault at or before POLL. Bug 3 presents as healthy
+`tx` and a healthy error ratio with still no `· NNcm`.
+
+**Why none of it was visible.** Every reject path in `ccc_shim_rx.c` reports
+through `DIAGK`, which a pretty-shell build compiles to nothing. A rejected
+Pre-POLL had no observable at all. The `Pre-POLL accepted: URSK proven on air`
+line exists for exactly this reason and is the first thing to look for; if it is
+absent, the gate ahead of it is rejecting and you will need to promote the
+reject paths to `ultrawidelock_printf` temporarily to find out which.

@@ -34,7 +34,8 @@ make check
 
 If you touched a port or an application, also build the target it affects:
 `make build`, `make nrf-build`, or `make esp-build APP=... TARGET=...`. ESP port
-integration has `bash tests/ports/esp32/verify_port.sh`. Say in the pull request
+integration has `bash tests/ports/esp32/verify_port.sh`; the Zephyr port checks
+under `tests/ports/zephyr/` are already part of `make check`. Say in the pull request
 which of these you actually ran, and on what hardware if any.
 
 ## Architecture rules

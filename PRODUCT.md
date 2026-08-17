@@ -160,7 +160,7 @@ Real, re-derivable numbers already on the surfaces:
 - One timestamp tick is about 15.65 ps, which light crosses in 4.692 mm.
 - Flash 379,332 of 433,664 B (87.5%); RAM 111,012 of 131,072 B (84.7%).
 - The obstruction classifier costs 776 B flash, 0 B RAM, 28 B stack.
-- 7,375 host tests, no hardware required.
+- 7,766 host tests, no hardware required.
 - The unlock bound is 1.00 m, from `ULTRAWIDELOCK_UNLOCK_RANGE_CM`.
 
 The landing hero computes its scope from the firmware's own constants in
