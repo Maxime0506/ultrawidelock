@@ -9,7 +9,7 @@ overlay_dir="$repo_root/apps/dwm3001cdk-lock/overlays"
 need() {
 	local pattern=$1
 	local file=$2
-	if ! rg -q "$pattern" "$file"; then
+	if ! grep -Eq "$pattern" "$file"; then
 		echo "missing '$pattern' in ${file#"$repo_root"/}" >&2
 		exit 1
 	fi
@@ -18,7 +18,7 @@ need() {
 reject() {
 	local pattern=$1
 	local file=$2
-	if rg -q "$pattern" "$file"; then
+	if grep -Eq "$pattern" "$file"; then
 		echo "forbidden '$pattern' in ${file#"$repo_root"/}" >&2
 		exit 1
 	fi
@@ -33,7 +33,7 @@ need '\.le_data_len_updated = on_le_data_len_updated' "$backend"
 need '\.le_phy_updated = on_le_phy_updated' "$backend"
 reject 'bt_le_adv_stop' "$backend"
 reject '\(time_t\)\(UINT32_MAX' "$backend"
-if (( $(rg -c '\(uint64_t\)now <= UINT32_MAX - ULTRAWIDELOCK_ADV_TAG_VALID_S' \
+if (( $(grep -Ec '\(uint64_t\)now <= UINT32_MAX - ULTRAWIDELOCK_ADV_TAG_VALID_S' \
 	"$backend") != 2 )); then
 	echo "both advertising time-validity checks must widen before comparing" >&2
 	exit 1
