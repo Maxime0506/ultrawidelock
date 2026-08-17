@@ -919,6 +919,10 @@ def collect_zephyr_tools(
         commands.append(result)
         if result["exit_code"] == 0 and artifact.is_file():
             out[key] = status_record("measured", f"Zephyr {target} target produced its artifact")
+        elif f"unknown target '{target}'" in (result["tail"] or ""):
+            out[key] = status_record(
+                "unavailable", f"the pinned Zephyr does not provide a {target} target"
+            )
         else:
             detail = result["tail"] or f"{target} produced no expected artifact"
             out[key] = status_record("failed", detail)

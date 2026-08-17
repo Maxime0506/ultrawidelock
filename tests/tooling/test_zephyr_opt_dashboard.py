@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,6 +85,34 @@ class SafetyTests(unittest.TestCase):
             ],
         }
         self.assertEqual(DASHBOARD.build_verdict(model)["code"], "failed")
+
+    def test_absent_zephyr_target_is_unavailable_not_failed(self) -> None:
+        # NCS v3.3.0 provides ram_report/rom_report but no `dashboard` ninja
+        # target; a target the pinned Zephyr never had must not block the run.
+        def fake_run(argv, **kwargs):
+            target = argv[-1]
+            if target == "dashboard":
+                return {
+                    "command": " ".join(argv),
+                    "started_at": "",
+                    "exit_code": 1,
+                    "tail": "ninja: error: unknown target 'dashboard'",
+                }
+            if target in ("ram_report", "rom_report"):
+                (image_build / f"{target.split('_')[0]}.json").write_text("{}", encoding="utf-8")
+            return {"command": " ".join(argv), "started_at": "", "exit_code": 0, "tail": ""}
+
+        with tempfile.TemporaryDirectory(prefix="uwl-zephyr-tools-test-") as temporary:
+            repo = Path(temporary)
+            (repo / "workspace").mkdir()
+            image_build = repo / "build" / DASHBOARD.SIZE_IMAGE
+            image_build.mkdir(parents=True)
+            with mock.patch.object(DASHBOARD, "run_command", fake_run), \
+                    mock.patch.object(DASHBOARD.shutil, "which", lambda _: "/usr/bin/west"):
+                out = DASHBOARD.collect_zephyr_tools(repo, repo / "build", True, [])
+        self.assertEqual(out["zephyr_dashboard"]["status"], "unavailable")
+        self.assertEqual(out["ram_report"]["status"], "measured")
+        self.assertEqual(out["rom_report"]["status"], "measured")
 
     def test_sanitizer_cleans_dictionary_keys_as_well_as_values(self) -> None:
         cleaned = DASHBOARD.sanitize_tree({"/Users/<user>/field": "/home/<user>/value"})
