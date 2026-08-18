@@ -1955,6 +1955,64 @@ void test_matter_im_events(void)
 		T_EQ("and the operation it recorded", (long)op, (long)MATTER_DL_LOCK_OP_UNLOCK);
 	}
 
+#if MATTER_FEATURE_DL_ALARMS
+	t_group("a forced door is recorded as an alarm, in the same ring");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		matter_clusters_record_alarm(&info, MATTER_DL_ALARM_DOOR_FORCED_OPEN);
+		T_EQ("recorded", (long)matter_clusters_event_count(&info), 1L);
+		T_EQ("as the alarm event", (long)info.events[0].event_id,
+		     (long)MATTER_EVENT_DL_ALARM);
+		T_EQ("carrying DoorForcedOpen", (long)info.events[0].alarm_code,
+		     (long)MATTER_DL_ALARM_DOOR_FORCED_OPEN);
+
+		/* One ring for both events, because EventNumbers are ONE
+		 * ascending sequence for the node: a second ring would have to
+		 * invent an ordering between them that the numbers already
+		 * answer, and a subscriber's EventMin filter reads that
+		 * ordering as "already seen". */
+		matter_clusters_record_lock_operation(&info, MATTER_DL_LOCK_OP_LOCK,
+						      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+		T_EQ("a lock operation shares the ring", (long)matter_clusters_event_count(&info),
+		     2L);
+		T_OK("and the numbers stay one ascending sequence",
+		     info.events[1].number > info.events[0].number);
+		T_EQ("each entry says which event it is", (long)info.events[1].event_id,
+		     (long)MATTER_EVENT_DL_LOCK_OPERATION);
+	}
+
+	t_group("a report carries the alarm, its code, and no operation fields");
+	{
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		matter_clusters_record_alarm(&info, MATTER_DL_ALARM_DOOR_AJAR);
+
+		one_event_path(&req);
+		req.event_paths[0].event = MATTER_EVENT_DL_ALARM;
+		T_EQ("an alarm read encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and carries the one event", count_event_reports(out, len, &number, &op), 1);
+		T_EQ("with its event number", (long)number, 1L);
+		/* Field 0 of a DoorLockAlarm is the AlarmCode; field 0 of a
+		 * LockOperation is the operation type. Reading the first field
+		 * is therefore also the check that the right ENCODER ran. */
+		T_EQ("and its first field is the AlarmCode", (long)op,
+		     (long)MATTER_DL_ALARM_DOOR_AJAR);
+
+		/* Same endpoint, same cluster, different event: a subscriber
+		 * watching LockOperation must not be handed an alarm, which is
+		 * what the per-entry event id is FOR. */
+		one_event_path(&req);
+		T_EQ("a LockOperation read encodes",
+		     matter_im_report_data_encode(&srv, &req, out, sizeof(out), &len, NULL),
+		     MATTER_OK);
+		T_EQ("and the alarm is not in it", count_event_reports(out, len, NULL, NULL), 0);
+	}
+#endif /* MATTER_FEATURE_DL_ALARMS */
+
 	t_group("an event filter is what stops a subscriber seeing an unlock twice");
 	{
 		fill_info(&info);

@@ -35,6 +35,11 @@
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
 #include "ultrawidelock_satellite.h" /* second-anchor verdict; gates PREDICT only */
 #endif
+/* The sensors are ANCHOR's; the event they raise is the Matter node's. An
+ * anchor build with no Matter in it has nowhere to put an alarm. */
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR) && IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+#include "door_alarm.h" /* impact latch + swing angle -> DoorLockAlarm */
+#endif
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 #include "ultrawidelock_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
 #include "ultrawidelock_side_log.h"
@@ -348,6 +353,11 @@ int main(void)
 
 	ultrawidelock_satellite_init(&satellite, &fusion_cfg, CONFIG_ULTRAWIDELOCK_ANCHOR_STALE_MS,
 			   IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SELF_INSIDE));
+#endif
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR) && IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+	/* Door alarms. The ajar half waits on the same missing transport as the
+	 * satellite verdict above; the forced-open half is live below. */
+	door_alarm_init();
 #endif
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 	/*
@@ -731,6 +741,12 @@ int main(void)
 		switch (ultrawidelock_slam_poll(&slam_cfg, &slam, ultrawidelock_slam_hw_take(), now)) {
 		case ULTRAWIDELOCK_SLAM_TAMPER:
 			LOG_WRN("tamper: repeated impacts on the door");
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+			/* A struck door while the bolt is thrown is what
+			 * DoorForcedOpen means. The bolt test is applied by the
+			 * Matter half, which owns that state. */
+			door_alarm_tamper();
+#endif
 			break;
 		case ULTRAWIDELOCK_SLAM_IMPACT:
 			LOG_INF("impact");

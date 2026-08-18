@@ -107,6 +107,13 @@ target_sources_ifdef(CONFIG_ULTRAWIDELOCK_SIDE_GATE app PRIVATE src/side_feed.c)
 # Measurement only; CONFIG_ULTRAWIDELOCK_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_THREAD_GATE app PRIVATE src/thread_gate.c)
+# The two DoorLockAlarms, and the door-angle state they need. ANCHOR is default
+# n, so the shipping image never compiles this. Both symbols, not just ANCHOR:
+# the alarm is a Matter event, and `make reader ANCHOR=1` is an anchor build
+# with no Matter node to carry one.
+if(CONFIG_ULTRAWIDELOCK_ANCHOR AND CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+	target_sources(app PRIVATE src/door_alarm.c)
+endif()
 # The DFU receiver's BLE transport (ports/zephyr/dfu/dfu_ble_zephyr.c) and the
 # rest of the gated Zephyr glue compile via the ultrawidelock_zephyr_port module under
 # the same CONFIG symbols.
