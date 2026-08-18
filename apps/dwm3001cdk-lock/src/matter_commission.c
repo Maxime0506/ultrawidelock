@@ -2164,6 +2164,30 @@ static uint64_t matter_event_uptime_ms(void)
 	return ms > 0 ? (uint64_t)ms : 0u;
 }
 
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
+void matter_commission_record_alarm(uint8_t alarm_code)
+{
+	ultrawidelock_mutex_lock(&s_owner_lock);
+	/*
+	 * Locked or nothing. The sensors report about the DOOR; only this file
+	 * knows what the bolt is supposed to be doing, and an alarm about a door
+	 * the owner deliberately left open is the kind of event that teaches a
+	 * controller's owner to mute the accessory.
+	 */
+	if (s_info.lock_state == MATTER_DL_LOCK_STATE_LOCKED) {
+		matter_clusters_record_alarm(&s_info, alarm_code);
+		LOG_WRN("door alarm %u recorded", (unsigned int)alarm_code);
+		/*
+		 * Nothing about the bolt changed -- this only asks for the
+		 * report that will carry the event, and re-drives the lock LED
+		 * to the value it already has.
+		 */
+		notify_lock_state_changed();
+	}
+	ultrawidelock_mutex_unlock(&s_owner_lock);
+}
+#endif
+
 static void on_ultrawidelock_lock_state(bool unlocked)
 {
 	uint8_t want = unlocked ? MATTER_DL_LOCK_STATE_UNLOCKED : MATTER_DL_LOCK_STATE_LOCKED;

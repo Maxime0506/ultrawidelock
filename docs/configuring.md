@@ -19,6 +19,7 @@ Set on the command line, e.g. `make build RELEASE=1 SMP=1`:
 | `RELEASE=1` | trade the 8 KB RTT ring for 7,168 B of RAM, and set errors-only logging to save 20,568 B of flash. Codegen is identical either way |
 | `SMP=1` | add mcumgr over Bluetooth, which is what nRF Device Manager speaks. `make build SMP=1` is a valid debug configuration and leaves 12,764 B free. `RELEASE=1` remains the shipping configuration |
 | `DFU_LOG=1` | make the bootloader narrate what it does with a staged patch. Read it with MCUboot's own ELF, not the application's |
+| `ANCHOR=1` | layer `overlay-anchor.conf`: the second-anchor geometry, the door-swing angle and the LIS2DH12 impact latch, plus the two DoorLockAlarm events those feed. Default off, and the default image is byte-identical without it. Every threshold it turns on is a placeholder; see below |
 | `CDK_BUILD=<dir>` | which build directory `flash`, `flash-erase` and `monitor` mean. Default `build/cdk-matter` |
 | `CDK_RTT_BUILD=<dir>` | point `monitor` at a different image without moving what the flash targets write |
 | `CDK_KEY=<path>` | the image-signing key for this build only. Must be absolute. Defaults to `SIGN_KEY`, which both Zephyr ports share; `make release` uses it to point one build at a production key |
@@ -48,6 +49,11 @@ selected by the options above:
   `SMP=1` and the default `LTO=1`. Ordered so that later files win.
 - `overlays/uwb-selftest.conf`: the `make selftest` image, which reads the
   DW3110's `DEV_ID` at boot and stops.
+- `overlay-anchor.conf`: `ANCHOR=1`. Turns on `ULTRAWIDELOCK_ANCHOR` and the
+  impact latch, and with them the DoorLockAlarm events in
+  [`matter-door-lock-events.md`](matter-door-lock-events.md). It is the only
+  overlay whose every number is explicitly a placeholder, and it says so in the
+  file.
 - `sysbuild/mcuboot.conf`: the bootloader's own configuration, which is a
   separate image and does not inherit the application's.
 
@@ -93,6 +99,13 @@ image; see [`range-integrity.md`](range-integrity.md).
 | `ULTRAWIDELOCK_MCUBOOT_RECOVERY_HOLD_MS` | `apps/dwm3001cdk-lock` | SW2 hold that reboots into MCUboot serial recovery |
 | `ULTRAWIDELOCK_CRED_DEV_TRUST` | `modules/ultrawidelock_cred` | **LAB ONLY.** Lets the built-in development identity authenticate against an empty trust store. Must be off in anything you ship |
 | `DW3000_SPI_METRICS`, `DW3000_STS_BULK_WRITE_EXPERIMENT` | `modules/ultrawidelock_dw3000` | Instrumentation and an unproven fast path. Both default `n` |
+| `ULTRAWIDELOCK_ANCHOR` | `modules/ultrawidelock_anchor` | The door-swing angle, the two-anchor fusion and the side gate's logic. Default `n`; `ANCHOR=1` sets it |
+| `ULTRAWIDELOCK_ANCHOR_SLAM` | `modules/ultrawidelock_anchor` | The LIS2DH12 impact and tamper interrupt. Needs a board whose devicetree has an `accel0` alias with `irq-gpios`; the DWM3001CDK has both |
+| `ULTRAWIDELOCK_ANCHOR_SLAM_THRESHOLD_MG` | `modules/ultrawidelock_anchor` | What counts as a strike, after the high-pass filter. **Placeholder at 2000.** The number that matters is "louder than closing this door normally", which is a property of the door and its hinges |
+| `ULTRAWIDELOCK_ANCHOR_AJAR_DWELL_S` | `modules/ultrawidelock_anchor` | How long the leaf may stand away from CLOSED, bolt thrown, before a DoorAjar alarm. **Placeholder at 60**, chosen long: guessing high costs a late alarm, guessing low teaches the owner to ignore the event |
+| `ULTRAWIDELOCK_ANCHOR_DOOR_HINGE_FRAME_MM`, `..._HINGE_LEAF_MM`, `..._OFFSET_MDDEG` | `modules/ultrawidelock_anchor` | The install geometry the swing angle is solved from. **All placeholders.** Solve the offset from three measured points (shut, ~45, ~90 degrees), not with a tape to the hinge pin: the hinge axis is not where it looks like it is |
+| `ULTRAWIDELOCK_ML_LOS` | `modules/ultrawidelock_ml` | The obstruction classifier, and with it the carry-mode seam and the per-class widening table. `make mlgate` sets it |
+| `ULTRAWIDELOCK_UWB_CIRDIAG_SUMMARY_LEAN` | `modules/ultrawidelock_uwb` | Drops three separate register reads on a deadline. It does NOT drop the first-path index or the peak: those come out of one diagnostic burst whose length is fixed, so latching them costs 0 SPI bytes |
 
 ## Build options (nRF5340 DK)
 
