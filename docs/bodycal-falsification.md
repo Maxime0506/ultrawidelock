@@ -138,16 +138,40 @@ one that did not at `0`.
 
 ### Capture: the `[FEAT]` CSV
 
-The reader emits a `[FEAT]` line per reception. That emitter lives in the
-**feature-pipeline worktree**, not here — this worktree has no capture path and
-adding one is out of its scope. The columns it must carry for BodyCal:
+The reader emits a `[FEAT]` line per reception, and **that emitter now lives in
+this tree**: `apps/dwm3001cdk-lock/src/ml_feed.c`, header row first, under
+`make mlgate`. It arrived with the CIA feature pipeline; what follows was
+written as a requirement and is now a description.
+
+The header it prints, in order:
+
+```
+[FEAT] t_ms,n,cm,cls,conf_c,dis,fp_resid_c,rx_pwr_c,fp_pwr_c,delta_p_c,
+       fp_peak_c,fp_idx_q6,peak_idx,peak_amp,f1,f2,f3,area,acc
+```
+
+Every dB column is the value times 100 as an integer, because printing floats
+would need `CONFIG_CBPRINTF_FP_SUPPORT`, a global switch that grows every printf
+in an image whose only console is an 8 KB RTT ring. `fp_idx_q6` is the
+first-path index in Q10.6 and is handed over unconverted: its integer and
+fractional halves answer different questions.
+
+**The carry-mode label is still not on the line, and cannot be.** Nothing on the
+device knows which pocket the phone was in. The operator supplies it per cell,
+which is what the protocol above is for.
+
+The columns BodyCal needs, all of which the line now carries:
 
 - The five Ipatov CIA registers, exactly as `struct ultrawidelock_ml_cia` names
-  them: `f1`, `f2`, `f3`, `accum_count`, `channel_area`.
-- The reported range in centimetres.
-- `rx_pwr - fp_pwr` in dB, for the vendor rule and the disagreement counter.
-- **The carry-mode label**, per cell, which the operator supplies — nothing on
-  the device knows it.
+  them: `f1`, `f2`, `f3`, `acc`, `area`.
+- The reported range in centimetres, `cm`.
+- `delta_p_c`, which is `rx_pwr - fp_pwr` in centi-dB, for the vendor rule and
+  the disagreement counter `dis`.
+- Two columns the shipped model does not read and a fitted one might:
+  `fp_idx_q6` and `fp_peak_c`, the first-path-to-peak ratio. **No noise floor**,
+  and that is not an oversight: the DW3000's diagnostic struct has no noise
+  member this repo can name, so the raw peak, `f1..f3`, `area` and `acc` ship
+  instead and the column can be derived offline once its source is established.
 
 **The range lags by a round and that is correct, not a defect.** A DS-TWR round
 yields its distance when the round completes while diagnostics are read per
@@ -194,6 +218,10 @@ trained model; they prove it over very little ground.
 | `nlos_widen_class_cm[]` | `modules/ultrawidelock_cred/include/ultrawidelock_approach.h` | Shipped, all entries `0` |
 | `ultrawidelock_approach_feed_carry()` | `modules/ultrawidelock_cred/src/ultrawidelock_approach.c` | Shipped |
 | Host coverage | `tests/host/test_approach.c`, group `per-carry-mode widening (BodyCal)` | Shipped |
+| `[FEAT]` CSV emitter | `apps/dwm3001cdk-lock/src/ml_feed.c` | Shipped, `make mlgate` only |
+| First-path index and peak | `modules/ultrawidelock_uwb/include/uwb_cirdiag.h` | Shipped. Free: they come out of a burst whose length was already fixed |
+| `ultrawidelock_ml_los_diag()` | `modules/ultrawidelock_ml/src/ultrawidelock_ml_los.c` | Shipped, capture only. No decision reads it |
+| The capture itself | nobody has run one | **This is the missing step** |
 
 **The shipped model is two-class.** `ultrawidelock_ml_los_carry_classify()`
 therefore returns only `CLEAR` or `HAND`, and `POCKET` and `BAG` table entries

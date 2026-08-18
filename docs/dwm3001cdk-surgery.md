@@ -132,6 +132,10 @@ the reply with the report.
 
 ## 3. A subscription the node can actually serve needs four things
 
+> What the node sends once a subscription exists, both events and the ring that
+> holds them, is [`matter-door-lock-events.md`](matter-door-lock-events.md).
+
+
 **VERIFIED.** "Matter Accessory / No Response", and a Home tile stuck spinning on
 *Unlocking*, were four independent bugs. Each looked like the whole problem on its own.
 

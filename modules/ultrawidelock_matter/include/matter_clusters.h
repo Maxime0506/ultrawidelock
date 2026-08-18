@@ -346,10 +346,11 @@ struct matter_user {
  * The LockOperation event (door-lock-cluster.xml:723-733).
  *
  * Emitted whenever the bolt's reported state is CHANGED by something -- a
- * controller command or a credential walk-up. It is the only event this node
- * has, and it exists because the CHIP-based lock builds serve it and this one
- * served no events at all: Apple Home's "Manage Access" pane is the working
- * hypothesis for what that absence gates.
+ * controller command or a credential walk-up. It is the only event a DEFAULT
+ * image has -- the anchor build adds DoorLockAlarm below -- and it exists
+ * because the CHIP-based lock builds serve it and this one served no events at
+ * all: Apple Home's "Manage Access" pane is the working hypothesis for what
+ * that absence gates.
  *
  * Priority is CRITICAL, not Info. That is what the cluster XML says
  * (priority="critical" on the event element), and it is the field a subscriber
