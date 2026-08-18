@@ -1,0 +1,50 @@
+# cppcheck suppressions — tool artefacts only.
+#
+# Read tests/tooling/cppcheck_gate.sh first: it is the gate that loads this file
+# and it explains what is scanned and why.
+#
+# WHAT BELONGS HERE. Exactly one thing: a finding that is a property of cppcheck
+# rather than of the code. A false positive about a specific line does NOT belong
+# here — it gets an inline `cppcheck-suppress` comment at the site, so the
+# justification sits where the confusion is and moves with the code. An entry
+# here is invisible from the source file it silences, which is why the bar is
+# this high and the list is this short.
+#
+# Every entry names the finding, why cppcheck produces it, and what still proves
+# the underlying property. An entry that cannot answer the third question is a
+# hole and should be deleted.
+
+# ---------------------------------------------------------------------------
+# preprocessorErrorDirective in ultrawidelock_ml_feat.c
+#
+# WHAT. The file opens with a deliberate guard:
+#
+#     #if ULTRAWIDELOCK_ML_LOS_N_FEATURES != 2
+#     #error "... fills fp_resid and rx_pwr by name ..."
+#     #endif
+#
+# WHY CPPCHECK REPORTS IT. N_FEATURES is defined in the generated header
+# ultrawidelock_ml_los_features.h, reached through ultrawidelock_ml.h. cppcheck
+# brute-forces preprocessor configurations and analyses ones in which that
+# include did not resolve; there N_FEATURES is 0, the guard is true, and the
+# #error is "reached". It is reporting that the guard works.
+#
+# WHY IT IS NOT A HOLE. The guard is enforced where it means something: every
+# real compile of this file — the host suites, all three ports — resolves the
+# header and evaluates the condition for real. A regenerated model with a
+# different feature count still fails the build. This line only stops cppcheck
+# reporting a working guard as a defect.
+preprocessorErrorDirective:modules/ultrawidelock_ml/src/ultrawidelock_ml_feat.c
+
+# ---------------------------------------------------------------------------
+# syntaxError in the vendored decadriver
+#
+# WHAT. dw3000_device.c and dw3720_device.c contain a construct cppcheck's parser
+# rejects outright.
+#
+# WHY IT IS NOT A HOLE. Both files are inside
+# modules/ultrawidelock_dw3000/dwt_uwb_driver/, which the gate already cuts from
+# the scan — vendored Qorvo code we do not write and will not fix. This entry is
+# belt-and-braces so a future widening of the scan roots cannot resurrect a
+# parser complaint about someone else's source and be mistaken for our defect.
+syntaxError:modules/ultrawidelock_dw3000/dwt_uwb_driver/*

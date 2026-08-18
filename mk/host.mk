@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam scope purity ci
+.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam scope purity lint sca ci
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -68,3 +68,20 @@ scope:
 ## purity: modules/ names no OS, each port tree names only its own
 purity:
 	@$(REPO_ROOT)/tests/tooling/port_purity_check.sh
+
+## lint: cppcheck over the portable tree  ·  defects on paths no suite reaches
+##   Skipped loudly, not failed, when cppcheck is missing: CI installs it.
+##   modules/ and include/ only. ports/ and apps/ cannot be parsed without
+##   Zephyr and ESP-IDF expanding their macros, so neither this nor `make sca`
+##   reads them: that needs a compile database from a real target build.
+lint:
+	@$(REPO_ROOT)/tests/tooling/cppcheck_gate.sh
+
+## sca: Clang Static Analyzer over the portable tree  ·  path-sensitive defects
+##   The deeper pass `make lint` is not: it follows values across functions and
+##   branches, so it reaches NULL-on-one-arm and use-after-free-on-the-error-path
+##   bugs. Needs CodeChecker installed, so it is out of `make check` and CI:
+##     python3 -m venv .venv-sca && .venv-sca/bin/pip install codechecker
+##     CODECHECKER=.venv-sca/bin/CodeChecker make sca
+sca:
+	@$(REPO_ROOT)/tests/tooling/codechecker_sca.sh

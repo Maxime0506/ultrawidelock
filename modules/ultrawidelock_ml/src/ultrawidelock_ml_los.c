@@ -60,6 +60,7 @@ ultrawidelock_ml_los_classify(const float feat[ULTRAWIDELOCK_ML_LOS_N_FEATURES])
 
 	/* The generated predictor returns the class index directly. It cannot
 	 * fail: every path through the tree ends in a leaf. */
+	/* cppcheck-suppress uninitvar # the loop above writes all N_FEATURES entries */
 	return (enum ultrawidelock_ml_los_class)ultrawidelock_ml_los_tree_predict(
 		q, ULTRAWIDELOCK_ML_LOS_N_FEATURES);
 }

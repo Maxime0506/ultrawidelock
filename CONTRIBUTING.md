@@ -15,9 +15,11 @@ make check
 
 Run `make tools` to see every host tool, which targets each one gates, and what
 is already installed on your machine. `llvm-cov` and `cbmc` gate `make coverage`
-and `make cbmc`. Zephyr builds additionally need nRF Util, which installs the
-NCS toolchain; ESP32 builds need an installed ESP-IDF and, for the Matter lock,
-esp-matter.
+and `make cbmc`. `cppcheck` is worth installing even though it is optional: the
+`lint` suite inside `make check` skips loudly without it and CI runs it anyway,
+so a missing local copy means finding out on the pull request instead. Zephyr
+builds additionally need nRF Util, which installs the NCS toolchain; ESP32
+builds need an installed ESP-IDF and, for the Matter lock, esp-matter.
 
 Target builds are not required to contribute. A change confined to `modules/`
 or `tests/` is fully verifiable with the host suites alone.
