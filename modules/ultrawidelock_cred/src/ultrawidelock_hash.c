@@ -38,14 +38,6 @@ static void sha256_block(uint32_t h[8], const uint8_t p[64])
 	/* size_t index so i * 4 is computed at pointer width rather than in int
 	 * and widened afterwards. No behavioural change at these bounds; it keeps
 	 * the offset arithmetic honest for the analyser. */
-	/* p is a full block by contract, but cppcheck reaches here down a path where
-	 * the caller passed a one-byte object (&counter in hkdf_expand) and reports
-	 * indexing past it. That path does not exist: update() only calls this with
-	 * the caller's pointer once len >= BLOCK, and the short buffered call goes
-	 * through s->buf instead. The objectIndex suppression for that lives in
-	 * tests/tooling/cppcheck_gate.sh, scoped to this file, because the report
-	 * lands on both lines of the statement below and the marker that covers a
-	 * range is newer than the cppcheck some distributions ship. */
 	for (size_t i = 0; i < 16; i++) {
 		w[i] = (uint32_t)p[i * 4] << 24 | (uint32_t)p[i * 4 + 1] << 16 |
 		       (uint32_t)p[i * 4 + 2] << 8 | (uint32_t)p[i * 4 + 3];
@@ -196,14 +188,11 @@ void ultrawidelock_hmac_sha256(const uint8_t *key, size_t key_len, const void *m
 		opad[i] = k[i] ^ 0x5c;
 	}
 	ultrawidelock_sha256_init(&s);
-	/* The loop above writes all BLOCK bytes of both pads. */
-	/* cppcheck-suppress uninitvar */
 	ultrawidelock_sha256_update(&s, ipad, sizeof(ipad));
 	ultrawidelock_sha256_update(&s, msg, msg_len);
 	ultrawidelock_sha256_final(&s, inner);
 
 	ultrawidelock_sha256_init(&s);
-	/* cppcheck-suppress uninitvar */
 	ultrawidelock_sha256_update(&s, opad, sizeof(opad));
 	ultrawidelock_sha256_update(&s, inner, sizeof(inner));
 	ultrawidelock_sha256_final(&s, out);
@@ -251,19 +240,12 @@ int ultrawidelock_hkdf_expand(const uint8_t prk[ULTRAWIDELOCK_SHA256_LEN], const
 			opad[i] = kb ^ 0x5c;
 		}
 		ultrawidelock_sha256_init(&s);
-		/* The loop above writes all BLOCK bytes of both pads. */
-		/* cppcheck-suppress uninitvar */
 		ultrawidelock_sha256_update(&s, ipad, sizeof(ipad));
-		/* T(0) is the empty string (RFC 5869 s2.3), which is what tlen == 0
-		 * expresses on the first pass: zero bytes are read from t, so t is
-		 * not live until the final() below fills it. */
-		/* cppcheck-suppress uninitvar */
 		ultrawidelock_sha256_update(&s, t, tlen);
 		ultrawidelock_sha256_update(&s, info, info_len);
 		ultrawidelock_sha256_update(&s, &counter, 1);
 		ultrawidelock_sha256_final(&s, inner);
 		ultrawidelock_sha256_init(&s);
-		/* cppcheck-suppress uninitvar */
 		ultrawidelock_sha256_update(&s, opad, sizeof(opad));
 		ultrawidelock_sha256_update(&s, inner, sizeof(inner));
 		ultrawidelock_sha256_final(&s, t);

@@ -114,14 +114,30 @@ for d in include modules/*/include; do
 	[ -d "$d" ] && inc_args+=("-I$d")
 done
 
-# The two exemptions that are properties of the tool rather than of a line of
-# code. They are --suppress arguments rather than a --suppressions-list file
-# because that file cost a red CI run: cppcheck strips `#` comments from it and
+# The exemptions, all of them, in one place. Two rounds of red CI decided both
+# the form and the location, so both are worth stating.
+#
+# NOT A --suppressions-list FILE. cppcheck strips `#` comments out of one and
 # older builds then reject the empty line that is left ("Failed to add
-# suppression. No id."), so a file whose prose explained itself could not be
-# read by the version CI installs. `id:path` on the command line is the oldest
-# and most portable form cppcheck has, and it cannot drift from the flags it
-# sits next to.
+# suppression. No id."), so a file whose prose explained itself could not be read
+# by the version the runner installs. `id:path` on a command line is the oldest
+# and most portable form cppcheck has.
+#
+# NOT INLINE `cppcheck-suppress` MARKERS EITHER, which is the less obvious half.
+# An inline marker suppresses the NEXT LINE, so it only works if the analyser
+# reports where you expected. It does not: the uninitialised-`t` false positive
+# in the hashing code lands on hkdf_expand's `update(&s, t, tlen)` under 2.21 and
+# on sha256_update's `memcpy(s->buf, p, len)` -- a different function -- under
+# the 2.13 a stock Ubuntu runner installs. Markers placed for one version are
+# inert on the other, which is exactly how this gate failed CI a second time.
+# Suppressing by id and path holds still across both.
+#
+# The cost, stated rather than buried: `uninitvar` is off for the whole of
+# ultrawidelock_hash.c and ultrawidelock_approach.c, not just the lines that
+# trip it. Both are covered from other directions -- the SHA-256/HMAC/HKDF KATs
+# in tests/host, the CBMC harnesses, and `make test-san` -- so a real
+# uninitialised read there has three other ways to be caught. Narrow it again
+# the day cppcheck can see that a bounded loop fills the array it just filled.
 #
 #   preprocessorErrorDirective in ultrawidelock_ml_feat.c
 #     The file opens with `#if ULTRAWIDELOCK_ML_LOS_N_FEATURES != 2 / #error`.
@@ -154,9 +170,11 @@ run_cppcheck() { # <extra args...> -- prints findings, returns cppcheck's status
 	done
 	cppcheck \
 		--enable=warning,portability \
-		--inline-suppr \
 		--suppress=preprocessorErrorDirective:modules/ultrawidelock_ml/src/ultrawidelock_ml_feat.c \
 		--suppress=objectIndex:modules/ultrawidelock_cred/src/ultrawidelock_hash.c \
+		--suppress=uninitvar:modules/ultrawidelock_cred/src/ultrawidelock_hash.c \
+		--suppress=uninitvar:modules/ultrawidelock_cred/src/ultrawidelock_approach.c \
+		--suppress=toomanyconfigs \
 		--suppress=missingInclude \
 		--suppress=missingIncludeSystem \
 		--error-exitcode=1 \
@@ -238,6 +256,26 @@ if run_cppcheck "${scan_roots[@]}" >"$out" 2>&1; then
 	exit 0
 fi
 
+# One `  FAIL <finding>` row per finding, on stdout, BEFORE the raw output.
+#
+# The row shape is not decoration. scripts/test-runner.sh runs the suites in
+# parallel and replays a failing one through
+#
+#     grep -E '^[[:space:]]+FAIL[[:space:]]|RESULT: FAIL|error|Error'
+#
+# so anything that does not match that is dropped from the log. cppcheck writes
+# most findings as `warning:`, which matches none of it: the first CI failure of
+# this gate reported "2 finding(s)" and not one word about what or where, which
+# is a gate that cannot be acted on from the log it produces. The same row also
+# feeds suite_counts, so the failed column counts findings instead of always
+# reading 1.
+grep -E '\[[a-zA-Z]+\]$' "$out" | while IFS= read -r line; do
+	printf '  %sFAIL%s  %s\n' "$R" "$Z" "$line"
+done
+
+# The raw output after the rows: notes, the "Assuming condition is false" lines
+# and everything else needed to judge a finding, for whoever has the full log.
+printf '\n'
 cat "$out" >&2
 
 # cppcheck exits nonzero for two different reasons: it found something (that is

@@ -116,14 +116,16 @@ jobs:
       # step every run would print the skip and stay green -- the static
       # analysis would be in the repository and never once executed.
       #
-      # apt's cppcheck is older than the one brew gives a mac, and the two are
-      # not guaranteed to agree: analysers gain checks between releases, so this
-      # runner can report a finding a contributor's local `make lint` did not.
-      # That shows up as a pull request failing on a line its author saw pass.
-      # The version is printed here so the diagnosis is one glance at the log,
-      # and the fix is the same either way -- an inline `cppcheck-suppress` with
-      # a reason, or the defect. Pin a version here if the drift ever costs more
-      # than it catches.
+      # apt's cppcheck is older than the one brew gives a mac, and the two do not
+      # agree about where a finding lives: the same false positive in the hashing
+      # code is attributed to one function under 2.21 and to a different one
+      # under the 2.13 this runner installs. The gate's exemptions are scoped by
+      # check id and path rather than by line for exactly that reason, and the
+      # tree is verified clean under both versions -- but a newer analyser can
+      # still gain a check neither has run yet, so a finding a contributor's
+      # local `make lint` did not produce is possible. The version is printed
+      # here so that diagnosis is one glance at the log. Pin a version if the
+      # drift ever costs more than it catches.
       - name: cppcheck
         run: |
           sudo apt-get update

@@ -186,9 +186,6 @@ static int32_t range_median(const int32_t *win, int n)
 		}
 		t[j + 1] = v;
 	}
-	/* n >= 1, so the copy above wrote t[n / 2]: the only caller guards
-	 * n == 0 before it gets here. */
-	/* cppcheck-suppress uninitvar */
 	return t[n / 2];
 }
 
