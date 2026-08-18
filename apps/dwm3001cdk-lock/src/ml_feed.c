@@ -56,7 +56,15 @@ enum ultrawidelock_approach_action ml_feed_range(struct ultrawidelock_approach *
 
 		last_diag_n = ip.n;
 		if (ultrawidelock_ml_los_features(&cia, (uint16_t)cm, feat, &pwr_diff)) {
-			const enum ultrawidelock_ml_los_class cls = ultrawidelock_ml_los_classify(feat);
+			/* Carry first, binary folded out of it, so the two can never
+			 * disagree about the same reception. The fold is exact --
+			 * CLEAR is clear, everything else obstructed -- so cls is the
+			 * value ultrawidelock_ml_los_classify() would have returned and the
+			 * ev=ml trace line is unchanged. */
+			const enum ultrawidelock_ml_carry_class carry =
+				ultrawidelock_ml_los_carry_classify(feat);
+			const enum ultrawidelock_ml_los_class cls =
+				ultrawidelock_ml_carry_to_los(carry);
 			const float conf = ultrawidelock_ml_los_confidence(feat);
 
 			/*
@@ -66,13 +74,20 @@ enum ultrawidelock_approach_action ml_feed_range(struct ultrawidelock_approach *
 			 * disagreement whose RATE is the label-free drift monitor
 			 * ultrawidelock_ml_los_vendor() documents. Main-loop context, one ranging
 			 * block after the reception, so this competes with no deadline.
+			 *
+			 * carry is the same call's carry mode and carry_t says
+			 * whether a four-class model produced it -- with the shipped
+			 * two-class tree carry only ever reads 0 or 1 and carry_t is
+			 * 0, so a walk log makes clear which resolution it holds.
 			 */
-			ultrawidelock_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
-				   ultrawidelock_uptime_us(), ip.n, cm, (unsigned)cls,
-				   (int)(conf * 100.0f),
-				   (unsigned)ultrawidelock_ml_los_disagrees(feat, pwr_diff));
-			return ultrawidelock_approach_feed_channel(ap, now, cm,
-							   cls == ULTRAWIDELOCK_ML_LOS_OBSTRUCTED, conf);
+			ultrawidelock_printf(
+				"[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u carry=%u carry_t=%u\n",
+				ultrawidelock_uptime_us(), ip.n, cm, (unsigned)cls,
+				(int)(conf * 100.0f),
+				(unsigned)ultrawidelock_ml_los_disagrees(feat, pwr_diff),
+				(unsigned)carry, (unsigned)ultrawidelock_ml_los_carry_trained());
+			return ultrawidelock_approach_feed_carry(
+				ap, now, cm, (enum ultrawidelock_approach_carry)carry, conf);
 		}
 	}
 #endif
