@@ -57,8 +57,8 @@ in `struct matter_device_info` and rides out on the next report.
 
 | Source | Event | Where |
 |---|---|---|
-| `LockDoor` / `UnlockDoor` from a controller | `LockOperation`, source Remote | `matter_clusters.c` |
-| a credential walk-up | `LockOperation`, source Aliro, null fabric | `matter_commission.c`, the reader's lock-state listener |
+| `LockDoor` / `UnlockDoor` from a controller | `LockOperation`, source `MATTER_DL_OP_SOURCE_REMOTE` | `matter_clusters.c` |
+| a credential walk-up | `LockOperation`, source `MATTER_DL_OP_SOURCE_ALIRO`, null fabric | `matter_commission.c`, the reader's lock-state listener |
 | the impact/tamper latch | `DoorLockAlarm` / `DoorForcedOpen` | `door_alarm.c`, from the 250 ms loop in `main.c` |
 | the door-angle dwell | `DoorLockAlarm` / `DoorAjar` | `door_alarm.c` |
 
