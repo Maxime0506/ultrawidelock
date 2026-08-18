@@ -61,12 +61,29 @@
 # ABOUT SUPPRESSIONS. cppcheck cannot see that a bounded loop fills an array, so
 # `for (i = 0; i < N; i++) buf[i] = ...` followed by a read of buf is reported as
 # an uninitialised read every time ("Assuming condition is false" in its own
-# note). Those sites carry an inline `cppcheck-suppress` comment saying which
-# loop does the filling. Inline, not listed here, so the justification sits
-# where the next reader is confused and moves with the code if it moves.
+# note). Those sites carry an inline `cppcheck-suppress <id>` comment on the line
+# above the report, with the reason in an ordinary comment above that. Inline, so
+# the justification sits where the next reader is confused and moves with the
+# code if it moves.
 #
-# suppressions.txt holds the two exemptions that are properties of the tool
-# rather than of a line of code. See that file for why each one is not a hole.
+# The reason is a separate comment rather than a `# ...` tail on the suppression
+# itself, and the marker is the single-line form rather than the begin/end pair,
+# because both of those conveniences are newer than the cppcheck some
+# distributions ship and this gate has to say the same thing on every machine.
+# The two exemptions that belong to the tool rather than to a line of code are
+# --suppress arguments in run_cppcheck below, documented there.
+#
+# SOME OF THOSE MARKERS ARE CURRENTLY NO-OPS, and they stay anyway. Which
+# fill-loop false positives cppcheck actually emits moves with its version and
+# with the flags it is handed: on 2.21 with the flags below only two of the
+# seven still fire (ultrawidelock_approach.c's `t[n / 2]` and the `t, tlen`
+# read in hkdf_expand, both cases needing an argument about a caller rather
+# than about the line). The other five fired on the very first scan of this
+# tree and no longer do. A marker that suppresses nothing costs a comment; a
+# missing one costs a red pull request on whichever cppcheck a runner
+# installed, so the whole set is kept. The cost being accepted, stated plainly:
+# a dead marker would also hide a REAL uninitialised read if one ever appeared
+# on exactly that line.
 
 set -euo pipefail
 
@@ -78,8 +95,6 @@ else
 fi
 
 cd "$(dirname "$0")/../.."
-
-SUPPRESSIONS="tests/tooling/cppcheck-suppressions.txt"
 
 # The scan roots and the cuts. Written once and shared by the scan and the
 # self-test, so the self-test cannot pass against a narrower tree than the scan.
@@ -99,6 +114,38 @@ for d in include modules/*/include; do
 	[ -d "$d" ] && inc_args+=("-I$d")
 done
 
+# The two exemptions that are properties of the tool rather than of a line of
+# code. They are --suppress arguments rather than a --suppressions-list file
+# because that file cost a red CI run: cppcheck strips `#` comments from it and
+# older builds then reject the empty line that is left ("Failed to add
+# suppression. No id."), so a file whose prose explained itself could not be
+# read by the version CI installs. `id:path` on the command line is the oldest
+# and most portable form cppcheck has, and it cannot drift from the flags it
+# sits next to.
+#
+#   preprocessorErrorDirective in ultrawidelock_ml_feat.c
+#     The file opens with `#if ULTRAWIDELOCK_ML_LOS_N_FEATURES != 2 / #error`.
+#     N_FEATURES comes from the generated ultrawidelock_ml_los_features.h via
+#     ultrawidelock_ml.h; cppcheck brute-forces preprocessor configurations and
+#     analyses ones where that include did not resolve, where N_FEATURES is 0,
+#     the guard is true and the #error is "reached". It is reporting that the
+#     guard works. NOT A HOLE: every real compile of this file -- host suites and
+#     all three ports -- resolves the header and evaluates the condition for
+#     real, so a regenerated model with a different feature count still fails
+#     the build.
+#
+#   objectIndex in ultrawidelock_hash.c
+#     sha256_block() takes `const uint8_t p[64]` and indexes all 64. cppcheck
+#     reaches it down a path where the caller passed a one-byte object
+#     (&counter, in hkdf_expand) and reports indexing past it. That path does
+#     not exist: ultrawidelock_sha256_update() only passes the caller's pointer
+#     once len >= BLOCK, and the short buffered call goes through s->buf.
+#     Scoped to this file rather than an inline marker at the site because the
+#     report lands on two lines of one statement, and the block form that would
+#     cover both (cppcheck-suppress-begin) is newer than the cppcheck some
+#     distributions ship. NOT A HOLE, but it is the widest exemption here: it
+#     costs objectIndex on ~300 lines of self-contained hashing whose bounds
+#     tests/host and CBMC both exercise.
 run_cppcheck() { # <extra args...> -- prints findings, returns cppcheck's status
 	local ig_args=()
 	local i
@@ -108,7 +155,8 @@ run_cppcheck() { # <extra args...> -- prints findings, returns cppcheck's status
 	cppcheck \
 		--enable=warning,portability \
 		--inline-suppr \
-		--suppressions-list="$SUPPRESSIONS" \
+		--suppress=preprocessorErrorDirective:modules/ultrawidelock_ml/src/ultrawidelock_ml_feat.c \
+		--suppress=objectIndex:modules/ultrawidelock_cred/src/ultrawidelock_hash.c \
 		--suppress=missingInclude \
 		--suppress=missingIncludeSystem \
 		--error-exitcode=1 \
@@ -127,11 +175,6 @@ if ! command -v cppcheck >/dev/null 2>&1; then
 	printf '\n  %s!! cppcheck not installed -- STATIC ANALYSIS SKIPPED%s\n' "$Y" "$Z"
 	printf '     CI still runs it. install: brew install cppcheck\n\n'
 	exit 0
-fi
-
-if [ ! -f "$SUPPRESSIONS" ]; then
-	printf '%s  cppcheck gate: %s is missing%s\n' "$R" "$SUPPRESSIONS" "$Z" >&2
-	exit 2
 fi
 
 # The cuts must still be there. A vendored tree that is renamed or removed
@@ -215,6 +258,6 @@ if [ "${n:-0}" -eq 0 ]; then
 fi
 
 printf '\n  %sFAIL%s  0 passed, 1 failed  ·  %s finding(s)\n' "$R" "$Z" "$n" >&2
-printf '        a false positive gets an inline `cppcheck-suppress` comment\n' >&2
-printf '        naming why, not an entry in %s\n\n' "$SUPPRESSIONS" >&2
+printf '        a false positive gets an inline `cppcheck-suppress <id>` comment\n' >&2
+printf '        on the line above it, and the reason on the line above that\n\n' >&2
 exit 1
