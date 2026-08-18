@@ -9,6 +9,7 @@
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   scope      tests/tooling/uwb_engine_scope_check.sh  no vendor radio API outside the DW3000 engine
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
+#   lint       tests/tooling/cppcheck_gate.sh   cppcheck over the portable tree
 #   ui         scripts/lib/ui.sh --self-test    the progress display keeps the
 #                                               output it wraps byte for byte
 #
@@ -47,6 +48,7 @@ suite_cmd() {
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	scope) echo "bash tests/tooling/uwb_engine_scope_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
+	lint) echo "bash tests/tooling/cppcheck_gate.sh" ;;
 	ui) echo "bash scripts/lib/ui.sh --self-test" ;;
 	freertos) echo "bash tests/ports/freertos-nrf52833/run.sh" ;;
 	esac
@@ -61,6 +63,7 @@ suite_label() {
 	seam) echo "uwb seam" ;;
 	scope) echo "uwb engine scope" ;;
 	purity) echo "port purity" ;;
+	lint) echo "cppcheck" ;;
 	ui) echo "progress display" ;;
 	freertos) echo "FreeRTOS port" ;;
 	esac
@@ -163,7 +166,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared sdk drift seam scope purity ui}"
+SEL="${SUITES:-firmware shared sdk drift seam scope purity lint ui}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do
